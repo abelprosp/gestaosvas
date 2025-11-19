@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// Rate limiting removido temporariamente do middleware para compatibilidade com Edge Runtime
-// O rate limiting pode ser implementado diretamente nas rotas da API se necessário
-// TODO: Implementar rate limiting compatível com Edge Runtime ou mover para rotas individuais
+// Middleware minimalista para compatibilidade máxima com Edge Runtime
+// Rate limiting removido - pode ser implementado nas rotas individuais se necessário
+// Autenticação é gerenciada pelo AuthContext no frontend e nas rotas da API
 
 export const config = {
   matcher: [
@@ -19,32 +19,10 @@ export const config = {
   ],
 };
 
-export function middleware(request: NextRequest) {
-  try {
-    const pathname = request.nextUrl.pathname;
-
-    // Ignorar arquivos estáticos do Next.js (já são excluídos pelo matcher, mas garantir)
-    if (
-      pathname.startsWith("/_next/") ||
-      pathname.startsWith("/favicon.ico") ||
-      pathname.match(/\.(svg|png|jpg|jpeg|gif|webp|woff|woff2|ttf|eot|css|js)$/i)
-    ) {
-      return NextResponse.next();
-    }
-
-    // Para rotas da API, a autenticação será verificada em cada rota individual
-    // O rate limiting pode ser implementado diretamente nas rotas se necessário
-    
-    // Para rotas do frontend, deixamos o AuthContext gerenciar a autenticação
-    // O middleware não verifica cookies porque o Supabase usa localStorage
-    // O redirecionamento é feito pelo componente de login e AuthContext
-    return NextResponse.next();
-  } catch (error) {
-    // Se houver algum erro, permite a requisição continuar
-    // Isso evita que o middleware quebre completamente a aplicação
-    console.error("Middleware error:", error);
-    return NextResponse.next();
-  }
+export function middleware(_request: NextRequest) {
+  // Middleware minimalista - apenas passa as requisições
+  // Toda lógica de autenticação e rate limiting está nas rotas individuais
+  return NextResponse.next();
 }
 
 
