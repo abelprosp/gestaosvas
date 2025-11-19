@@ -8,8 +8,8 @@ const nextConfig = {
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || "/api",
   },
-  // Configuração para Vercel (apenas em produção)
-  output: "standalone", // Necessário para Vercel detectar corretamente
+  // Vercel detecta automaticamente o Next.js e otimiza o build
+  // Não precisa de output: "standalone" no Vercel
   experimental: {
     serverActions: {
       bodySizeLimit: "2mb",
