@@ -6,6 +6,7 @@ import { DashboardPage } from "@/components/pages/DashboardPage";
 
 // Forçar renderização dinâmica (não pré-renderizar)
 export const dynamic = "force-dynamic";
+export const runtime = "edge";
 
 export default function HomePage() {
   return (
