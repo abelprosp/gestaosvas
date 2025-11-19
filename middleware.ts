@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { rateLimit, RATE_LIMITS } from "@/lib/utils/rateLimit";
+
+// Rate limiting removido temporariamente do middleware para compatibilidade com Edge Runtime
+// O rate limiting pode ser implementado diretamente nas rotas da API se necessário
+// TODO: Implementar rate limiting compatível com Edge Runtime ou mover para rotas individuais
 
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
@@ -14,38 +17,9 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Aplicar rate limiting em rotas específicas
-  if (pathname.startsWith("/api/")) {
-    // Ignorar health check (não precisa de rate limiting)
-    if (pathname.startsWith("/api/health")) {
-      return NextResponse.next();
-    }
-
-    // Ignorar auth (não aplicamos rate limiting aqui)
-    if (pathname.startsWith("/api/auth")) {
-      return NextResponse.next();
-    }
-
-    // Rate limiting específico para busca de CNPJ (chamadas externas custosas)
-    if (pathname.match(/^\/api\/clients\/lookup\/cnpj\/[^/]+$/)) {
-      const rateLimitResponse = rateLimit(RATE_LIMITS.CNPJ_LOOKUP)(request);
-      if (rateLimitResponse) {
-        return rateLimitResponse; // Bloqueia requisição
-      }
-      // Continua para processamento normal
-      return NextResponse.next();
-    }
-
-    // Rate limiting padrão para todas as outras rotas da API
-    const rateLimitResponse = rateLimit(RATE_LIMITS.API_DEFAULT)(request);
-    if (rateLimitResponse) {
-      return rateLimitResponse; // Bloqueia requisição
-    }
-
-    // A autenticação será verificada em cada rota da API
-    return NextResponse.next();
-  }
-
+  // Para rotas da API, a autenticação será verificada em cada rota individual
+  // O rate limiting pode ser implementado diretamente nas rotas se necessário
+  
   // Para rotas do frontend, deixamos o AuthContext gerenciar a autenticação
   // O middleware não verifica cookies porque o Supabase usa localStorage
   // O redirecionamento é feito pelo componente de login e AuthContext
