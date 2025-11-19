@@ -9,7 +9,7 @@ const nextConfig = {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || "/api",
   },
   // Configuração para Vercel (apenas em produção)
-  // output: "standalone", // Removido temporariamente para desenvolvimento
+  output: "standalone", // Necessário para Vercel detectar corretamente
   experimental: {
     serverActions: {
       bodySizeLimit: "2mb",
