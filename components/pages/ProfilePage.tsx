@@ -15,7 +15,7 @@ import {
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { useAuth } from "@/context/AuthContext";
-import supabase from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabase/client";
 
 type ProfileFormValues = {
   name: string;
