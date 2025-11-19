@@ -52,7 +52,8 @@ export async function createAuthenticatedServerClient() {
   return client;
 }
 
-export const supabase = createServerClient();
+// Removido export const supabase - deve ser criado apenas quando necessário
+// Para usar o cliente, chame createServerClient() ou createAuthenticatedServerClient() diretamente
 
 
 
