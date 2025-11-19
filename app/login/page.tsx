@@ -11,14 +11,14 @@ import {
   useColorModeValue,
   useToast,
 } from "@chakra-ui/react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 
 // Forçar renderização dinâmica (não pré-renderizar)
 export const dynamic = "force-dynamic";
 
-export default function LoginPage() {
+function LoginForm() {
   const { signIn, loading, user } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -95,6 +95,18 @@ export default function LoginPage() {
         </Stack>
       </Box>
     </Center>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <Center minH="100vh" bgGradient="linear(to-br, brand.500, brand.700)">
+        <Text color="white">Carregando...</Text>
+      </Center>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }
 
