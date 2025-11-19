@@ -15,6 +15,9 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 
+// Forçar renderização dinâmica (não pré-renderizar)
+export const dynamic = "force-dynamic";
+
 export default function LoginPage() {
   const { signIn, loading, user } = useAuth();
   const [email, setEmail] = useState("");
