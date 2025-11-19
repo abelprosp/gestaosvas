@@ -23,18 +23,20 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [hasRedirected, setHasRedirected] = useState(false);
   const toast = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
   const cardBg = useColorModeValue("rgba(255,255,255,0.9)", "rgba(13, 18, 34, 0.9)");
 
-  const from = searchParams.get("from") || "/";
+  const from = searchParams.get("from") || "/clientes";
 
   useEffect(() => {
-    if (!loading && user) {
-      router.push(from);
+    if (!loading && user && !hasRedirected) {
+      setHasRedirected(true);
+      router.replace(from); // Usar replace em vez de push para evitar histórico duplicado
     }
-  }, [loading, user, router, from]);
+  }, [loading, user, router, from, hasRedirected]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -45,8 +47,8 @@ function LoginForm() {
       toast({ title: "Falha ao autenticar", description: error, status: "error" });
       return;
     }
-    toast({ title: "Login realizado com sucesso", status: "success" });
     // O useEffect vai detectar quando o usuário for atualizado e redirecionar
+    // Não precisa mostrar toast aqui, o redirecionamento acontece automaticamente
   };
 
   return (

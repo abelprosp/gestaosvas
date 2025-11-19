@@ -4,10 +4,11 @@ import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-// Redirecionar para /login - o ProtectedRoute vai gerenciar o redirecionamento de volta
-// Isso evita problemas de SSR e garante que a página sempre funcione
+// Redirecionar para /clientes - o ProtectedRoute vai gerenciar a autenticação
+// Se não autenticado, será redirecionado para /login
+// Isso evita loops de redirecionamento entre / e /login
 export default function HomePage() {
-  redirect("/login");
+  redirect("/clientes");
 }
 
 
