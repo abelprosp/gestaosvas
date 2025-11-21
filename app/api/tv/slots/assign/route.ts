@@ -13,6 +13,7 @@ const assignSchema = z.object({
   expiresAt: z.string().optional(),
   notes: z.string().optional(),
   planType: PLAN_TYPE_ENUM.optional(),
+  hasTelephony: z.boolean().optional(),
 });
 
 export const POST = createApiHandler(

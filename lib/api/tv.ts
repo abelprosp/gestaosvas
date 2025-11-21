@@ -9,6 +9,7 @@ export interface AssignTVSlotPayload {
   expiresAt?: string;
   notes?: string;
   planType?: TVPlanType;
+  hasTelephony?: boolean;
 }
 
 export interface UpdateTVSlotPayload {
@@ -20,6 +21,7 @@ export interface UpdateTVSlotPayload {
   notes?: string | null;
   password?: string;
   planType?: TVPlanType | null;
+  hasTelephony?: boolean | null;
 }
 
 type ApiError = {

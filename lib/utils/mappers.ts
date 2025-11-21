@@ -114,6 +114,7 @@ type TVSlotRow = {
   expires_at: string | null;
   notes: string | null;
   plan_type: string | null;
+  has_telephony: boolean | null;
   created_at: string;
   updated_at: string;
   tv_accounts?: TVAccountRow | null;
@@ -407,6 +408,7 @@ export function mapTVSlotRow(row: TVSlotRow, history: TVSlotHistoryRow[] = []): 
     expiresAt: row.expires_at,
     notes: row.notes,
     planType: row.status === "ASSIGNED" ? (row.plan_type as TVSlot["planType"]) ?? null : null,
+    hasTelephony: row.has_telephony ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     account: row.tv_accounts ? mapTVAccountRow(row.tv_accounts) : undefined,
@@ -446,6 +448,7 @@ export function mapClientTVAssignment(
     expiresAt: mappedSlot.expiresAt,
     notes: mappedSlot.notes,
     planType: mappedSlot.planType,
+    hasTelephony: mappedSlot.hasTelephony ?? null,
     history: historyRows.map(mapTVSlotHistoryRow),
     clientId: mappedSlot.clientId ?? null,
     profileLabel: profileLabel ?? null,

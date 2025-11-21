@@ -22,10 +22,11 @@ import {
   Badge,
   SimpleGrid,
   GridItem,
+  Checkbox,
 } from "@chakra-ui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { FiClock, FiEdit, FiKey, FiPlus, FiTrash2, FiSend, FiUserPlus } from "react-icons/fi";
+import { FiClock, FiEdit, FiKey, FiPlus, FiTrash2, FiSend, FiUserPlus, FiPhone } from "react-icons/fi";
 import {
   assignMultipleTVSlots,
   assignNextTVSlot,
@@ -68,6 +69,7 @@ type AssignFormState = {
   startsAt: string;
   expiresAt: string;
   notes: string;
+  hasTelephony: boolean;
 };
 
 function extractErrorMessage(error: unknown) {
@@ -123,6 +125,7 @@ export function TVAssignmentsManager({ clientId, isTvSelected, isOpen }: TVAssig
     startsAt: todayISODate(),
     expiresAt: "",
     notes: "",
+    hasTelephony: false,
   });
   const vendorOptions = useMemo(() => {
     return vendors
@@ -282,6 +285,7 @@ export function TVAssignmentsManager({ clientId, isTvSelected, isOpen }: TVAssig
         expiresAt: "",
         notes: "",
         planType: "ESSENCIAL",
+        hasTelephony: false,
       });
     }
   }, [isOpen, clientId]);
@@ -350,6 +354,19 @@ export function TVAssignmentsManager({ clientId, isTvSelected, isOpen }: TVAssig
                 </option>
               ))}
             </Select>
+          </FormControl>
+          <FormControl>
+            <FormLabel>Telefonia</FormLabel>
+            <Checkbox
+              isChecked={assignForm.hasTelephony}
+              onChange={(event) =>
+                setAssignForm((prev) => ({ ...prev, hasTelephony: event.target.checked }))
+              }
+              isDisabled={isReadOnly}
+              colorScheme="brand"
+            >
+              Cliente tem telefonia
+            </Checkbox>
           </FormControl>
           <FormControl>
             <FormLabel>Início</FormLabel>
@@ -495,6 +512,7 @@ export function TVAssignmentsManager({ clientId, isTvSelected, isOpen }: TVAssig
                 expiresAt: assignForm.expiresAt || undefined,
                 notes: assignForm.notes || undefined,
                 planType: assignForm.planType,
+                hasTelephony: assignForm.hasTelephony || undefined,
               };
 
               if (isReadOnly) {
@@ -559,7 +577,16 @@ export function TVAssignmentsManager({ clientId, isTvSelected, isOpen }: TVAssig
               >
                 <Box>
                   <Heading size="sm">
-                    {assignment.profileLabel ? `${assignment.profileLabel} · ${assignment.email}` : assignment.email}
+                    <HStack spacing={2}>
+                      <Text>
+                        {assignment.profileLabel ? `${assignment.profileLabel} · ${assignment.email}` : assignment.email}
+                      </Text>
+                      {assignment.hasTelephony && (
+                        <Tooltip label="Cliente com telefonia">
+                          <Box color="brand.500" as={FiPhone} />
+                        </Tooltip>
+                      )}
+                    </HStack>
                   </Heading>
                   <HStack mt={1} spacing={3} flexWrap="wrap">
                     {assignment.profileLabel && <Badge colorScheme="purple">{assignment.profileLabel}</Badge>}
@@ -568,6 +595,13 @@ export function TVAssignmentsManager({ clientId, isTvSelected, isOpen }: TVAssig
                       <Badge colorScheme={assignment.planType === "PREMIUM" ? "pink" : "green"}>
                         {assignment.planType === "PREMIUM" ? "Plano Premium" : "Plano Essencial"}
                       </Badge>
+                    )}
+                    {assignment.hasTelephony && (
+                      <Tooltip label="Cliente com telefonia">
+                        <Badge colorScheme="orange" leftIcon={<Box as={FiPhone} />}>
+                          Telefonia
+                        </Badge>
+                      </Tooltip>
                     )}
                     <HStack spacing={2} align="center">
                       <Badge colorScheme="purple" fontFamily="mono">
@@ -677,6 +711,22 @@ export function TVAssignmentsManager({ clientId, isTvSelected, isOpen }: TVAssig
                       </option>
                     ))}
                   </Select>
+                </FormControl>
+                <FormControl>
+                  <FormLabel>Telefonia</FormLabel>
+                  <Checkbox
+                    isChecked={assignment.hasTelephony ?? false}
+                    onChange={(event) =>
+                      updateMutation.mutate({
+                        slotId: assignment.slotId,
+                        payload: { hasTelephony: event.target.checked },
+                      })
+                    }
+                    isDisabled={isReadOnly}
+                    colorScheme="brand"
+                  >
+                    Cliente tem telefonia
+                  </Checkbox>
                 </FormControl>
                 <FormControl>
                   <FormLabel>Vendedor</FormLabel>

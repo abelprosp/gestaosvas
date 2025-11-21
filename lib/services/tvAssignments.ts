@@ -24,6 +24,7 @@ export interface AssignSlotParams {
   notes?: string | null;
   startsAt?: string | null;
   planType?: TVPlanType | null;
+  hasTelephony?: boolean | null;
 }
 
 export interface AssignMultipleSlotParams extends AssignSlotParams {
@@ -319,6 +320,7 @@ export async function assignSlotToClient(params: AssignSlotParams) {
         expires_at: params.expiresAt ?? null,
         notes: params.notes ?? null,
         plan_type: params.planType ?? null,
+        has_telephony: params.hasTelephony ?? null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", slot.id)

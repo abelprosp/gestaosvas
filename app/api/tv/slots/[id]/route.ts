@@ -33,6 +33,7 @@ const updateSchema = z
     status: z.enum(["AVAILABLE", "ASSIGNED", "INACTIVE", "SUSPENDED"]).optional(),
     notes: z.string().optional().nullable(),
     planType: PLAN_TYPE_ENUM.optional().nullable(),
+    hasTelephony: z.boolean().optional().nullable(),
     password: z
       .string()
       .regex(/^\d{4}$/, { message: "A senha deve conter exatamente 4 dígitos." })
@@ -65,6 +66,9 @@ export const PATCH = createApiHandler(async (req, { params, user }) => {
   }
   if (payload.planType !== undefined) {
     updateData.plan_type = payload.planType ?? null;
+  }
+  if (payload.hasTelephony !== undefined) {
+    updateData.has_telephony = payload.hasTelephony ?? null;
   }
   let shouldRandomize = false;
   if (payload.status !== undefined) {

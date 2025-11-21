@@ -31,6 +31,7 @@ export interface TVSlot {
   expiresAt?: string | null;
   notes?: string | null;
   planType?: TVPlanType | null;
+  hasTelephony?: boolean | null;
   createdAt: string;
   updatedAt: string;
   account?: TVAccount;
@@ -56,6 +57,7 @@ export interface ClientTVAssignment {
   expiresAt?: string | null;
   notes?: string | null;
   planType?: TVPlanType | null;
+  hasTelephony?: boolean | null;
   history: TVSlotHistory[];
   clientId?: string | null;
   profileLabel?: string | null;
