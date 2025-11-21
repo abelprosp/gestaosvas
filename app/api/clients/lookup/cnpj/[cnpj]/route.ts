@@ -58,38 +58,78 @@ function formatPhone(value?: string | null, fallbackDdd?: string | null) {
 
 async function fetchCnpjData(cnpj: string): Promise<BrasilApiCnpjResponse> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
+  const timeout = setTimeout(() => controller.abort(), 15000); // Aumentado para 15s
+  const url = `https://brasilapi.com.br/api/cnpj/v1/${cnpj}`;
+  
   try {
-    const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`, {
+    console.log(`[fetchCnpjData] Fazendo requisição para: ${url}`);
+    
+    const response = await fetch(url, {
       headers: {
         accept: "application/json",
+        "User-Agent": "GestaoSVAS/1.0",
       },
       signal: controller.signal,
     });
+    
+    console.log(`[fetchCnpjData] Status da resposta: ${response.status} ${response.statusText}`);
+    
     let payload: unknown = null;
+    let responseText = "";
+    
     try {
-      payload = await response.json();
+      responseText = await response.text();
+      console.log(`[fetchCnpjData] Resposta recebida (primeiros 500 chars):`, responseText.substring(0, 500));
+      
+      if (responseText) {
+        payload = JSON.parse(responseText);
+      }
     } catch (parseError) {
-      console.error("[fetchCnpjData] Falha ao converter resposta da BrasilAPI", parseError);
+      console.error(`[fetchCnpjData] Falha ao converter resposta da BrasilAPI. Status: ${response.status}`, {
+        parseError,
+        responseText: responseText.substring(0, 200),
+      });
     }
 
-    if (!response.ok || !payload) {
+    if (!response.ok) {
       const message =
         (payload as { message?: string })?.message ??
-        (response.status === 404 ? "CNPJ não encontrado." : "Não foi possível consultar o CNPJ no momento.");
-      throw new HttpError(response.status === 404 ? 404 : 502, message);
+        (payload as { error?: string })?.error ??
+        (response.status === 404 
+          ? "CNPJ não encontrado na base de dados." 
+          : response.status === 429
+          ? "Muitas requisições. Aguarde um momento e tente novamente."
+          : `Erro ao consultar CNPJ (${response.status}). Tente novamente.`);
+      console.error(`[fetchCnpjData] Resposta não OK. Status: ${response.status}, Message: ${message}`);
+      throw new HttpError(response.status === 404 ? 404 : response.status === 429 ? 429 : 502, message);
+    }
+    
+    if (!payload) {
+      console.error(`[fetchCnpjData] Payload vazio após parsing`);
+      throw new HttpError(502, "Resposta inválida da API de consulta CNPJ.");
     }
 
+    console.log(`[fetchCnpjData] Dados parseados com sucesso`);
     return payload as BrasilApiCnpjResponse;
   } catch (error) {
     if (error instanceof HttpError) {
       throw error;
     }
     if ((error as Error)?.name === "AbortError") {
+      console.error(`[fetchCnpjData] Timeout ao consultar CNPJ ${cnpj}`);
       throw new HttpError(504, "Tempo excedido ao consultar o CNPJ. Tente novamente.");
     }
-    console.error("[fetchCnpjData] Erro inesperado", error);
-    throw new HttpError(502, "Não foi possível consultar o CNPJ no momento.");
+    if (error instanceof TypeError && error.message.includes("fetch")) {
+      console.error(`[fetchCnpjData] Erro de rede ao consultar CNPJ:`, error);
+      throw new HttpError(503, "Erro de conexão com a API. Verifique sua conexão e tente novamente.");
+    }
+    console.error(`[fetchCnpjData] Erro inesperado ao consultar CNPJ ${cnpj}:`, {
+      error,
+      name: (error as Error)?.name,
+      message: (error as Error)?.message,
+      stack: (error as Error)?.stack,
+    });
+    throw new HttpError(502, `Não foi possível consultar o CNPJ: ${(error as Error)?.message ?? "Erro desconhecido"}`);
   } finally {
     clearTimeout(timeout);
   }
