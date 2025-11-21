@@ -157,7 +157,7 @@ async function createAccountBatch(index: number): Promise<boolean> {
 async function fetchAvailableSlot() {
   // Busca slots disponíveis que NUNCA foram atribuídos a um cliente
   // Para isso, verificamos se não há histórico de "ASSIGNED" para este slot
-  const supabase = createSupabaseClient();
+  const supabase = createSupabaseClient(true);
   const { data: allSlots, error: fetchError } = await supabase
     .from("tv_slots")
     .select("*, tv_accounts(*)")
@@ -228,7 +228,7 @@ function sortSlotsByEmail(slots: any[]) {
 }
 
 export async function ensureAvailableSlotExists() {
-  const supabase = createSupabaseClient();
+  const supabase = createSupabaseClient(true);
   // Tenta múltiplas vezes para lidar com race conditions
   for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt += 1) {
     // Primeiro, tenta buscar um slot disponível
@@ -271,7 +271,8 @@ export async function ensureAvailableSlotExists() {
 }
 
 export async function assignSlotToClient(params: AssignSlotParams) {
-  const supabase = createSupabaseClient();
+  // Usa Service Role Key para garantir permissão de escrita na tabela tv_slots (operação de sistema)
+  const supabase = createSupabaseClient(true);
   // Tenta múltiplas vezes para lidar com race conditions ao atribuir slots
   for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt += 1) {
     const slot = await ensureAvailableSlotExists();
@@ -365,7 +366,8 @@ export async function assignSlotToClient(params: AssignSlotParams) {
 }
 
 export async function assignMultipleSlotsToClient(params: AssignMultipleSlotParams) {
-  const supabase = createSupabaseClient();
+  // A função assignSlotToClient já usa createSupabaseClient(true), então não precisamos aqui
+  // Mas se precisarmos de validações extras, garantimos o uso do service role
   const { quantity, ...rest } = params;
   if (!Number.isFinite(quantity) || quantity < 1) {
     throw new HttpError(400, "Quantidade inválida. Informe um número maior ou igual a 1.");
@@ -384,7 +386,7 @@ export async function assignMultipleSlotsToClient(params: AssignMultipleSlotPara
 }
 
 export async function releaseSlotsForClient(clientId: string) {
-  const supabase = createSupabaseClient();
+  const supabase = createSupabaseClient(true);
   const { data: slots, error } = await supabase
     .from("tv_slots")
     .select("id")
@@ -441,7 +443,7 @@ export async function ensureSlotPoolReady() {
 }
 
 export async function randomizeAllTvPasswords() {
-  const supabase = createSupabaseClient();
+  const supabase = createSupabaseClient(true);
   try {
     const { data, error } = await supabase.from("tv_slots").select("id");
     if (error) {
