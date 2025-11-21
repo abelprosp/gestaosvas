@@ -255,141 +255,150 @@ async function handleTvServiceForClient(
     selectionsCount: selections.length,
   });
 
-  // Se cliente tem serviço TV mas não tem tvSetup, apenas não cria acessos
-  // O serviço TV já foi salvo via syncClientServices
-  if (hasTv && tvSetup) {
-    // Verificar se os campos obrigatórios para criar acessos estão preenchidos
-    const hasSoldBy = tvSetup.soldBy && tvSetup.soldBy.trim();
-    // Verificar se expiresAt está no formato correto (YYYY-MM-DD = 10 caracteres)
-    // Aceitar tanto formato YYYY-MM-DD quanto DD/MM/YYYY
-    const expiresAtTrimmed = tvSetup.expiresAt ? tvSetup.expiresAt.trim() : "";
-    
-    // Converter data se necessário (DD/MM/YYYY -> YYYY-MM-DD)
-    let expiresAtFormatted = expiresAtTrimmed;
-    if (expiresAtTrimmed.includes("/")) {
-      // Converter de DD/MM/YYYY para YYYY-MM-DD
-      const parts = expiresAtTrimmed.split("/");
-      if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
-        expiresAtFormatted = `${parts[2]}-${parts[1]}-${parts[0]}`;
-      }
+  // REGRA: Se cliente tem serviço TV, SEMPRE cria acessos automaticamente
+  // Se tvSetup não estiver completo, usa valores padrão
+  if (hasTv) {
+    // Verificar se já tem acessos atribuídos
+    const alreadyAssigned = await clientHasTvAssignment(clientId);
+    if (alreadyAssigned) {
+      console.log(`[handleTvServiceForClient] ℹ️ Cliente ${clientId} já possui acessos de TV atribuídos`);
+      return;
     }
-    
-    const hasExpiresAt = expiresAtFormatted.length === 10;
-    
-    console.log(`[handleTvServiceForClient] Verificando campos para cliente ${clientId}:`, {
-      hasSoldBy,
-      expiresAtOriginal: expiresAtTrimmed,
-      expiresAtFormatted,
-      hasExpiresAt,
-      tvSetupKeys: Object.keys(tvSetup),
-    });
-    
-    // Só cria acessos se os campos obrigatórios estiverem preenchidos
-    if (hasSoldBy && hasExpiresAt) {
-      const alreadyAssigned = await clientHasTvAssignment(clientId);
-      if (!alreadyAssigned) {
-        // Converter quantity de string para number
-        const parsedQuantity = tvSetup.quantity 
-          ? (typeof tvSetup.quantity === "string" ? parseInt(tvSetup.quantity, 10) : tvSetup.quantity)
-          : 1;
-        const quantity = Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? Math.min(50, parsedQuantity) : 1;
-        const planType: TVPlanType = tvSetup?.planType ?? "ESSENCIAL";
-        const soldAt =
-          tvSetup?.soldAt && tvSetup.soldAt.length === 10
-            ? new Date(`${tvSetup.soldAt}T12:00:00`).toISOString()
-            : tvSetup?.soldAt ?? undefined;
-        const soldBy = tvSetup.soldBy?.trim() || "";
-        
-        const params = {
-          clientId,
-          soldBy,
-          soldAt,
-          startsAt: tvSetup?.startsAt ?? undefined,
-          expiresAt: expiresAtFormatted,
-          notes: tvSetup?.notes?.trim() || undefined,
-          planType,
-          hasTelephony: tvSetup?.hasTelephony ?? undefined,
-        };
 
-        console.log(`[handleTvServiceForClient] 🚀 Criando ${quantity} acesso(s) de TV para cliente ${clientId}`, {
-          clientId,
-          quantity,
-          soldBy,
-          expiresAt: expiresAtFormatted,
-          planType,
-        });
-        
-        try {
-          if (quantity > 1) {
-            const results = await assignMultipleSlotsToClient({
-              ...params,
-              quantity,
-            });
-            console.log(`[handleTvServiceForClient] ✅ ${results.length} acesso(s) de TV criado(s) com sucesso para cliente ${clientId}`);
-          } else {
-            const result = await assignSlotToClient(params);
-            console.log(`[handleTvServiceForClient] ✅ 1 acesso de TV criado com sucesso para cliente ${clientId}:`, {
-              slotId: result.id,
-              email: result.account?.email,
-              username: result.username,
-            });
-          }
-        } catch (assignError) {
-          // Verificar se é erro de schema (HttpError 503) - verificar propriedades diretamente
-          // Não podemos confiar apenas no instanceof em ambientes compilados
-          const isHttpError503 = 
-            assignError && 
-            typeof assignError === "object" &&
-            (("status" in assignError && (assignError as { status?: number }).status === 503) ||
-            (assignError instanceof HttpError && assignError.status === 503));
-          
-          // Verificar também pelos códigos de schema do Supabase
-          const schemaCodes = ["PGRST200", "PGRST201", "PGRST202", "PGRST203", "PGRST204", "PGRST205"];
-          const isSchemaError = 
-            assignError && 
-            typeof assignError === "object" && 
-            "code" in assignError &&
-            schemaCodes.includes((assignError as { code?: string }).code ?? "");
-          
-          if (isHttpError503 || isSchemaError) {
-            // É erro de schema - não relançar, apenas logar
-            console.warn(`[handleTvServiceForClient] ⚠️ Schema de TV não disponível para cliente ${clientId}. Serviço será salvo sem acessos de TV.`);
-            return; // Retorna sem lançar erro - cliente será salvo normalmente
-          }
-          
-          // Outro tipo de erro, loga e relança
-          console.error(`[handleTvServiceForClient] ❌ Erro ao criar acessos de TV para cliente ${clientId}:`, {
-            error: assignError,
-            message: assignError instanceof Error ? assignError.message : String(assignError),
-            stack: assignError instanceof Error ? assignError.stack : undefined,
-          });
-          throw assignError;
+    // Se tem tvSetup, usa os valores fornecidos, senão usa valores padrão
+    let soldBy: string;
+    let expiresAt: string;
+    let soldAt: string | undefined;
+    let startsAt: string | undefined;
+    let quantity = 1;
+    let planType: TVPlanType = "ESSENCIAL";
+    let notes: string | undefined;
+    let hasTelephony: boolean | undefined;
+
+    if (tvSetup) {
+      // Usar valores do tvSetup se disponíveis
+      soldBy = tvSetup.soldBy?.trim() || "Sistema";
+      const expiresAtTrimmed = tvSetup.expiresAt ? tvSetup.expiresAt.trim() : "";
+      
+      // Converter data se necessário (DD/MM/YYYY -> YYYY-MM-DD)
+      let expiresAtFormatted = expiresAtTrimmed;
+      if (expiresAtTrimmed.includes("/")) {
+        const parts = expiresAtTrimmed.split("/");
+        if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+          expiresAtFormatted = `${parts[2]}-${parts[1]}-${parts[0]}`;
         }
-      } else {
-        console.log(`[handleTvServiceForClient] ℹ️ Cliente ${clientId} já possui acessos de TV atribuídos`);
       }
+      
+      // Se data não foi fornecida ou inválida, usar 30 dias a partir de hoje
+      if (expiresAtFormatted.length === 10) {
+        expiresAt = expiresAtFormatted;
+      } else {
+        const defaultExpires = new Date();
+        defaultExpires.setDate(defaultExpires.getDate() + 30);
+        expiresAt = defaultExpires.toISOString().slice(0, 10);
+      }
+      
+      soldAt = tvSetup.soldAt && tvSetup.soldAt.length === 10
+        ? new Date(`${tvSetup.soldAt}T12:00:00`).toISOString()
+        : undefined;
+      startsAt = tvSetup.startsAt && tvSetup.startsAt.length === 10
+        ? tvSetup.startsAt
+        : undefined;
+      
+      const parsedQuantity = tvSetup.quantity 
+        ? (typeof tvSetup.quantity === "string" ? parseInt(tvSetup.quantity, 10) : tvSetup.quantity)
+        : 1;
+      quantity = Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? Math.min(50, parsedQuantity) : 1;
+      planType = tvSetup.planType ?? "ESSENCIAL";
+      notes = tvSetup.notes?.trim() || undefined;
+      hasTelephony = tvSetup.hasTelephony ?? undefined;
     } else {
-      console.warn(`[handleTvServiceForClient] ⚠️ Campos obrigatórios não preenchidos para cliente ${clientId}:`, {
-        hasSoldBy,
-        hasExpiresAt,
-        expiresAtOriginal: expiresAtTrimmed,
-        expiresAtFormatted,
-        tvSetupKeys: Object.keys(tvSetup),
-        tvSetupContent: JSON.stringify(tvSetup, null, 2),
-      });
-      console.warn(`[handleTvServiceForClient] ⚠️ Serviço TV será salvo, mas SEM acessos configurados para cliente ${clientId}`);
+      // Valores padrão quando tvSetup não foi fornecido
+      console.log(`[handleTvServiceForClient] ⚠️ Cliente ${clientId} tem serviço TV mas tvSetup não fornecido. Usando valores padrão.`);
+      soldBy = "Sistema";
+      const defaultExpires = new Date();
+      defaultExpires.setDate(defaultExpires.getDate() + 30);
+      expiresAt = defaultExpires.toISOString().slice(0, 10);
+      quantity = 1;
+      planType = "ESSENCIAL";
     }
-    // Se campos não estão preenchidos, simplesmente não cria acessos (não dá erro)
-    // O serviço TV já foi salvo via syncClientServices, apenas não tem acessos configurados
-  } else if (hasTv && !tvSetup) {
-    // Cliente tem serviço TV mas não tem tvSetup (campos não preenchidos)
-    // Apenas loga, não faz nada - o serviço já foi salvo
-    console.warn(`[handleTvServiceForClient] ⚠️ Cliente ${clientId} tem serviço TV mas tvSetup não foi fornecido:`, {
-      serviceNames: services.map(s => s.name),
-      serviceIds,
-      selectionsCount: selections.length,
+    
+    console.log(`[handleTvServiceForClient] 📋 Parâmetros para criar acessos TV (cliente ${clientId}):`, {
+      soldBy,
+      expiresAt,
+      quantity,
+      planType,
+      hasTelephony,
+      usingDefaults: !tvSetup,
     });
-    console.warn(`[handleTvServiceForClient] ⚠️ Serviço será salvo sem acessos configurados. Para criar acessos, preencha vendedor e vencimento ao criar o cliente.`);
+    
+    // SEMPRE cria acessos se tem serviço TV (mesmo sem tvSetup completo)
+    const params = {
+      clientId,
+      soldBy,
+      soldAt,
+      startsAt,
+      expiresAt,
+      notes,
+      planType,
+      hasTelephony,
+    };
+
+    console.log(`[handleTvServiceForClient] 🚀 Criando ${quantity} acesso(s) de TV para cliente ${clientId}`, {
+      clientId,
+      quantity,
+      soldBy,
+      expiresAt,
+      planType,
+      usingDefaults: !tvSetup,
+    });
+    
+    try {
+      if (quantity > 1) {
+        const results = await assignMultipleSlotsToClient({
+          ...params,
+          quantity,
+        });
+        console.log(`[handleTvServiceForClient] ✅ ${results.length} acesso(s) de TV criado(s) com sucesso para cliente ${clientId}`);
+      } else {
+        const result = await assignSlotToClient(params);
+        console.log(`[handleTvServiceForClient] ✅ 1 acesso de TV criado com sucesso para cliente ${clientId}:`, {
+          slotId: result.id,
+          email: result.account?.email,
+          username: result.username,
+        });
+      }
+    } catch (assignError) {
+      // Verificar se é erro de schema (HttpError 503) - verificar propriedades diretamente
+      // Não podemos confiar apenas no instanceof em ambientes compilados
+      const isHttpError503 = 
+        assignError && 
+        typeof assignError === "object" &&
+        (("status" in assignError && (assignError as { status?: number }).status === 503) ||
+        (assignError instanceof HttpError && assignError.status === 503));
+      
+      // Verificar também pelos códigos de schema do Supabase
+      const schemaCodes = ["PGRST200", "PGRST201", "PGRST202", "PGRST203", "PGRST204", "PGRST205"];
+      const isSchemaError = 
+        assignError && 
+        typeof assignError === "object" && 
+        "code" in assignError &&
+        schemaCodes.includes((assignError as { code?: string }).code ?? "");
+      
+      if (isHttpError503 || isSchemaError) {
+        // É erro de schema - não relançar, apenas logar
+        console.warn(`[handleTvServiceForClient] ⚠️ Schema de TV não disponível para cliente ${clientId}. Serviço será salvo sem acessos de TV.`);
+        return; // Retorna sem lançar erro - cliente será salvo normalmente
+      }
+      
+      // Outro tipo de erro, loga e relança
+      console.error(`[handleTvServiceForClient] ❌ Erro ao criar acessos de TV para cliente ${clientId}:`, {
+        error: assignError,
+        message: assignError instanceof Error ? assignError.message : String(assignError),
+        stack: assignError instanceof Error ? assignError.stack : undefined,
+      });
+      throw assignError;
+    }
   } else if (!hasTv) {
     // Cliente não tem serviço TV, libera slots se houver
     console.log(`[handleTvServiceForClient] ℹ️ Cliente ${clientId} não tem serviço TV. Liberando slots se houver.`);
