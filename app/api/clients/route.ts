@@ -242,7 +242,16 @@ async function handleTvServiceForClient(
   if (hasTv && tvSetup) {
     // Verificar se os campos obrigatórios para criar acessos estão preenchidos
     const hasSoldBy = tvSetup.soldBy && tvSetup.soldBy.trim();
-    const hasExpiresAt = tvSetup.expiresAt && tvSetup.expiresAt.trim().length >= 8;
+    // Verificar se expiresAt está no formato correto (YYYY-MM-DD = 10 caracteres)
+    const expiresAtTrimmed = tvSetup.expiresAt ? tvSetup.expiresAt.trim() : "";
+    const hasExpiresAt = expiresAtTrimmed.length === 10;
+    
+    console.log(`[handleTvServiceForClient] Verificando campos para cliente ${clientId}:`, {
+      hasSoldBy,
+      expiresAtTrimmed,
+      hasExpiresAt,
+      tvSetupKeys: Object.keys(tvSetup),
+    });
     
     // Só cria acessos se os campos obrigatórios estiverem preenchidos
     if (hasSoldBy && hasExpiresAt) {
@@ -259,34 +268,50 @@ async function handleTvServiceForClient(
             ? new Date(`${tvSetup.soldAt}T12:00:00`).toISOString()
             : tvSetup?.soldAt ?? undefined;
         const soldBy = tvSetup.soldBy.trim();
+        
+        // Garantir que expiresAt está no formato YYYY-MM-DD
+        let expiresAtFormatted = expiresAtTrimmed;
+        if (expiresAtTrimmed.includes("/")) {
+          // Converter de DD/MM/YYYY para YYYY-MM-DD
+          const parts = expiresAtTrimmed.split("/");
+          if (parts.length === 3) {
+            expiresAtFormatted = `${parts[2]}-${parts[1]}-${parts[0]}`;
+          }
+        }
+        
         const params = {
           clientId,
           soldBy,
           soldAt,
           startsAt: tvSetup?.startsAt ?? undefined,
-          expiresAt: tvSetup.expiresAt,
+          expiresAt: expiresAtFormatted,
           notes: tvSetup?.notes?.trim() || undefined,
           planType,
           hasTelephony: tvSetup?.hasTelephony ?? undefined,
         };
 
-        console.log(`[handleTvServiceForClient] Criando ${quantity} acesso(s) de TV para cliente ${clientId}`);
+        console.log(`[handleTvServiceForClient] Criando ${quantity} acesso(s) de TV para cliente ${clientId}`, params);
         
-        if (quantity > 1) {
-          await assignMultipleSlotsToClient({
-            ...params,
-            quantity,
-          });
-        } else {
-          await assignSlotToClient(params);
+        try {
+          if (quantity > 1) {
+            await assignMultipleSlotsToClient({
+              ...params,
+              quantity,
+            });
+          } else {
+            await assignSlotToClient(params);
+          }
+          
+          console.log(`[handleTvServiceForClient] ✅ ${quantity} acesso(s) de TV criado(s) com sucesso para cliente ${clientId}`);
+        } catch (assignError) {
+          console.error(`[handleTvServiceForClient] ❌ Erro ao criar acessos de TV para cliente ${clientId}:`, assignError);
+          throw assignError;
         }
-        
-        console.log(`[handleTvServiceForClient] ${quantity} acesso(s) de TV criado(s) com sucesso`);
       } else {
         console.log(`[handleTvServiceForClient] Cliente ${clientId} já possui acessos de TV atribuídos`);
       }
     } else {
-      console.log(`[handleTvServiceForClient] Campos obrigatórios não preenchidos (soldBy: ${hasSoldBy}, expiresAt: ${hasExpiresAt}), não criando acessos`);
+      console.log(`[handleTvServiceForClient] ⚠️ Campos obrigatórios não preenchidos (soldBy: ${hasSoldBy}, expiresAt: ${hasExpiresAt}), não criando acessos para cliente ${clientId}`);
     }
     // Se campos não estão preenchidos, simplesmente não cria acessos (não dá erro)
   } else if (!hasTv) {
