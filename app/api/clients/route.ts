@@ -547,10 +547,42 @@ export const POST = createApiHandler(async (req) => {
   const selectedServiceIds = selections.map((selection) => selection.serviceId);
   try {
     await syncClientServices(data.id, selections);
-    await handleTvServiceForClient(data.id, selections, tvSetup);
+    
+    // Tentar processar TV, mas não falhar se schema não estiver disponível
+    try {
+      await handleTvServiceForClient(data.id, selections, tvSetup);
+    } catch (tvError) {
+      // Verificar se é erro de schema (tabela não existe)
+      const schemaCodes = ["PGRST200", "PGRST201", "PGRST202", "PGRST203", "PGRST204", "PGRST205"];
+      const isSchemaError = 
+        tvError && 
+        typeof tvError === "object" && 
+        "code" in tvError &&
+        schemaCodes.includes((tvError as { code?: string }).code ?? "");
+      
+      // Verificar também se é HttpError 503 (que indica schema missing)
+      const isHttpError503 = 
+        tvError instanceof HttpError && 
+        (tvError as HttpError).status === 503;
+      
+      if (isSchemaError || isHttpError503) {
+        console.warn("[POST /api/clients] Schema de TV não disponível, cliente será salvo sem acessos de TV");
+        // Não lança erro, apenas continua sem configurar TV
+        // O cliente será salvo normalmente, apenas sem acessos de TV
+      } else {
+        // Outro tipo de erro, propaga
+        throw tvError;
+      }
+    }
+    
     await syncCloudAccesses(data.id, selectedServiceIdsList, cloudSetups ?? []);
   } catch (syncError) {
-    await supabase.from("clients").delete().eq("id", data.id);
+    // Se falhar ao sincronizar serviços, deleta o cliente criado
+    try {
+      await supabase.from("clients").delete().eq("id", data.id);
+    } catch (deleteError) {
+      console.error("[POST /api/clients] Erro ao deletar cliente após falha na sincronização:", deleteError);
+    }
     throw syncError;
   }
 
