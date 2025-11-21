@@ -65,14 +65,16 @@ function sortSlotsByEmail(slots: any[]) {
     const indexA = parseEmailIndex(emailA);
     const indexB = parseEmailIndex(emailB);
 
+    // Primeiro: ordena por índice do email (menor primeiro)
     if (indexA === null && indexB === null) return emailA.localeCompare(emailB);
-    if (indexA === null) return 1;
-    if (indexB === null) return -1;
-    if (indexA !== indexB) return indexA - indexB;
+    if (indexA === null) return 1; // Sem índice vai para o final
+    if (indexB === null) return -1; // Sem índice vai para o final
+    if (indexA !== indexB) return indexA - indexB; // Menor índice primeiro
 
+    // Segundo: se mesmo email, ordena por slot_number (menor primeiro)
     const slotA = a.slot_number ?? 0;
     const slotB = b.slot_number ?? 0;
-    return slotA - slotB;
+    return slotA - slotB; // Menor slot primeiro
   });
 }
 
@@ -135,8 +137,16 @@ export async function ensureAvailableSlotExists() {
       // Não filtra por histórico - se está AVAILABLE e sem cliente, pode usar
       // Isso garante que sempre pegue o primeiro disponível, independente de ter sido usado antes
       const sorted = sortSlotsByEmail(allSlots);
+      
+      // Log para debug: mostra os primeiros 5 slots ordenados
+      console.log(`[ensureAvailableSlotExists] Total de slots disponíveis: ${sorted.length}`);
+      console.log(`[ensureAvailableSlotExists] Primeiros 5 slots ordenados:`);
+      sorted.slice(0, 5).forEach((slot, idx) => {
+        console.log(`  [${idx}] ${slot.tv_accounts?.email} #${slot.slot_number} (index: ${parseEmailIndex(slot.tv_accounts?.email ?? "")})`);
+      });
+      
       const firstAvailable = sorted[0];
-      console.log(`[ensureAvailableSlotExists] Slot selecionado: ${firstAvailable.tv_accounts?.email} #${firstAvailable.slot_number}`);
+      console.log(`[ensureAvailableSlotExists] ✅ Slot selecionado: ${firstAvailable.tv_accounts?.email} #${firstAvailable.slot_number}`);
       return firstAvailable;
     }
 
