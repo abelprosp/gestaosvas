@@ -656,8 +656,8 @@ useEffect(() => {
                 </FormControl>
               </GridItem>
               <GridItem colSpan={{ base: 1, md: 2 }}>
-                <FormControl isRequired={!defaultValues}>
-                  <FormLabel>Serviços contratados{!defaultValues && " *"}</FormLabel>
+                <FormControl>
+                  <FormLabel>Serviços contratados</FormLabel>
                   {serviceOptions.length === 0 ? (
                     <Text fontSize="sm" color="gray.500">
                       Nenhum serviço cadastrado ainda. Utilize a aba Serviços para adicionar opções.
