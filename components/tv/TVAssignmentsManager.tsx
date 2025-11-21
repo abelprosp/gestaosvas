@@ -311,16 +311,154 @@ export function TVAssignmentsManager({ clientId, isTvSelected, isOpen }: TVAssig
     return null;
   }
 
+  // Se não tem clientId (criando cliente novo), mostrar formulário mas desabilitar botão de gerar
   if (!clientId) {
     return (
-      <Box mt={6}>
-        <Heading size="sm" mb={2}>
-          Acessos de TV
-        </Heading>
-        <Text fontSize="sm" color="gray.500">
-          Salve o cliente primeiro para gerar e administrar acessos de TV.
-        </Text>
-      </Box>
+      <Stack spacing={6} mt={6}>
+        <Box>
+          <Heading size="sm" mb={3}>
+            Configurar acessos de TV
+          </Heading>
+          <Text fontSize="sm" color="gray.500" mb={4}>
+            Configure os acessos de TV. Após salvar o cliente, você poderá gerar os acessos.
+          </Text>
+          <SimpleGrid
+            columns={{ base: 1, md: 2, xl: 4 }}
+            spacing={4}
+            bg={cardBg}
+            borderRadius="xl"
+            p={4}
+            borderWidth={1}
+            borderColor={cardBorder}
+          >
+            <FormControl>
+              <FormLabel>Plano</FormLabel>
+              <Select
+                value={assignForm.planType}
+                onChange={(event) =>
+                  setAssignForm((prev) => ({ ...prev, planType: event.target.value as TVPlanType }))
+                }
+                isDisabled={isReadOnly}
+              >
+                {PLAN_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl>
+              <FormLabel>Telefonia</FormLabel>
+              <Checkbox
+                isChecked={assignForm.hasTelephony}
+                onChange={(event) =>
+                  setAssignForm((prev) => ({ ...prev, hasTelephony: event.target.checked }))
+                }
+                isDisabled={isReadOnly}
+                colorScheme="brand"
+              >
+                Cliente tem telefonia
+              </Checkbox>
+            </FormControl>
+            <FormControl>
+              <FormLabel>Início</FormLabel>
+              <Input
+                type="date"
+                value={assignForm.startsAt ?? ""}
+                onChange={(event) => setAssignForm((prev) => ({ ...prev, startsAt: event.target.value }))}
+                isDisabled={isReadOnly}
+              />
+            </FormControl>
+            <FormControl>
+              <FormLabel>Vencimento</FormLabel>
+              <Input
+                type="date"
+                value={assignForm.expiresAt ?? ""}
+                onChange={(event) => setAssignForm((prev) => ({ ...prev, expiresAt: event.target.value }))}
+                isDisabled={isReadOnly}
+              />
+            </FormControl>
+            <FormControl>
+              <FormLabel>Observações</FormLabel>
+              <Input
+                placeholder="Notas adicionais"
+                value={assignForm.notes ?? ""}
+                onChange={(event) => setAssignForm((prev) => ({ ...prev, notes: event.target.value }))}
+                isDisabled={isReadOnly}
+              />
+            </FormControl>
+            <FormControl>
+              <FormLabel>Quantidade de acessos</FormLabel>
+              <Input
+                type="number"
+                min={1}
+                max={50}
+                value={assignForm.quantity}
+                onChange={(event) => {
+                  const digits = event.target.value.replace(/\D/g, "");
+                  setAssignForm((prev) => ({
+                    ...prev,
+                    quantity: digits,
+                  }));
+                }}
+                isDisabled={isReadOnly}
+              />
+            </FormControl>
+            <GridItem colSpan={{ base: 1, md: 2, xl: 1 }}>
+              <FormControl isRequired>
+                <FormLabel>Vendedor</FormLabel>
+                <Input
+                  list="tv-assign-vendors-new"
+                  placeholder={vendorsLoading ? "Carregando vendedores..." : "Nome do vendedor"}
+                  value={assignForm.soldBy}
+                  onChange={(event) => setAssignForm((prev) => ({ ...prev, soldBy: event.target.value }))}
+                  isDisabled={isReadOnly}
+                  autoComplete="off"
+                />
+                <datalist id="tv-assign-vendors-new">
+                  {vendorOptions.map((option) => (
+                    <option key={option.label} value={option.label} />
+                  ))}
+                </datalist>
+                <Stack direction={{ base: "column", md: "row" }} spacing={2} mt={2}>
+                  {isAdmin ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      leftIcon={<FiUserPlus />}
+                      as={Link}
+                      href="/admin/usuarios"
+                    >
+                      Cadastrar vendedor
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      leftIcon={<FiSend />}
+                      onClick={() => handleAuthorizationRequest("VENDOR_CREATE_REQUEST", { clientId: "new" })}
+                    >
+                      Solicitar novo vendedor
+                    </Button>
+                  )}
+                </Stack>
+              </FormControl>
+            </GridItem>
+            <FormControl>
+              <FormLabel>Data da venda</FormLabel>
+              <Input
+                type="date"
+                value={assignForm.soldAt ?? ""}
+                onChange={(event) => setAssignForm((prev) => ({ ...prev, soldAt: event.target.value }))}
+                isDisabled={isReadOnly}
+              />
+            </FormControl>
+          </SimpleGrid>
+          <Text fontSize="sm" color="gray.500" mt={4}>
+            💡 Salve o cliente primeiro para gerar os acessos de TV com essas configurações.
+          </Text>
+        </Box>
+      </Stack>
     );
   }
 

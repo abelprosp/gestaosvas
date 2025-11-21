@@ -44,6 +44,7 @@ const tvSetupSchema = z
     startsAt: z.string().optional(),
     expiresAt: z.string().min(1, "Informe uma data de vencimento."),
     notes: z.string().optional(),
+    hasTelephony: z.boolean().optional(),
   })
   .optional();
 
@@ -255,6 +256,7 @@ async function handleTvServiceForClient(
         expiresAt: tvSetup?.expiresAt ?? undefined,
         notes: tvSetup?.notes ?? undefined,
         planType,
+        hasTelephony: tvSetup?.hasTelephony ?? undefined,
       };
 
       if (quantity > 1) {

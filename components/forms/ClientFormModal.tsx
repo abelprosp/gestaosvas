@@ -64,6 +64,7 @@ export interface ClientFormValues {
     startsAt?: string;
     expiresAt?: string;
     notes?: string;
+    hasTelephony?: boolean;
   };
   cloudSetups?: Array<{
     serviceId: string;
@@ -110,6 +111,7 @@ type TvSetupState = {
   startsAt: string;
   expiresAt: string;
   notes: string;
+  hasTelephony: boolean;
 };
 
 function buildInitialTvSetup(): TvSetupState {
@@ -121,6 +123,7 @@ function buildInitialTvSetup(): TvSetupState {
     startsAt: todayISODate(),
     expiresAt: "",
     notes: "",
+    hasTelephony: false,
   };
 }
 
@@ -504,6 +507,7 @@ useEffect(() => {
           startsAt: tvSetup.startsAt || undefined,
           expiresAt: tvSetup.expiresAt || undefined,
           notes: tvSetup.notes?.trim() || undefined,
+          hasTelephony: tvSetup.hasTelephony || undefined,
         };
       }
 
@@ -747,6 +751,21 @@ useEffect(() => {
                       <option value="ESSENCIAL">TV Essencial</option>
                       <option value="PREMIUM">TV Premium</option>
                     </Select>
+                  </FormControl>
+                  <FormControl>
+                    <FormLabel>Telefonia</FormLabel>
+                    <Checkbox
+                      isChecked={tvSetup.hasTelephony}
+                      onChange={(event) =>
+                        setTvSetup((prev) => ({
+                          ...prev,
+                          hasTelephony: event.target.checked,
+                        }))
+                      }
+                      colorScheme="brand"
+                    >
+                      Cliente tem telefonia
+                    </Checkbox>
                   </FormControl>
                   <FormControl>
                     <FormLabel>Quantidade de acessos</FormLabel>
