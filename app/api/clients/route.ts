@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createApiHandler } from "@/lib/utils/apiHandler";
 import { createServerClient } from "@/lib/supabase/server";
@@ -181,7 +181,7 @@ async function fetchTvAssignmentsForClients(
 
     list.forEach((item, index) => {
       item.profileLabel = `Perfil ${index + 1}`;
-      item.history.sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
+      item.history.sort((a: { createdAt: string }, b: { createdAt: string }) => (a.createdAt > b.createdAt ? -1 : 1));
     });
   });
 
@@ -237,13 +237,22 @@ async function handleTvServiceForClient(
 ) {
   const serviceIds = selections.map((selection) => selection.serviceId);
   const services = await fetchServicesByIds(serviceIds);
-  const hasTv = services.some((service) => service.name?.toLowerCase().includes("tv"));
+  
+  // Detectar serviço TV - verifica se o nome contém "tv" (case insensitive)
+  // Aceita: "TV", "tv", "TV Essencial", "TV Negociável", etc.
+  const hasTv = services.some((service) => {
+    const serviceName = (service.name ?? "").toLowerCase();
+    return serviceName.includes("tv");
+  });
 
-  console.log(`[handleTvServiceForClient] Cliente ${clientId}:`, {
+  console.log(`[handleTvServiceForClient] 🔍 Análise para cliente ${clientId}:`, {
     hasTv,
     tvSetupPresent: !!tvSetup,
+    tvSetupKeys: tvSetup ? Object.keys(tvSetup) : [],
     serviceIds,
     serviceNames: services.map(s => s.name),
+    serviceCount: services.length,
+    selectionsCount: selections.length,
   });
 
   // Se cliente tem serviço TV mas não tem tvSetup, apenas não cria acessos
@@ -289,7 +298,7 @@ async function handleTvServiceForClient(
           tvSetup?.soldAt && tvSetup.soldAt.length === 10
             ? new Date(`${tvSetup.soldAt}T12:00:00`).toISOString()
             : tvSetup?.soldAt ?? undefined;
-        const soldBy = tvSetup.soldBy.trim();
+        const soldBy = tvSetup.soldBy?.trim() || "";
         
         const params = {
           clientId,
@@ -360,16 +369,30 @@ async function handleTvServiceForClient(
         console.log(`[handleTvServiceForClient] ℹ️ Cliente ${clientId} já possui acessos de TV atribuídos`);
       }
     } else {
-      console.log(`[handleTvServiceForClient] ⚠️ Campos obrigatórios não preenchidos (soldBy: ${hasSoldBy}, expiresAt: ${hasExpiresAt}), não criando acessos para cliente ${clientId}. O serviço TV será salvo, mas sem acessos configurados.`);
+      console.warn(`[handleTvServiceForClient] ⚠️ Campos obrigatórios não preenchidos para cliente ${clientId}:`, {
+        hasSoldBy,
+        hasExpiresAt,
+        expiresAtOriginal: expiresAtTrimmed,
+        expiresAtFormatted,
+        tvSetupKeys: Object.keys(tvSetup),
+        tvSetupContent: JSON.stringify(tvSetup, null, 2),
+      });
+      console.warn(`[handleTvServiceForClient] ⚠️ Serviço TV será salvo, mas SEM acessos configurados para cliente ${clientId}`);
     }
     // Se campos não estão preenchidos, simplesmente não cria acessos (não dá erro)
     // O serviço TV já foi salvo via syncClientServices, apenas não tem acessos configurados
   } else if (hasTv && !tvSetup) {
     // Cliente tem serviço TV mas não tem tvSetup (campos não preenchidos)
     // Apenas loga, não faz nada - o serviço já foi salvo
-    console.log(`[handleTvServiceForClient] ℹ️ Cliente ${clientId} tem serviço TV mas tvSetup não foi fornecido. Serviço será salvo sem acessos configurados.`);
+    console.warn(`[handleTvServiceForClient] ⚠️ Cliente ${clientId} tem serviço TV mas tvSetup não foi fornecido:`, {
+      serviceNames: services.map(s => s.name),
+      serviceIds,
+      selectionsCount: selections.length,
+    });
+    console.warn(`[handleTvServiceForClient] ⚠️ Serviço será salvo sem acessos configurados. Para criar acessos, preencha vendedor e vencimento ao criar o cliente.`);
   } else if (!hasTv) {
     // Cliente não tem serviço TV, libera slots se houver
+    console.log(`[handleTvServiceForClient] ℹ️ Cliente ${clientId} não tem serviço TV. Liberando slots se houver.`);
     await releaseSlotsForClient(clientId);
   }
 }
@@ -635,7 +658,6 @@ export const POST = createApiHandler(async (req) => {
     throw new HttpError(500, "Falha ao criar cliente");
   }
 
-  const selectedServiceIds = selections.map((selection) => selection.serviceId);
   try {
     // Primeiro sincroniza os serviços (salva os relacionamentos cliente-serviço)
     console.log(`[POST /api/clients] Sincronizando ${selections.length} serviço(s) para cliente ${data.id}`);
@@ -645,9 +667,16 @@ export const POST = createApiHandler(async (req) => {
     // Depois tenta processar configurações especiais (TV, Cloud)
     // Os acessos serão gerados automaticamente se tvSetup estiver preenchido
     try {
-      console.log("[POST /api/clients] Processando configurações especiais, clientId:", data.id, "tvSetup:", tvSetup ? "presente" : "ausente", "cloudSetups:", cloudSetups ? `${cloudSetups.length} configuração(ões)` : "ausente");
+      console.log("[POST /api/clients] 🔄 Processando configurações especiais:", {
+        clientId: data.id,
+        tvSetupPresent: !!tvSetup,
+        tvSetupContent: tvSetup ? JSON.stringify(tvSetup, null, 2) : "ausente",
+        cloudSetupsCount: cloudSetups ? cloudSetups.length : 0,
+        selectionsCount: selections.length,
+        serviceIds: selections.map(s => s.serviceId),
+      });
       await handleTvServiceForClient(data.id, selections, tvSetup);
-      console.log("[POST /api/clients] ✅ Configurações de TV processadas com sucesso");
+      console.log("[POST /api/clients] ✅ Configurações de TV processadas com sucesso para cliente", data.id);
     } catch (tvError) {
       // Verificar se é erro de schema (tabela não existe)
       // Verificar pelos códigos de schema do Supabase
