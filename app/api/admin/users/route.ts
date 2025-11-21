@@ -27,9 +27,23 @@ const updateUserSchema = z
 export const GET = createApiHandler(
   async (req) => {
     const supabase = createServerClient();
+    
+    // Verificar se a Service Role Key está configurada
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error("SUPABASE_SERVICE_ROLE_KEY não está configurada");
+      throw new Error("Configuração de servidor incompleta. Service Role Key não encontrada.");
+    }
+
     const { data, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    
     if (error) {
+      console.error("Erro ao listar usuários:", error);
       throw error;
+    }
+
+    if (!data || !data.users) {
+      console.warn("Resposta vazia ao listar usuários");
+      return NextResponse.json([]);
     }
 
     const users = data.users.map((user) => ({
@@ -41,6 +55,7 @@ export const GET = createApiHandler(
       lastSignInAt: user.last_sign_in_at,
     }));
 
+    console.log(`Listados ${users.length} usuários`);
     return NextResponse.json(users);
   },
   { requireAdmin: true }

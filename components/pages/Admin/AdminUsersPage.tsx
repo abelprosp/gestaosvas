@@ -35,11 +35,14 @@ import {
   useColorModeValue,
   useDisclosure,
   useToast,
+  Alert,
+  AlertIcon,
 } from "@chakra-ui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useRef, useState } from "react";
 import { FiEdit, FiTrash } from "react-icons/fi";
 import { api } from "@/lib/api/client";
+import { useAuth } from "@/context/AuthContext";
 
 interface AdminUser {
   id: string;
@@ -53,9 +56,10 @@ interface AdminUser {
 export function AdminUsersPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
+  const { isAdmin, role, user } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("user");
+  const [roleField, setRoleField] = useState("user");
   const [name, setName] = useState("");
   const editModal = useDisclosure();
   const deleteDialog = useDisclosure();
@@ -85,12 +89,25 @@ export function AdminUsersPage() {
     return "Não foi possível concluir a operação.";
   };
 
-  const { data: users = [], isLoading } = useQuery<AdminUser[]>({
+  const { data: users = [], isLoading, error: usersError } = useQuery<AdminUser[]>({
     queryKey: ["admin", "users"],
     queryFn: async () => {
-      const response = await api.get<AdminUser[]>("/admin/users");
-      return response.data;
+      try {
+        const response = await api.get<AdminUser[]>("/admin/users");
+        return response.data;
+      } catch (error: any) {
+        console.error("Erro ao buscar usuários:", error);
+        const errorMessage = extractErrorMessage(error);
+        toast({
+          title: "Erro ao carregar usuários",
+          description: errorMessage,
+          status: "error",
+          duration: 5000,
+        });
+        throw error;
+      }
     },
+    retry: false,
   });
 
   const createUser = useMutation({
@@ -98,7 +115,7 @@ export function AdminUsersPage() {
       const response = await api.post("/admin/users", {
         email,
         password,
-        role,
+        role: roleField,
         name: name.trim() ? name.trim() : undefined,
       });
       return response.data;
@@ -108,7 +125,7 @@ export function AdminUsersPage() {
       toast({ title: "Usuário criado", status: "success" });
       setEmail("");
       setPassword("");
-      setRole("user");
+      setRoleField("user");
       setName("");
     },
     onError: (error: unknown) => {
@@ -220,6 +237,20 @@ export function AdminUsersPage() {
     updateUser.mutate({ id: editingUser.id, payload });
   };
 
+  if (!isAdmin) {
+    return (
+      <Stack spacing={6}>
+        <Alert status="warning">
+          <AlertIcon />
+          Você não tem permissão para acessar esta página. Apenas administradores podem gerenciar usuários.
+          <Text fontSize="sm" mt={2}>
+            Seu role atual: <strong>{role}</strong>
+          </Text>
+        </Alert>
+      </Stack>
+    );
+  }
+
   return (
     <Stack spacing={6}>
       <Heading>Gerenciamento de usuários</Heading>
@@ -278,7 +309,7 @@ export function AdminUsersPage() {
 
           <FormControl flex={{ base: 1, md: 0.8 }}>
             <FormLabel mb={1}>Função</FormLabel>
-            <Select value={role} onChange={(event) => setRole(event.target.value)} autoComplete="off">
+            <Select value={roleField} onChange={(event) => setRoleField(event.target.value)} autoComplete="off">
               <option value="user">Usuário</option>
               <option value="admin">Administrador</option>
             </Select>
@@ -317,15 +348,24 @@ export function AdminUsersPage() {
             <Tbody>
               {isLoading && (
                 <Tr>
-                  <Td colSpan={4}>Carregando...</Td>
+                  <Td colSpan={5}>Carregando...</Td>
                 </Tr>
               )}
-              {!isLoading && users.length === 0 && (
+              {usersError && (
                 <Tr>
-                  <Td colSpan={4}>Nenhum usuário cadastrado.</Td>
+                  <Td colSpan={5}>
+                    <Text color="red.500">
+                      Erro ao carregar usuários: {extractErrorMessage(usersError)}
+                    </Text>
+                  </Td>
                 </Tr>
               )}
-              {users.map((user) => (
+              {!isLoading && !usersError && users.length === 0 && (
+                <Tr>
+                  <Td colSpan={5}>Nenhum usuário cadastrado.</Td>
+                </Tr>
+              )}
+              {!usersError && users.map((user) => (
                 <Tr key={user.id}>
                   <Td>{user.name ?? "—"}</Td>
                   <Td>{user.email}</Td>
