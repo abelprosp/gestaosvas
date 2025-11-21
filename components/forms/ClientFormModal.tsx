@@ -472,63 +472,72 @@ useEffect(() => {
       const parsedQuantity = tvSetup.quantity ? parseInt(tvSetup.quantity, 10) : NaN;
       const quantity =
         Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? Math.min(50, parsedQuantity) : 1;
+      
+      // TV Setup é opcional - só inclui se todos os campos obrigatórios estiverem preenchidos
       if (!defaultValues && isTvSelected) {
-        if (!tvSetup.soldBy || !tvSetup.soldBy.trim()) {
-          toast({
-            title: "Selecione o vendedor",
-            status: "error",
-          });
-          return;
+        const hasSoldBy = tvSetup.soldBy && tvSetup.soldBy.trim();
+        const hasExpiresAt = tvSetup.expiresAt && tvSetup.expiresAt.trim().length === 10;
+        
+        // Se o usuário selecionou TV mas não preencheu os campos, simplesmente não inclui o tvSetup
+        // O cliente será criado sem acessos de TV configurados, mas pode adicionar depois
+        if (hasSoldBy && hasExpiresAt) {
+          tvSetupPayload = {
+            quantity,
+            planType: tvSetup.planType,
+            soldBy: tvSetup.soldBy.trim(),
+            soldAt: tvSetup.soldAt || undefined,
+            startsAt: tvSetup.startsAt || undefined,
+            expiresAt: tvSetup.expiresAt || undefined,
+            notes: tvSetup.notes?.trim() || undefined,
+            hasTelephony: tvSetup.hasTelephony || undefined,
+          };
         }
-
-        if (!tvSetup.expiresAt || tvSetup.expiresAt.trim().length !== 10) {
-          toast({
-            title: "Informe a data de vencimento",
-            description: "Utilize o formato AAAA-MM-DD.",
-            status: "error",
-          });
-          return;
-        }
-
-        tvSetupPayload = {
-          quantity,
-          planType: tvSetup.planType,
-          soldBy: tvSetup.soldBy.trim(),
-          soldAt: tvSetup.soldAt || undefined,
-          startsAt: tvSetup.startsAt || undefined,
-          expiresAt: tvSetup.expiresAt || undefined,
-          notes: tvSetup.notes?.trim() || undefined,
-          hasTelephony: tvSetup.hasTelephony || undefined,
-        };
+        // Se não tiver todos os campos, não inclui o tvSetup (não bloqueia a criação do cliente)
       }
 
       let cloudSetupsPayload: ClientFormValues["cloudSetups"];
       if (selectedCloudServiceIds.length) {
         const setups: NonNullable<ClientFormValues["cloudSetups"]> = [];
+        // Apenas inclui serviços Cloud que tiverem vencimento preenchido
+        // Serviços selecionados sem vencimento não serão adicionados, mas não bloqueiam a criação
         for (const serviceId of selectedCloudServiceIds) {
           const config = cloudSetups[serviceId];
-          if (!config || !config.expiresAt || config.expiresAt.trim().length !== 10) {
-            toast({
-              title: "Informe o vencimento",
-              description: "Defina a data para todos os serviços selecionados.",
-              status: "error",
+          if (config && config.expiresAt && config.expiresAt.trim().length === 10) {
+            setups.push({
+              serviceId,
+              expiresAt: config.expiresAt,
+              isTest: config.isTest,
+              notes: config.notes?.trim() || undefined,
             });
-            return;
           }
-          setups.push({
-            serviceId,
-            expiresAt: config.expiresAt,
-            isTest: config.isTest,
-            notes: config.notes?.trim() || undefined,
-          });
+          // Se não tiver vencimento, simplesmente não inclui este serviço (não bloqueia a criação)
         }
-        cloudSetupsPayload = setups;
+        cloudSetupsPayload = setups.length > 0 ? setups : undefined;
       }
+
+      // Se TV foi selecionada mas não tem tvSetup (campos não preenchidos), remove TV dos serviços
+      const finalServiceIds = [...serviceIds];
+      if (isTvSelected && !tvSetupPayload) {
+        const tvServiceIds = tvServices.map((s) => s.id);
+        const filteredServiceIds = finalServiceIds.filter((id) => !tvServiceIds.includes(id));
+        finalServiceIds.splice(0, finalServiceIds.length, ...filteredServiceIds);
+      }
+      
+      // Se Cloud foi selecionado mas não tem cloudSetups (campos não preenchidos), remove Cloud dos serviços
+      if (selectedCloudServiceIds.length > 0 && !cloudSetupsPayload) {
+        const filteredServiceIds = finalServiceIds.filter((id) => !selectedCloudServiceIds.includes(id));
+        finalServiceIds.splice(0, finalServiceIds.length, ...filteredServiceIds);
+      }
+      
+      // Ajusta serviceSelections para corresponder aos serviceIds finais
+      const finalServiceSelections = serviceSelections.filter((selection) =>
+        finalServiceIds.includes(selection.serviceId)
+      );
 
       await onSubmit({
         ...values,
-        serviceIds,
-        serviceSelections,
+        serviceIds: finalServiceIds,
+        serviceSelections: finalServiceSelections,
         tvSetup: tvSetupPayload,
         cloudSetups: cloudSetupsPayload,
       });
