@@ -190,9 +190,11 @@ export async function assignSlotToClient(params: AssignSlotParams) {
       .maybeSingle();
 
     if (updateError) {
+       console.error("Erro ao atualizar slot:", updateError);
        if (isSchemaMissing(updateError)) {
-         console.warn("Schema de TV ausente.");
-         return {} as any; // Retorna vazio para não quebrar fluxo, mas loga warning
+         console.warn(`Schema de TV ausente ou erro de permissão: ${updateError.code} - ${updateError.message}`);
+         // Se for erro de schema, vamos tentar lançar para ver no log principal
+         throw updateError; 
        }
        throw updateError;
     }

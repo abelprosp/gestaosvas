@@ -83,7 +83,9 @@ function sanitizeDocument(document: string): string {
 // function isUniqueViolation(error: PostgrestError) { return error.code === "23505"; }
 
 async function syncClientServices(clientId: string, selections: ServiceSelection[]) {
-  const supabase = createServerClient();
+  console.log(`[syncClientServices] Iniciando para cliente ${clientId}, serviços:`, JSON.stringify(selections));
+  // Usa Service Role Key para garantir que services sejam salvos independente de RLS
+  const supabase = createServerClient(true);
   const uniqueSelections = new Map<string, ServiceSelection>();
   selections.forEach((selection) => {
     if (selection?.serviceId) {
@@ -91,8 +93,11 @@ async function syncClientServices(clientId: string, selections: ServiceSelection
     }
   });
 
+  console.log(`[syncClientServices] IDs únicos a salvar:`, Array.from(uniqueSelections.keys()));
+
   const { error: deleteError } = await supabase.from("client_services").delete().eq("client_id", clientId);
   if (deleteError) {
+    console.error(`[syncClientServices] Erro ao deletar serviços anteriores:`, deleteError);
     if (isSchemaMissing(deleteError)) {
       console.warn(
         "[syncClientServices] Tabela client_services indisponível. Execute as migrações do Supabase para habilitar a gestão de serviços.",
@@ -103,6 +108,7 @@ async function syncClientServices(clientId: string, selections: ServiceSelection
   }
 
   if (!uniqueSelections.size) {
+    console.log(`[syncClientServices] Nenhum serviço para inserir.`);
     return;
   }
 
@@ -113,14 +119,22 @@ async function syncClientServices(clientId: string, selections: ServiceSelection
     // sold_by: selection.soldBy // TODO: Adicionar coluna no banco
   }));
 
+  console.log(`[syncClientServices] Inserindo ${rows.length} linhas:`, JSON.stringify(rows));
+
   const { error: insertError } = await supabase.from("client_services").insert(rows);
 
   if (insertError) {
+    console.error(`[syncClientServices] ❌ ERRO CRÍTICO ao inserir serviços:`, JSON.stringify(insertError));
     if (isSchemaMissing(insertError)) {
+      console.warn("[syncClientServices] Erro de schema ignorado (mas impediu salvamento)");
       return;
     }
-    throw insertError;
+    // Lança o erro para vermos no log do Vercel
+    const errorMsg = (insertError as any).message || String(insertError);
+    const errorCode = (insertError as any).code || "UNKNOWN";
+    throw new Error(`Erro ao salvar serviços: ${errorMsg} (${errorCode})`);
   }
+  console.log(`[syncClientServices] ✅ Sucesso! Serviços salvos.`);
 }
 
 async function fetchTvAssignmentsForClients(
@@ -406,7 +420,7 @@ async function fetchClientSummary(clientId: string) {
   const supabase = createServerClient();
   const { data, error } = await supabase
     .from("clients")
-    .select("*, services:client_services(*, service:services(*))")
+    .select("*, client_services(*, service:services(*))")
     .eq("id", clientId)
     .single();
 
@@ -436,7 +450,7 @@ export const GET = createApiHandler(async (req) => {
 
   let query = supabase
     .from("clients")
-    .select("*, services:client_services(*, service:services(*))", { count: "exact" })
+    .select("*, client_services(*, service:services(*))", { count: "exact" })
     .order("created_at", { ascending: false });
 
   if (search) {
@@ -545,14 +559,20 @@ export const POST = createApiHandler(async (req) => {
   }
 
   try {
-    const selections = data.serviceSelections ?? [];
-    // Se serviceIds veio mas selections não, monta selections básicos
-    if (!selections.length && data.serviceIds?.length) {
-        console.log("[POST] Convertendo serviceIds para selections:", data.serviceIds);
-        data.serviceIds.forEach(id => selections.push({ serviceId: id }));
+    // Garante que selections tenha todos os IDs, combinando serviceSelections e serviceIds
+    const selections = [...(data.serviceSelections ?? [])];
+    const existingIds = new Set(selections.map(s => s.serviceId));
+    
+    if (data.serviceIds?.length) {
+        data.serviceIds.forEach(id => {
+            if (!existingIds.has(id)) {
+                selections.push({ serviceId: id });
+                existingIds.add(id);
+            }
+        });
     }
     
-    console.log("[POST] Sincronizando serviços:", selections.length, selections);
+    console.log("[POST] Sincronizando serviços (final):", selections.length, JSON.stringify(selections));
 
     // 2. Salva Serviços
     await syncClientServices(newClient.id, selections);
