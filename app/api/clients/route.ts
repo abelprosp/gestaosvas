@@ -16,10 +16,10 @@ type ServiceSelection = {
 const costCenterSchema = z.enum(["LUXUS", "NEXUS"]);
 
 const clientSchema = z.object({
-  name: z.string().min(2),
-  email: z.string().email(),
+  name: z.string().min(1, "O nome do cliente é obrigatório"),
+  email: z.string().email("Email inválido"),
   phone: z.string().optional(),
-  document: z.string().min(5),
+  document: z.string().min(5, "Documento muito curto"),
   costCenter: costCenterSchema,
   companyName: z.string().optional(),
   notes: z.string().optional(),
@@ -492,6 +492,15 @@ export const GET = createApiHandler(async (req) => {
 
 export const POST = createApiHandler(async (req) => {
   const body = await req.json();
+  
+  console.log("[POST /api/clients] Payload recebido:", JSON.stringify({
+    name: body.name,
+    serviceIds: body.serviceIds,
+    serviceSelectionsCount: body.serviceSelections?.length,
+    tvSetup: body.tvSetup,
+    hasTvSetup: !!body.tvSetup
+  }, null, 2));
+
   const validation = clientCreateSchema.safeParse(body);
 
   if (!validation.success) {
@@ -539,14 +548,22 @@ export const POST = createApiHandler(async (req) => {
     const selections = data.serviceSelections ?? [];
     // Se serviceIds veio mas selections não, monta selections básicos
     if (!selections.length && data.serviceIds?.length) {
+        console.log("[POST] Convertendo serviceIds para selections:", data.serviceIds);
         data.serviceIds.forEach(id => selections.push({ serviceId: id }));
     }
+    
+    console.log("[POST] Sincronizando serviços:", selections.length, selections);
 
     // 2. Salva Serviços
     await syncClientServices(newClient.id, selections);
 
     // 3. Processa TV (Cria acessos se necessário)
-    await handleTvServiceForClient(newClient.id, selections, data.tvSetup);
+    if (selections.length > 0) {
+        console.log("[POST] Iniciando processamento de TV...");
+        await handleTvServiceForClient(newClient.id, selections, data.tvSetup);
+    } else {
+        console.warn("[POST] Nenhum serviço selecionado, pulando configuração de TV");
+    }
 
     // 4. Processa Cloud
     if (data.cloudSetups) {
@@ -557,6 +574,9 @@ export const POST = createApiHandler(async (req) => {
       console.error("Erro no pós-processamento do cliente:", error);
       // Não deleta o cliente, permite que o usuário tente corrigir editando
   }
+
+  // Pequeno delay para garantir consistência de leitura após escrita
+  await new Promise(r => setTimeout(r, 500));
 
   const result = await fetchClientSummary(newClient.id);
   return NextResponse.json(result, { status: 201 });
