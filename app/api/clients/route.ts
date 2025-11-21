@@ -239,6 +239,15 @@ async function handleTvServiceForClient(
   const services = await fetchServicesByIds(serviceIds);
   const hasTv = services.some((service) => service.name?.toLowerCase().includes("tv"));
 
+  console.log(`[handleTvServiceForClient] Cliente ${clientId}:`, {
+    hasTv,
+    tvSetupPresent: !!tvSetup,
+    serviceIds,
+    serviceNames: services.map(s => s.name),
+  });
+
+  // Se cliente tem serviço TV mas não tem tvSetup, apenas não cria acessos
+  // O serviço TV já foi salvo via syncClientServices
   if (hasTv && tvSetup) {
     // Verificar se os campos obrigatórios para criar acessos estão preenchidos
     const hasSoldBy = tvSetup.soldBy && tvSetup.soldBy.trim();
@@ -328,10 +337,16 @@ async function handleTvServiceForClient(
         console.log(`[handleTvServiceForClient] ℹ️ Cliente ${clientId} já possui acessos de TV atribuídos`);
       }
     } else {
-      console.log(`[handleTvServiceForClient] ⚠️ Campos obrigatórios não preenchidos (soldBy: ${hasSoldBy}, expiresAt: ${hasExpiresAt}), não criando acessos para cliente ${clientId}`);
+      console.log(`[handleTvServiceForClient] ⚠️ Campos obrigatórios não preenchidos (soldBy: ${hasSoldBy}, expiresAt: ${hasExpiresAt}), não criando acessos para cliente ${clientId}. O serviço TV será salvo, mas sem acessos configurados.`);
     }
     // Se campos não estão preenchidos, simplesmente não cria acessos (não dá erro)
+    // O serviço TV já foi salvo via syncClientServices, apenas não tem acessos configurados
+  } else if (hasTv && !tvSetup) {
+    // Cliente tem serviço TV mas não tem tvSetup (campos não preenchidos)
+    // Apenas loga, não faz nada - o serviço já foi salvo
+    console.log(`[handleTvServiceForClient] ℹ️ Cliente ${clientId} tem serviço TV mas tvSetup não foi fornecido. Serviço será salvo sem acessos configurados.`);
   } else if (!hasTv) {
+    // Cliente não tem serviço TV, libera slots se houver
     await releaseSlotsForClient(clientId);
   }
 }
@@ -599,14 +614,17 @@ export const POST = createApiHandler(async (req) => {
 
   const selectedServiceIds = selections.map((selection) => selection.serviceId);
   try {
+    // Primeiro sincroniza os serviços (salva os relacionamentos cliente-serviço)
+    console.log(`[POST /api/clients] Sincronizando ${selections.length} serviço(s) para cliente ${data.id}`);
     await syncClientServices(data.id, selections);
+    console.log(`[POST /api/clients] ✅ ${selections.length} serviço(s) sincronizado(s) com sucesso`);
     
-    // Tentar processar TV, mas não falhar se schema não estiver disponível
+    // Depois tenta processar configurações especiais (TV, Cloud)
     // Os acessos serão gerados automaticamente se tvSetup estiver preenchido
     try {
-      console.log("[POST /api/clients] Processando serviço TV, clientId:", data.id, "tvSetup:", tvSetup ? "presente" : "ausente");
+      console.log("[POST /api/clients] Processando configurações especiais, clientId:", data.id, "tvSetup:", tvSetup ? "presente" : "ausente", "cloudSetups:", cloudSetups ? `${cloudSetups.length} configuração(ões)` : "ausente");
       await handleTvServiceForClient(data.id, selections, tvSetup);
-      console.log("[POST /api/clients] Acessos de TV processados com sucesso");
+      console.log("[POST /api/clients] ✅ Configurações de TV processadas com sucesso");
     } catch (tvError) {
       // Verificar se é erro de schema (tabela não existe)
       const schemaCodes = ["PGRST200", "PGRST201", "PGRST202", "PGRST203", "PGRST204", "PGRST205"];

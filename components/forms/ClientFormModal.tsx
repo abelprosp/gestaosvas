@@ -548,21 +548,17 @@ useEffect(() => {
         cloudSetupsPayload = setups.length > 0 ? setups : undefined;
       }
 
-      // Se TV foi selecionada mas não tem tvSetup (campos não preenchidos), remove TV dos serviços
+      // MANTER serviços mesmo se campos obrigatórios não estiverem preenchidos
+      // O serviço será salvo, apenas sem acessos/configurações especiais
+      // Isso permite que o cliente tenha o serviço cadastrado e possa configurar depois
       const finalServiceIds = [...serviceIds];
-      if (isTvSelected && !tvSetupPayload) {
-        const tvServiceIds = tvServices.map((s) => s.id);
-        const filteredServiceIds = finalServiceIds.filter((id) => !tvServiceIds.includes(id));
-        finalServiceIds.splice(0, finalServiceIds.length, ...filteredServiceIds);
-      }
+      // NÃO remove TV dos serviços - se selecionou, deve ser salvo
+      // Apenas não cria acessos se campos não estiverem preenchidos
       
-      // Se Cloud foi selecionado mas não tem cloudSetups (campos não preenchidos), remove Cloud dos serviços
-      if (selectedCloudServiceIds.length > 0 && !cloudSetupsPayload) {
-        const filteredServiceIds = finalServiceIds.filter((id) => !selectedCloudServiceIds.includes(id));
-        finalServiceIds.splice(0, finalServiceIds.length, ...filteredServiceIds);
-      }
+      // NÃO remove Cloud dos serviços - se selecionou, deve ser salvo
+      // Apenas não cria acessos se campos não estiverem preenchidos
       
-      // Ajusta serviceSelections para corresponder aos serviceIds finais
+      // Ajusta serviceSelections para corresponder aos serviceIds (mantém todos)
       const finalServiceSelections = serviceSelections.filter((selection) =>
         finalServiceIds.includes(selection.serviceId)
       );
