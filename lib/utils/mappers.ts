@@ -153,7 +153,8 @@ export function mapClientRow(row: ClientRow): Client {
     address: row.address,
     city: row.city,
     state: row.state,
-    openedBy: (row as any).opened_by ?? null,
+    // openedBy: (row as any).opened_by ?? null, // Comentado até criar coluna no banco
+    openedBy: null, // Por enquanto null até criar migração
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     services: [],
@@ -188,7 +189,7 @@ export function mapClientRow(row: ClientRow): Client {
 }
 
 export function clientInsertPayload(data: Partial<Client>): Record<string, unknown> {
-  return {
+  const payload: Record<string, unknown> = {
     name: data.name,
     email: data.email,
     phone: data.phone ?? null,
@@ -199,12 +200,19 @@ export function clientInsertPayload(data: Partial<Client>): Record<string, unkno
     address: data.address ?? null,
     city: data.city ?? null,
     state: data.state ?? null,
-    opened_by: data.openedBy ?? null,
   };
+  
+  // Adicionar opened_by apenas se existir no banco (verificar se a coluna existe)
+  // Por enquanto, comentado até criar migração no banco
+  // if (data.openedBy) {
+  //   payload.opened_by = data.openedBy;
+  // }
+  
+  return payload;
 }
 
 export function clientUpdatePayload(data: Partial<Client>): Record<string, unknown> {
-  return {
+  const payload: Record<string, unknown> = {
     ...(data.name !== undefined ? { name: data.name } : {}),
     ...(data.email !== undefined ? { email: data.email } : {}),
     ...(data.phone !== undefined ? { phone: data.phone } : {}),
@@ -215,9 +223,16 @@ export function clientUpdatePayload(data: Partial<Client>): Record<string, unkno
     ...(data.address !== undefined ? { address: data.address } : {}),
     ...(data.city !== undefined ? { city: data.city } : {}),
     ...(data.state !== undefined ? { state: data.state } : {}),
-    ...(data.openedBy !== undefined ? { opened_by: data.openedBy ?? null } : {}),
     updated_at: new Date().toISOString(),
   };
+  
+  // Adicionar opened_by apenas se existir no banco (verificar se a coluna existe)
+  // Por enquanto, comentado até criar migração no banco
+  // if (data.openedBy !== undefined) {
+  //   payload.opened_by = data.openedBy ?? null;
+  // }
+  
+  return payload;
 }
 
 export function mapLineRow(row: LineRow): Line {
