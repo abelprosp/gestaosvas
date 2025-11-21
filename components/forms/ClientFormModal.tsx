@@ -992,9 +992,10 @@ useEffect(() => {
                 </Stack>
               </Box>
             )}
-            {tvServices.length > 0 && (
+            {/* TVAssignmentsManager só aparece quando editando cliente existente */}
+            {tvServices.length > 0 && defaultValues?.id && (
               <TVAssignmentsManager
-                clientId={defaultValues?.id}
+                clientId={defaultValues.id}
                 isTvSelected={isTvSelected}
                 isOpen={isOpen}
               />
