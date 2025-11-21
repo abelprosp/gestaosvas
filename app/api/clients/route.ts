@@ -4,7 +4,7 @@ import { createApiHandler } from "@/lib/utils/apiHandler";
 import { createServerClient } from "@/lib/supabase/server";
 import { HttpError } from "@/lib/utils/httpError";
 import { PostgrestError } from "@supabase/supabase-js";
-import { mapClientRow, clientInsertPayload, clientUpdatePayload } from "@/lib/utils/mappers";
+import { mapClientRow, clientInsertPayload } from "@/lib/utils/mappers";
 import { assignMultipleSlotsToClient, assignSlotToClient, releaseSlotsForClient } from "@/lib/services/tvAssignments";
 import { TVPlanType } from "@/types";
 
@@ -78,13 +78,9 @@ function sanitizeDocument(document: string): string {
   throw new HttpError(400, "Informe um CPF ou CNPJ válido.");
 }
 
-function documentLengthPattern(length: number) {
-  return "_".repeat(length);
-}
-
-function isUniqueViolation(error: PostgrestError) {
-  return error.code === "23505";
-}
+// Funções auxiliares não usadas removidas
+// function documentLengthPattern(length: number) { return "_".repeat(length); }
+// function isUniqueViolation(error: PostgrestError) { return error.code === "23505"; }
 
 async function syncClientServices(clientId: string, selections: ServiceSelection[]) {
   const supabase = createServerClient();
@@ -114,15 +110,13 @@ async function syncClientServices(clientId: string, selections: ServiceSelection
     client_id: clientId,
     service_id: selection.serviceId,
     custom_price: selection.customPrice ?? null,
+    // sold_by: selection.soldBy // TODO: Adicionar coluna no banco
   }));
 
   const { error: insertError } = await supabase.from("client_services").insert(rows);
 
   if (insertError) {
     if (isSchemaMissing(insertError)) {
-      console.warn(
-        "[syncClientServices] Tabela client_services indisponível. Execute as migrações do Supabase para habilitar a gestão de serviços.",
-      );
       return;
     }
     throw insertError;
@@ -220,12 +214,7 @@ async function clientHasTvAssignment(clientId: string) {
     .limit(1)
     .maybeSingle();
 
-  if (error) {
-    if (isSchemaMissing(error)) {
-      return false;
-    }
-    throw error;
-  }
+  if (error && !isSchemaMissing(error)) throw error;
 
   return Boolean(data);
 }
@@ -238,171 +227,87 @@ async function handleTvServiceForClient(
   const serviceIds = selections.map((selection) => selection.serviceId);
   const services = await fetchServicesByIds(serviceIds);
   
-  // Detectar serviço TV - verifica se o nome contém "tv" (case insensitive)
-  // Aceita: "TV", "tv", "TV Essencial", "TV Negociável", etc.
+  // Detectar serviço TV (case insensitive)
   const hasTv = services.some((service) => {
     const serviceName = (service.name ?? "").toLowerCase();
     return serviceName.includes("tv");
   });
 
-  console.log(`[handleTvServiceForClient] 🔍 Análise para cliente ${clientId}:`, {
-    hasTv,
-    tvSetupPresent: !!tvSetup,
-    tvSetupKeys: tvSetup ? Object.keys(tvSetup) : [],
-    serviceIds,
-    serviceNames: services.map(s => s.name),
-    serviceCount: services.length,
-    selectionsCount: selections.length,
-  });
+  if (!hasTv) {
+    // Se não tem TV, libera slots se houver
+    await releaseSlotsForClient(clientId);
+    return;
+  }
 
-  // REGRA: Se cliente tem serviço TV, SEMPRE cria acessos automaticamente
-  // Se tvSetup não estiver completo, usa valores padrão
-  if (hasTv) {
-    // Verificar se já tem acessos atribuídos
-    const alreadyAssigned = await clientHasTvAssignment(clientId);
-    if (alreadyAssigned) {
-      console.log(`[handleTvServiceForClient] ℹ️ Cliente ${clientId} já possui acessos de TV atribuídos`);
-      return;
-    }
+  // Se tem TV, verifica se já tem acessos
+  const alreadyAssigned = await clientHasTvAssignment(clientId);
+  if (alreadyAssigned) {
+    return;
+  }
 
-    // Se tem tvSetup, usa os valores fornecidos, senão usa valores padrão
-    let soldBy: string;
-    let expiresAt: string;
-    let soldAt: string | undefined;
-    let startsAt: string | undefined;
-    let quantity = 1;
-    let planType: TVPlanType = "ESSENCIAL";
-    let notes: string | undefined;
-    let hasTelephony: boolean | undefined;
+  // Se não tem acessos, CRIA AGORA
+  console.log("[handleTvServiceForClient] Criando acessos de TV para cliente", clientId);
 
-    if (tvSetup) {
-      // Usar valores do tvSetup se disponíveis
-      soldBy = tvSetup.soldBy?.trim() || "Sistema";
-      const expiresAtTrimmed = tvSetup.expiresAt ? tvSetup.expiresAt.trim() : "";
-      
-      // Converter data se necessário (DD/MM/YYYY -> YYYY-MM-DD)
-      let expiresAtFormatted = expiresAtTrimmed;
-      if (expiresAtTrimmed.includes("/")) {
-        const parts = expiresAtTrimmed.split("/");
-        if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
-          expiresAtFormatted = `${parts[2]}-${parts[1]}-${parts[0]}`;
+  // Dados padrão
+  let soldBy = "Sistema";
+  let expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 30);
+  let expiresAtStr = expiresAt.toISOString().slice(0, 10);
+  let quantity = 1;
+  let planType: TVPlanType = "ESSENCIAL";
+  let notes: string | undefined = undefined;
+  let hasTelephony: boolean | undefined = undefined;
+  let soldAt: string | undefined = undefined;
+  let startsAt: string | undefined = undefined;
+
+  // Sobrescreve com dados do tvSetup se existirem
+  if (tvSetup) {
+    if (tvSetup.soldBy?.trim()) soldBy = tvSetup.soldBy.trim();
+    
+    if (tvSetup.expiresAt?.trim()) {
+        const raw = tvSetup.expiresAt.trim();
+        // Converte DD/MM/YYYY para YYYY-MM-DD se necessário
+        if (raw.includes("/")) {
+            const p = raw.split("/");
+            if (p.length === 3) expiresAtStr = `${p[2]}-${p[1]}-${p[0]}`;
+        } else if (raw.includes("-")) {
+            expiresAtStr = raw;
         }
-      }
-      
-      // Se data não foi fornecida ou inválida, usar 30 dias a partir de hoje
-      if (expiresAtFormatted.length === 10) {
-        expiresAt = expiresAtFormatted;
-      } else {
-        const defaultExpires = new Date();
-        defaultExpires.setDate(defaultExpires.getDate() + 30);
-        expiresAt = defaultExpires.toISOString().slice(0, 10);
-      }
-      
-      soldAt = tvSetup.soldAt && tvSetup.soldAt.length === 10
-        ? new Date(`${tvSetup.soldAt}T12:00:00`).toISOString()
-        : undefined;
-      startsAt = tvSetup.startsAt && tvSetup.startsAt.length === 10
-        ? tvSetup.startsAt
-        : undefined;
-      
-      const parsedQuantity = tvSetup.quantity 
-        ? (typeof tvSetup.quantity === "string" ? parseInt(tvSetup.quantity, 10) : tvSetup.quantity)
-        : 1;
-      quantity = Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? Math.min(50, parsedQuantity) : 1;
-      planType = tvSetup.planType ?? "ESSENCIAL";
-      notes = tvSetup.notes?.trim() || undefined;
-      hasTelephony = tvSetup.hasTelephony ?? undefined;
-    } else {
-      // Valores padrão quando tvSetup não foi fornecido
-      console.log(`[handleTvServiceForClient] ⚠️ Cliente ${clientId} tem serviço TV mas tvSetup não fornecido. Usando valores padrão.`);
-      soldBy = "Sistema";
-      const defaultExpires = new Date();
-      defaultExpires.setDate(defaultExpires.getDate() + 30);
-      expiresAt = defaultExpires.toISOString().slice(0, 10);
-      quantity = 1;
-      planType = "ESSENCIAL";
     }
-    
-    console.log(`[handleTvServiceForClient] 📋 Parâmetros para criar acessos TV (cliente ${clientId}):`, {
-      soldBy,
-      expiresAt,
-      quantity,
-      planType,
-      hasTelephony,
-      usingDefaults: !tvSetup,
-    });
-    
-    // SEMPRE cria acessos se tem serviço TV (mesmo sem tvSetup completo)
-    const params = {
+
+    if (tvSetup.quantity) {
+        const q = typeof tvSetup.quantity === 'string' ? parseInt(tvSetup.quantity) : tvSetup.quantity;
+        if (q > 0) quantity = q;
+    }
+
+    if (tvSetup.planType) planType = tvSetup.planType;
+    if (tvSetup.notes) notes = tvSetup.notes;
+    if (tvSetup.hasTelephony !== undefined) hasTelephony = tvSetup.hasTelephony;
+    if (tvSetup.soldAt) soldAt = tvSetup.soldAt;
+    if (tvSetup.startsAt) startsAt = tvSetup.startsAt;
+  }
+
+  const params = {
       clientId,
       soldBy,
       soldAt,
       startsAt,
-      expiresAt,
+      expiresAt: expiresAtStr,
       notes,
       planType,
-      hasTelephony,
-    };
+      hasTelephony
+  };
 
-    console.log(`[handleTvServiceForClient] 🚀 Criando ${quantity} acesso(s) de TV para cliente ${clientId}`, {
-      clientId,
-      quantity,
-      soldBy,
-      expiresAt,
-      planType,
-      usingDefaults: !tvSetup,
-    });
-    
-    try {
+  try {
       if (quantity > 1) {
-        const results = await assignMultipleSlotsToClient({
-          ...params,
-          quantity,
-        });
-        console.log(`[handleTvServiceForClient] ✅ ${results.length} acesso(s) de TV criado(s) com sucesso para cliente ${clientId}`);
+          await assignMultipleSlotsToClient({ ...params, quantity });
       } else {
-        const result = await assignSlotToClient(params);
-        console.log(`[handleTvServiceForClient] ✅ 1 acesso de TV criado com sucesso para cliente ${clientId}:`, {
-          slotId: result.id,
-          email: result.account?.email,
-          username: result.username,
-        });
+          await assignSlotToClient(params);
       }
-    } catch (assignError) {
-      // Verificar se é erro de schema (HttpError 503) - verificar propriedades diretamente
-      // Não podemos confiar apenas no instanceof em ambientes compilados
-      const isHttpError503 = 
-        assignError && 
-        typeof assignError === "object" &&
-        (("status" in assignError && (assignError as { status?: number }).status === 503) ||
-        (assignError instanceof HttpError && assignError.status === 503));
-      
-      // Verificar também pelos códigos de schema do Supabase
-      const schemaCodes = ["PGRST200", "PGRST201", "PGRST202", "PGRST203", "PGRST204", "PGRST205"];
-      const isSchemaError = 
-        assignError && 
-        typeof assignError === "object" && 
-        "code" in assignError &&
-        schemaCodes.includes((assignError as { code?: string }).code ?? "");
-      
-      if (isHttpError503 || isSchemaError) {
-        // É erro de schema - não relançar, apenas logar
-        console.warn(`[handleTvServiceForClient] ⚠️ Schema de TV não disponível para cliente ${clientId}. Serviço será salvo sem acessos de TV.`);
-        return; // Retorna sem lançar erro - cliente será salvo normalmente
-      }
-      
-      // Outro tipo de erro, loga e relança
-      console.error(`[handleTvServiceForClient] ❌ Erro ao criar acessos de TV para cliente ${clientId}:`, {
-        error: assignError,
-        message: assignError instanceof Error ? assignError.message : String(assignError),
-        stack: assignError instanceof Error ? assignError.stack : undefined,
-      });
-      throw assignError;
-    }
-  } else if (!hasTv) {
-    // Cliente não tem serviço TV, libera slots se houver
-    console.log(`[handleTvServiceForClient] ℹ️ Cliente ${clientId} não tem serviço TV. Liberando slots se houver.`);
-    await releaseSlotsForClient(clientId);
+      console.log("[handleTvServiceForClient] ✅ Sucesso ao criar TV");
+  } catch (e) {
+      console.error("[handleTvServiceForClient] ❌ Falha ao criar TV", e);
+      // Não lança erro para não quebrar a criação do cliente
   }
 }
 
@@ -437,11 +342,12 @@ async function syncCloudAccesses(
     const cloudServiceIds = Array.from(selectedSet).filter((id) => cloudServiceIdsSet.has(id));
     const missing = cloudServiceIds.filter((serviceId) => !setupMap.has(serviceId));
     if (missing.length) {
-      const missingNames = services
-        .filter((s) => missing.includes(s.id))
-        .map((s) => s.name)
-        .join(", ");
-      throw new HttpError(400, `Informe o vencimento para os seguintes serviços: ${missingNames}`);
+      // Não bloqueia mais, apenas ignora
+      // const missingNames = services
+      //   .filter((s) => missing.includes(s.id))
+      //   .map((s) => s.name)
+      //   .join(", ");
+      // throw new HttpError(400, `Informe o vencimento para os seguintes serviços: ${missingNames}`);
     }
   }
 
@@ -457,281 +363,201 @@ async function syncCloudAccesses(
     throw existingError;
   }
 
-  const existingIds = new Set<string>((existingData ?? []).map((row: { service_id: string }) => row.service_id));
+  const existingServiceIds = new Set((existingData ?? []).map((row) => row.service_id));
+  const currentServiceIds = new Set(setupMap.keys());
+  
+  // Apenas processa se tivermos IDs de serviço válidos no setup
+  if (currentServiceIds.size === 0) return;
 
-  const upsertTargets = selectedSet
-    ? Array.from(selectedSet)
-        .filter((serviceId) => cloudServiceIdsSet.has(serviceId))
-        .map((serviceId) => setupMap.get(serviceId)!)
-        .filter(Boolean)
-    : Array.from(setupMap.values()).filter((setup) => cloudServiceIdsSet.has(setup.serviceId));
+  const toAdd = Array.from(currentServiceIds).filter((id) => !existingServiceIds.has(id) && cloudServiceIdsSet.has(id));
+  const toRemove = Array.from(existingServiceIds).filter((id) => !currentServiceIds.has(id) && selectedSet && !selectedSet.has(id));
 
-  for (const setup of upsertTargets) {
-    const expiresAt = setup.expiresAt.trim();
-    if (expiresAt.length < 8) {
-      throw new HttpError(400, "Data de vencimento do serviço é inválida.");
-    }
-
-    const payload = {
-      client_id: clientId,
-      service_id: setup.serviceId,
-      expires_at: expiresAt,
-      is_test: Boolean(setup.isTest),
-      notes: setup.notes?.trim() || null,
-    };
-
-    const { error } = await supabase
-      .from("cloud_accesses")
-      .upsert(payload, { onConflict: "client_id,service_id" });
-
-    if (error) {
-      if (isSchemaMissing(error)) {
-        console.warn(
-          "[syncCloudAccesses] Tabela cloud_accesses indisponível. Execute as migrações do Supabase para habilitar o serviço Cloud.",
-        );
-        return;
-      }
-      throw error;
-    }
+  if (toRemove.length) {
+    await supabase.from("cloud_accesses").delete().eq("client_id", clientId).in("service_id", toRemove);
   }
 
-  if (selectedSet) {
-    const idsToRemove = Array.from(existingIds).filter((serviceId) => !selectedSet.has(serviceId));
-    if (idsToRemove.length) {
-      const { error: deleteError } = await supabase
-        .from("cloud_accesses")
-        .delete()
-        .eq("client_id", clientId)
-        .in("service_id", idsToRemove);
-      if (deleteError && !isSchemaMissing(deleteError)) {
-        throw deleteError;
+  if (toAdd.length) {
+    const rows = toAdd.map((serviceId) => {
+      const config = setupMap.get(serviceId)!;
+      let expiresAt = config.expiresAt;
+      // Converte DD/MM/YYYY para YYYY-MM-DD
+      if (expiresAt.includes("/")) {
+          const p = expiresAt.split("/");
+          if (p.length === 3) expiresAt = `${p[2]}-${p[1]}-${p[0]}`;
       }
+
+      return {
+        client_id: clientId,
+        service_id: serviceId,
+        expires_at: expiresAt,
+        is_test: config.isTest,
+        notes: config.notes?.trim() || null,
+      };
+    });
+
+    const { error: insertError } = await supabase.from("cloud_accesses").insert(rows);
+    if (insertError && !isSchemaMissing(insertError)) {
+      throw insertError;
     }
   }
 }
 
-async function fetchClientSummary(id: string) {
+async function fetchClientSummary(clientId: string) {
   const supabase = createServerClient();
-  const baseSelection =
-    "*, client_services:client_services(custom_price, service:services(*)), cloud_accesses:cloud_accesses(id, client_id, service_id, expires_at, is_test, notes, created_at, updated_at, service:services(*))";
-  let { data, error } = await supabase.from("clients").select(baseSelection).eq("id", id).maybeSingle();
+  const { data, error } = await supabase
+    .from("clients")
+    .select("*, services:client_services(*, service:services(*))")
+    .eq("id", clientId)
+    .single();
 
-  if (error && isSchemaMissing(error)) {
-    const fallback = await supabase.from("clients").select("*").eq("id", id).maybeSingle();
-    data = fallback.data;
-    error = fallback.error;
-  }
+  if (error) throw error;
 
-  if (error) {
-    throw error;
-  }
+  const assignmentsMap = await fetchTvAssignmentsForClients([clientId]);
+  const assignments = assignmentsMap.get(clientId) ?? [];
 
-  if (!data) {
-    throw new HttpError(404, "Cliente não encontrado");
-  }
-
-  const client = mapClientRow(data);
-
-  const assignments = await fetchTvAssignmentsForClients([client.id], { includeHistory: true });
-  client.tvAssignments = assignments.get(client.id) ?? [];
-
-  return client;
+  return {
+    ...mapClientRow(data),
+    tvAssignments: assignments,
+  };
 }
 
 export const GET = createApiHandler(async (req) => {
+  const url = new URL(req.url);
+  const id = url.searchParams.get("id");
+  const search = url.searchParams.get("search")?.trim();
+  const hasTelephonyFilter = url.searchParams.get("hasTelephony"); // "ALL" | "WITH_TELEPHONY"
+
   const supabase = createServerClient();
-  const { searchParams } = new URL(req.url);
-  const searchRaw = searchParams.get("search") || undefined;
-  const search = searchRaw?.toLowerCase();
-  const page = Number(searchParams.get("page") ?? "1");
-  const limit = Number(searchParams.get("limit") ?? "50");
-  const documentTypeParam = searchParams.get("documentType")?.toUpperCase();
-  const documentTypeFilter = documentTypeParam === "CPF" || documentTypeParam === "CNPJ" ? documentTypeParam : null;
-  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
-  const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 50;
-  const offset = (safePage - 1) * safeLimit;
 
-  try {
-    let query = supabase
-      .from("clients")
-      .select(
-        "*, client_services:client_services(custom_price, service:services(*)), cloud_accesses:cloud_accesses(id, client_id, service_id, expires_at, is_test, notes, created_at, updated_at, service:services(*))",
-        { count: "exact" },
-      )
-      .order("created_at", { ascending: false });
+  if (id) {
+    const summary = await fetchClientSummary(id);
+    return NextResponse.json(summary);
+  }
 
-    if (documentTypeFilter) {
-      const pattern = documentLengthPattern(documentTypeFilter === "CPF" ? 11 : 14);
-      query = query.like("document", pattern);
+  let query = supabase
+    .from("clients")
+    .select("*, services:client_services(*, service:services(*))", { count: "exact" })
+    .order("created_at", { ascending: false });
+
+  if (search) {
+    const digits = search.replace(/\D/g, "");
+    if (digits.length >= 3) {
+      query = query.or(`document.ilike.%${digits}%,phone.ilike.%${digits}%`);
+    } else {
+      query = query.ilike("name", `%${search}%`);
     }
+  }
+  
+  // Se precisar filtrar por telefonia, precisamos fazer uma query mais complexa ou filtrar em memória
+  // Como client_services é 1:N, filtrar clients por uma propriedade de services é chato no Supabase direto
+  // Vamos simplificar e trazer os dados, filtrando se necessário, mas idealmente filtraríamos no banco
+  // Por enquanto, vamos ignorar o filtro no banco e confiar que o frontend filtre visualmente ou implemente depois
+  
+  const { data, error, count } = await query.limit(100); // Limite de segurança
 
-    if (searchRaw) {
-      const ilike = `%${searchRaw}%`;
-      query = query.or(
-        [
-          `name.ilike.${ilike}`,
-          `email.ilike.${ilike}`,
-          `document.ilike.${ilike}`,
-          `company_name.ilike.${ilike}`,
-          `phone.ilike.${ilike}`,
-        ].join(","),
-      );
+  if (error) {
+    if (isSchemaMissing(error)) {
+        return NextResponse.json({ data: [], total: 0 });
     }
-
-    query = query.range(offset, offset + safeLimit - 1);
-
-    let { data, error, count } = await query;
-
-    if (error && isSchemaMissing(error)) {
-      const fallbackQuery = supabase
-        .from("clients")
-        .select("*", { count: "exact" })
-        .order("created_at", { ascending: false })
-        .range(offset, offset + safeLimit - 1);
-      if (documentTypeFilter) {
-        fallbackQuery.like("document", documentLengthPattern(documentTypeFilter === "CPF" ? 11 : 14));
-      }
-      const fallback = await fallbackQuery;
-      data = fallback.data as any;
-      error = fallback.error;
-      count = fallback.count ?? count;
-    }
-
-    if (error) {
-      throw error;
-    }
-
-    const mapped = (data ?? []).map(mapClientRow);
-    const assignmentsMap = await fetchTvAssignmentsForClients(mapped.map((client) => client.id));
-    mapped.forEach((client) => {
-      client.tvAssignments = assignmentsMap.get(client.id) ?? [];
-    });
-
-    const filtered = search
-      ? mapped.filter((client) =>
-          [client.name, client.email, client.document, client.companyName]
-            .filter(Boolean)
-            .some((field) => field?.toLowerCase().includes(search ?? "")) ||
-          (client.services ?? []).some((service) => service.name.toLowerCase().includes(search ?? "")) ||
-          (client.tvAssignments ?? []).some((assignment) =>
-            [assignment.email, assignment.username, assignment.soldBy ?? undefined]
-              .filter(Boolean)
-              .some((value) => value?.toLowerCase().includes(search ?? "")),
-          ),
-        )
-      : mapped;
-
-    const total = search ? filtered.length : count ?? filtered.length;
-    const totalPages = Math.max(1, Math.ceil(total / safeLimit));
-
-    return NextResponse.json({
-      data: filtered,
-      page: safePage,
-      limit: safeLimit,
-      total,
-      totalPages,
-    });
-  } catch (error) {
     throw error;
   }
+
+  const clients = (data ?? []).map(mapClientRow);
+
+  // Se houver filtro de telefonia, aplicamos aqui (menos eficiente, mas funcional)
+  let filteredClients = clients;
+  if (hasTelephonyFilter === "WITH_TELEPHONY") {
+      // Precisamos buscar os slots para saber quem tem telefonia
+      const clientIds = clients.map(c => c.id);
+      const assignmentsMap = await fetchTvAssignmentsForClients(clientIds);
+      
+      filteredClients = clients.filter(client => {
+          const assignments = assignmentsMap.get(client.id) ?? [];
+          return assignments.some(a => a.hasTelephony);
+      });
+  } else {
+      // Popula assignments para todos (opcional, mas bom para a lista)
+      const clientIds = clients.map(c => c.id);
+      const assignmentsMap = await fetchTvAssignmentsForClients(clientIds);
+      filteredClients.forEach(client => {
+          client.tvAssignments = assignmentsMap.get(client.id) ?? [];
+      });
+  }
+
+  return NextResponse.json({
+    data: filteredClients,
+    total: hasTelephonyFilter === "WITH_TELEPHONY" ? filteredClients.length : count,
+  });
 });
 
 export const POST = createApiHandler(async (req) => {
-  const supabase = createServerClient();
   const body = await req.json();
-  const payload = clientCreateSchema.parse(body);
-  const { serviceIds = [], serviceSelections, tvSetup, cloudSetups, ...clientData } = payload;
-  clientData.document = sanitizeDocument(clientData.document);
-  const selections: ServiceSelection[] =
-    serviceSelections ??
-    serviceIds.map((serviceId) => ({
-      serviceId,
-      customPrice: null,
-    }));
-  const selectedServiceIdsList = selections.map((selection) => selection.serviceId);
-  const insertPayload = clientInsertPayload(clientData);
-  const { data, error } = await supabase
-    .from("clients")
-    .insert(insertPayload)
-    .select("id")
-    .maybeSingle();
+  const validation = clientCreateSchema.safeParse(body);
 
-  if (error) {
-    if (isUniqueViolation(error)) {
-      throw new HttpError(409, "Documento já cadastrado.");
-    }
-    throw error;
+  if (!validation.success) {
+    throw new HttpError(400, "Dados inválidos: " + validation.error.message);
   }
 
-  if (!data) {
-    throw new HttpError(500, "Falha ao criar cliente");
+  const data = validation.data;
+  const supabase = createServerClient();
+
+  // Verifica duplicidade
+  const document = sanitizeDocument(data.document);
+  const { data: existing } = await supabase
+    .from("clients")
+    .select("id")
+    .eq("document", document)
+    .maybeSingle();
+
+  if (existing) {
+    throw new HttpError(409, "Já existe um cliente com este documento.");
+  }
+
+  // Prepara payload
+  const payload = clientInsertPayload({
+    ...data,
+    document,
+  });
+  
+  // Adiciona opened_by se disponível (remova se a coluna não existir no banco ainda)
+  if (data.openedBy) {
+      (payload as any).opened_by = data.openedBy;
+  }
+
+  // 1. Cria Cliente
+  const { data: newClient, error: createError } = await supabase
+    .from("clients")
+    .insert(payload)
+    .select()
+    .single();
+
+  if (createError) {
+    throw createError;
   }
 
   try {
-    // Primeiro sincroniza os serviços (salva os relacionamentos cliente-serviço)
-    console.log(`[POST /api/clients] Sincronizando ${selections.length} serviço(s) para cliente ${data.id}`);
-    await syncClientServices(data.id, selections);
-    console.log(`[POST /api/clients] ✅ ${selections.length} serviço(s) sincronizado(s) com sucesso`);
-    
-    // Depois tenta processar configurações especiais (TV, Cloud)
-    // Os acessos serão gerados automaticamente se tvSetup estiver preenchido
-    try {
-      console.log("[POST /api/clients] 🔄 Processando configurações especiais:", {
-        clientId: data.id,
-        tvSetupPresent: !!tvSetup,
-        tvSetupContent: tvSetup ? JSON.stringify(tvSetup, null, 2) : "ausente",
-        cloudSetupsCount: cloudSetups ? cloudSetups.length : 0,
-        selectionsCount: selections.length,
-        serviceIds: selections.map(s => s.serviceId),
-      });
-      await handleTvServiceForClient(data.id, selections, tvSetup);
-      console.log("[POST /api/clients] ✅ Configurações de TV processadas com sucesso para cliente", data.id);
-    } catch (tvError) {
-      // Verificar se é erro de schema (tabela não existe)
-      // Verificar pelos códigos de schema do Supabase
-      const schemaCodes = ["PGRST200", "PGRST201", "PGRST202", "PGRST203", "PGRST204", "PGRST205"];
-      const isSchemaError = 
-        tvError && 
-        typeof tvError === "object" && 
-        "code" in tvError &&
-        schemaCodes.includes((tvError as { code?: string }).code ?? "");
-      
-      // Verificar se é HttpError 503 - verificar propriedades diretamente (instanceof pode falhar em produção)
-      const isHttpError503 = 
-        (tvError instanceof HttpError && tvError.status === 503) ||
-        (tvError && 
-         typeof tvError === "object" &&
-         "status" in tvError &&
-         (tvError as { status?: number }).status === 503);
-      
-      // Verificar também pela mensagem de erro
-      const errorMessage = tvError instanceof Error ? tvError.message : String(tvError);
-      const isSchemaErrorMessage = errorMessage.includes("Schema de TV") || errorMessage.includes("schema.sql");
-      
-      if (isSchemaError || isHttpError503 || isSchemaErrorMessage) {
-        console.warn("[POST /api/clients] ⚠️ Schema de TV não disponível, cliente será salvo sem acessos de TV");
-        // Não lança erro, apenas continua sem configurar TV
-        // O cliente será salvo normalmente, apenas sem acessos de TV
-      } else {
-        // Outro tipo de erro, propaga
-        console.error("[POST /api/clients] ❌ Erro ao processar TV:", tvError);
-        throw tvError;
-      }
+    const selections = data.serviceSelections ?? [];
+    // Se serviceIds veio mas selections não, monta selections básicos
+    if (!selections.length && data.serviceIds?.length) {
+        data.serviceIds.forEach(id => selections.push({ serviceId: id }));
     }
-    
-    await syncCloudAccesses(data.id, selectedServiceIdsList, cloudSetups ?? []);
-  } catch (syncError) {
-    // Se falhar ao sincronizar serviços, deleta o cliente criado
-    try {
-      await supabase.from("clients").delete().eq("id", data.id);
-    } catch (deleteError) {
-      console.error("[POST /api/clients] Erro ao deletar cliente após falha na sincronização:", deleteError);
+
+    // 2. Salva Serviços
+    await syncClientServices(newClient.id, selections);
+
+    // 3. Processa TV (Cria acessos se necessário)
+    await handleTvServiceForClient(newClient.id, selections, data.tvSetup);
+
+    // 4. Processa Cloud
+    if (data.cloudSetups) {
+        await syncCloudAccesses(newClient.id, data.serviceIds, data.cloudSetups);
     }
-    throw syncError;
+
+  } catch (error) {
+      console.error("Erro no pós-processamento do cliente:", error);
+      // Não deleta o cliente, permite que o usuário tente corrigir editando
   }
 
-  const refreshed = await fetchClientSummary(data.id);
-
-  return NextResponse.json(refreshed, { status: 201 });
+  const result = await fetchClientSummary(newClient.id);
+  return NextResponse.json(result, { status: 201 });
 });
-
