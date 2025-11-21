@@ -161,15 +161,31 @@ export async function ensureAvailableSlotExists() {
 }
 
 export async function assignSlotToClient(params: AssignSlotParams) {
+  console.log(`[assignSlotToClient] Iniciando atribuição para cliente ${params.clientId}`);
   const supabase = createSupabaseClient(true); // SERVICE ROLE KEY
 
   for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt++) {
-    const slot = await ensureAvailableSlotExists();
+    console.log(`[assignSlotToClient] Tentativa ${attempt + 1}/${MAX_RETRY_ATTEMPTS}`);
+    
+    let slot;
+    try {
+      slot = await ensureAvailableSlotExists();
+      if (!slot) {
+        console.error(`[assignSlotToClient] ensureAvailableSlotExists retornou null/undefined`);
+        throw new HttpError(500, "Não foi possível encontrar um slot disponível");
+      }
+      console.log(`[assignSlotToClient] Slot encontrado: ${slot.id} (${slot.tv_accounts?.email} #${slot.slot_number})`);
+    } catch (error) {
+      console.error(`[assignSlotToClient] Erro ao buscar slot disponível:`, error);
+      throw error;
+    }
     
     const soldAt = params.soldAt ?? new Date().toISOString();
     const startsAt = params.startsAt && params.startsAt.trim() ? params.startsAt : new Date().toISOString().slice(0, 10);
     const password = generateNumericPassword();
 
+    console.log(`[assignSlotToClient] Tentando atualizar slot ${slot.id} para cliente ${params.clientId}`);
+    
     // Tenta reservar o slot atomicamente
     const { data: updatedSlot, error: updateError } = await supabase
       .from("tv_slots")
@@ -193,10 +209,9 @@ export async function assignSlotToClient(params: AssignSlotParams) {
       .maybeSingle();
 
     if (updateError) {
-       console.error("Erro ao atualizar slot:", updateError);
+       console.error(`[assignSlotToClient] Erro ao atualizar slot:`, updateError);
        if (isSchemaMissing(updateError)) {
          console.warn(`Schema de TV ausente ou erro de permissão: ${updateError.code} - ${updateError.message}`);
-         // Se for erro de schema, vamos tentar lançar para ver no log principal
          throw updateError; 
        }
        throw updateError;
@@ -204,12 +219,15 @@ export async function assignSlotToClient(params: AssignSlotParams) {
 
     if (!updatedSlot) {
       // Alguém pegou esse slot antes de nós, tenta de novo
+      console.warn(`[assignSlotToClient] Slot ${slot.id} já foi atribuído por outro processo. Tentando novamente...`);
       await sleep(RETRY_DELAY_MS);
       continue;
     }
 
+    console.log(`[assignSlotToClient] Slot atualizado com sucesso: ${updatedSlot.id}`);
+
     // Registra histórico
-    await supabase.from("tv_slot_history").insert({
+    const { error: historyError } = await supabase.from("tv_slot_history").insert({
       tv_slot_id: slot.id,
       action: "ASSIGNED",
       metadata: {
@@ -220,9 +238,17 @@ export async function assignSlotToClient(params: AssignSlotParams) {
       },
     });
 
-    return mapTVSlotRow(updatedSlot);
+    if (historyError) {
+      console.warn(`[assignSlotToClient] Erro ao registrar histórico (não crítico):`, historyError);
+      // Não lança erro - histórico é opcional
+    }
+
+    const mapped = mapTVSlotRow(updatedSlot);
+    console.log(`[assignSlotToClient] ✅ Sucesso! Slot atribuído: ${mapped.id}`);
+    return mapped;
   }
 
+  console.error(`[assignSlotToClient] ❌ Falha após ${MAX_RETRY_ATTEMPTS} tentativas`);
   throw new HttpError(500, "Falha ao atribuir slot de TV: concorrência alta ou erro no sistema.");
 }
 
