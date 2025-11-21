@@ -224,38 +224,46 @@ async function handleTvServiceForClient(
   const services = await fetchServicesByIds(serviceIds);
   const hasTv = services.some((service) => service.name?.toLowerCase().includes("tv"));
 
-  if (hasTv) {
-    const alreadyAssigned = await clientHasTvAssignment(clientId);
-    if (!alreadyAssigned) {
-      const quantity =
-        tvSetup?.quantity && Number.isFinite(tvSetup.quantity) && tvSetup.quantity > 0 ? tvSetup.quantity : 1;
-      const planType: TVPlanType = tvSetup?.planType ?? "ESSENCIAL";
-      const soldAt =
-        tvSetup?.soldAt && tvSetup.soldAt.length === 10
-          ? new Date(`${tvSetup.soldAt}T12:00:00`).toISOString()
-          : tvSetup?.soldAt ?? undefined;
-      const soldBy = tvSetup?.soldBy?.trim() ?? null;
-      const params = {
-        clientId,
-        soldBy,
-        soldAt,
-        startsAt: tvSetup?.startsAt ?? undefined,
-        expiresAt: tvSetup?.expiresAt ?? undefined,
-        notes: tvSetup?.notes ?? undefined,
-        planType,
-        hasTelephony: tvSetup?.hasTelephony ?? undefined,
-      };
+  if (hasTv && tvSetup) {
+    // Verificar se os campos obrigatórios para criar acessos estão preenchidos
+    const hasSoldBy = tvSetup.soldBy && tvSetup.soldBy.trim();
+    const hasExpiresAt = tvSetup.expiresAt && tvSetup.expiresAt.trim().length >= 8;
+    
+    // Só cria acessos se os campos obrigatórios estiverem preenchidos
+    if (hasSoldBy && hasExpiresAt) {
+      const alreadyAssigned = await clientHasTvAssignment(clientId);
+      if (!alreadyAssigned) {
+        const quantity =
+          tvSetup?.quantity && Number.isFinite(tvSetup.quantity) && tvSetup.quantity > 0 ? tvSetup.quantity : 1;
+        const planType: TVPlanType = tvSetup?.planType ?? "ESSENCIAL";
+        const soldAt =
+          tvSetup?.soldAt && tvSetup.soldAt.length === 10
+            ? new Date(`${tvSetup.soldAt}T12:00:00`).toISOString()
+            : tvSetup?.soldAt ?? undefined;
+        const soldBy = tvSetup.soldBy.trim();
+        const params = {
+          clientId,
+          soldBy,
+          soldAt,
+          startsAt: tvSetup?.startsAt ?? undefined,
+          expiresAt: tvSetup.expiresAt,
+          notes: tvSetup?.notes?.trim() || undefined,
+          planType,
+          hasTelephony: tvSetup?.hasTelephony ?? undefined,
+        };
 
-      if (quantity > 1) {
-        await assignMultipleSlotsToClient({
-          ...params,
-          quantity,
-        });
-      } else {
-        await assignSlotToClient(params);
+        if (quantity > 1) {
+          await assignMultipleSlotsToClient({
+            ...params,
+            quantity,
+          });
+        } else {
+          await assignSlotToClient(params);
+        }
       }
     }
-  } else {
+    // Se campos não estão preenchidos, simplesmente não cria acessos (não dá erro)
+  } else if (!hasTv) {
     await releaseSlotsForClient(clientId);
   }
 }
