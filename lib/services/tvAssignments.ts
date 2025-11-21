@@ -120,7 +120,7 @@ export async function ensureAvailableSlotExists() {
   const supabase = createSupabaseClient(true); // SERVICE ROLE KEY
 
   for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt++) {
-    // 1. Tenta achar slot livre
+    // 1. Tenta achar slot livre - busca slots DISPONÍVEIS e que nunca foram usados (sem histórico de ASSIGNED)
     const { data: allSlots, error: fetchError } = await supabase
       .from("tv_slots")
       .select("*, tv_accounts(*)")
@@ -130,10 +130,13 @@ export async function ensureAvailableSlotExists() {
     if (fetchError && !isSchemaMissing(fetchError)) throw fetchError;
 
     if (allSlots && allSlots.length > 0) {
-      // Filtrar slots que já foram usados e liberados (opcional, mas boa prática se quiser rotação)
-      // Para simplificar, vamos pegar o primeiro disponível ordenado
+      // Ordena todos os slots disponíveis por email e slot_number (garante ordem consistente)
+      // Não filtra por histórico - se está AVAILABLE e sem cliente, pode usar
+      // Isso garante que sempre pegue o primeiro disponível, independente de ter sido usado antes
       const sorted = sortSlotsByEmail(allSlots);
-      return sorted[0];
+      const firstAvailable = sorted[0];
+      console.log(`[ensureAvailableSlotExists] Slot selecionado: ${firstAvailable.tv_accounts?.email} #${firstAvailable.slot_number}`);
+      return firstAvailable;
     }
 
     // 2. Se não tem, cria nova conta
