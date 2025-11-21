@@ -153,6 +153,7 @@ export function mapClientRow(row: ClientRow): Client {
     address: row.address,
     city: row.city,
     state: row.state,
+    openedBy: (row as any).opened_by ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     services: [],
@@ -186,7 +187,7 @@ export function mapClientRow(row: ClientRow): Client {
   return client;
 }
 
-export function clientInsertPayload(data: Partial<Client>) {
+export function clientInsertPayload(data: Partial<Client>): Record<string, unknown> {
   return {
     name: data.name,
     email: data.email,
@@ -198,10 +199,11 @@ export function clientInsertPayload(data: Partial<Client>) {
     address: data.address ?? null,
     city: data.city ?? null,
     state: data.state ?? null,
+    opened_by: data.openedBy ?? null,
   };
 }
 
-export function clientUpdatePayload(data: Partial<Client>) {
+export function clientUpdatePayload(data: Partial<Client>): Record<string, unknown> {
   return {
     ...(data.name !== undefined ? { name: data.name } : {}),
     ...(data.email !== undefined ? { email: data.email } : {}),
@@ -213,6 +215,7 @@ export function clientUpdatePayload(data: Partial<Client>) {
     ...(data.address !== undefined ? { address: data.address } : {}),
     ...(data.city !== undefined ? { city: data.city } : {}),
     ...(data.state !== undefined ? { state: data.state } : {}),
+    ...(data.openedBy !== undefined ? { opened_by: data.openedBy ?? null } : {}),
     updated_at: new Date().toISOString(),
   };
 }
