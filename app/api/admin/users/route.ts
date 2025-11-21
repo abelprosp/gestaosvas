@@ -30,10 +30,13 @@ export const GET = createApiHandler(
       // Verificar se a Service Role Key está configurada
       if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
         console.error("[GET /admin/users] SUPABASE_SERVICE_ROLE_KEY não está configurada");
-        throw new HttpError(500, "Configuração de servidor incompleta. Service Role Key não encontrada.");
+        throw new HttpError(
+          500,
+          "Configuração de servidor incompleta. Service Role Key não encontrada. Configure SUPABASE_SERVICE_ROLE_KEY no Vercel."
+        );
       }
 
-      const supabase = createServerClient();
+      const supabase = createServerClient(true); // Requer Service Role Key
       
       console.log("[GET /admin/users] Tentando listar usuários...");
       const { data, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
@@ -76,7 +79,14 @@ export const GET = createApiHandler(
 
 export const POST = createApiHandler(
   async (req) => {
-    const supabase = createServerClient();
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      throw new HttpError(
+        500,
+        "Configuração de servidor incompleta. Service Role Key não encontrada. Configure SUPABASE_SERVICE_ROLE_KEY no Vercel."
+      );
+    }
+
+    const supabase = createServerClient(true); // Requer Service Role Key
     const body = await req.json();
     const payload = createUserSchema.parse(body);
     const { data, error } = await supabase.auth.admin.createUser({

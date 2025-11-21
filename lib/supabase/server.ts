@@ -14,7 +14,13 @@ if (!supabaseAnonKey) {
 }
 
 // Cliente do Supabase para operações no servidor (usando Service Role Key quando necessário)
-export function createServerClient() {
+export function createServerClient(requireServiceRole = false) {
+  if (requireServiceRole && !supabaseServiceRoleKey) {
+    throw new Error(
+      "SUPABASE_SERVICE_ROLE_KEY não está configurada. Esta operação requer Service Role Key."
+    );
+  }
+
   if (supabaseServiceRoleKey) {
     return createClient(supabaseUrl, supabaseServiceRoleKey, {
       auth: {
@@ -24,6 +30,10 @@ export function createServerClient() {
   }
 
   // Fallback para anon key (menos seguro, apenas para desenvolvimento)
+  if (!supabaseAnonKey) {
+    throw new Error("Nenhuma chave do Supabase configurada (ANON_KEY ou SERVICE_ROLE_KEY)");
+  }
+
   return createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       persistSession: false,
