@@ -36,16 +36,8 @@ type BrasilApiCnpjResponse = {
   abertura?: string | null;
 };
 
-function formatCep(value?: string | null) {
-  if (!value) {
-    return null;
-  }
-  const digits = value.replace(/\D/g, "");
-  if (digits.length !== 8) {
-    return digits || null;
-  }
-  return `${digits.substring(0, 2)}.${digits.substring(2, 5)}-${digits.substring(5)}`;
-}
+// Função formatCep removida - agora retornamos apenas os dígitos
+// A formatação será feita no frontend (máscara do input)
 
 function formatPhone(value?: string | null, fallbackDdd?: string | null) {
   if (!value && !fallbackDdd) {
@@ -114,30 +106,44 @@ function buildAddress(row: BrasilApiCnpjResponse) {
 }
 
 export const GET = createApiHandler(async (req, { params }) => {
-  const cnpj = sanitizeCnpj(params.cnpj ?? "");
-  const data = await fetchCnpjData(cnpj);
-  const companyName = data.razao_social?.trim() ?? null;
-  const tradeName = data.nome_fantasia?.trim() ?? null;
-  const name = tradeName || companyName || "";
-  const address = buildAddress(data);
-  const city = data.municipio?.trim() ?? null;
-  const state = data.uf?.trim() ?? null;
-  const phone = formatPhone(data.telefone, data.ddd_telefone_1);
-  const postalCode = formatCep(data.cep);
-
-  return NextResponse.json({
-    document: cnpj,
-    name: name || null,
-    companyName,
-    tradeName,
-    address,
-    city,
-    state,
-    phone,
-    postalCode,
-    email: data.email?.trim() || null,
-    openingDate: data.abertura ?? null,
-  });
+  try {
+    const cnpj = sanitizeCnpj(params.cnpj ?? "");
+    console.log(`[CNPJ Lookup] Buscando CNPJ: ${cnpj}`);
+    
+    const data = await fetchCnpjData(cnpj);
+    console.log(`[CNPJ Lookup] Dados recebidos da BrasilAPI:`, JSON.stringify(data, null, 2));
+    
+    const companyName = data.razao_social?.trim() ?? null;
+    const tradeName = data.nome_fantasia?.trim() ?? null;
+    const name = tradeName || companyName || "";
+    const address = buildAddress(data);
+    const city = data.municipio?.trim() ?? null;
+    const state = data.uf?.trim() ?? null;
+    const phone = formatPhone(data.telefone, data.ddd_telefone_1);
+    // Remove formatação do CEP para salvar apenas números
+    const postalCode = data.cep ? data.cep.replace(/\D/g, "") : null;
+    
+    const result = {
+      document: cnpj,
+      name: name || null,
+      companyName,
+      tradeName,
+      address,
+      city,
+      state,
+      phone,
+      postalCode,
+      email: data.email?.trim() || null,
+      openingDate: data.abertura ?? null,
+    };
+    
+    console.log(`[CNPJ Lookup] Retornando resultado:`, JSON.stringify(result, null, 2));
+    
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error(`[CNPJ Lookup] Erro ao buscar CNPJ:`, error);
+    throw error;
+  }
 });
 
 

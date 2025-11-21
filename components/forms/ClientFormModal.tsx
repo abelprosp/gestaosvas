@@ -314,6 +314,8 @@ export function ClientFormModal({
       fillIfEmpty("companyName", data.companyName ?? data.tradeName ?? null);
       fillIfEmpty("address", data.address ?? null);
       fillIfEmpty("city", data.city ?? null);
+      // Mapeia postalCode para zipCode
+      fillIfEmpty("zipCode", data.postalCode ?? null);
       fillIfEmpty("state", data.state ?? null);
       fillIfEmpty("phone", data.phone ?? null);
       fillIfEmpty("email", data.email ?? null);
