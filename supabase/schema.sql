@@ -2,9 +2,20 @@
 create extension if not exists "pgcrypto";
 create extension if not exists "uuid-ossp";
 
--- Tipos enumerados
-create type contract_status as enum ('DRAFT', 'SENT', 'SIGNED', 'CANCELLED');
-create type line_type as enum ('TITULAR', 'DEPENDENTE');
+-- Tipos enumerados (criar apenas se não existirem)
+do $$ 
+begin
+  if not exists (select 1 from pg_type where typname = 'contract_status') then
+    create type contract_status as enum ('DRAFT', 'SENT', 'SIGNED', 'CANCELLED');
+  end if;
+end $$;
+
+do $$ 
+begin
+  if not exists (select 1 from pg_type where typname = 'line_type') then
+    create type line_type as enum ('TITULAR', 'DEPENDENTE');
+  end if;
+end $$;
 
 -- Tabela de clientes
 create table if not exists clients (
@@ -121,31 +132,37 @@ begin
 end;
 $$ language plpgsql;
 
+drop trigger if exists clients_set_updated_at on clients;
 create trigger clients_set_updated_at
 before update on clients
 for each row
 execute procedure set_updated_at();
 
+drop trigger if exists contract_templates_set_updated_at on contract_templates;
 create trigger contract_templates_set_updated_at
 before update on contract_templates
 for each row
 execute procedure set_updated_at();
 
+drop trigger if exists contracts_set_updated_at on contracts;
 create trigger contracts_set_updated_at
 before update on contracts
 for each row
 execute procedure set_updated_at();
 
+drop trigger if exists lines_set_updated_at on lines;
 create trigger lines_set_updated_at
 before update on lines
 for each row
 execute procedure set_updated_at();
 
+drop trigger if exists services_set_updated_at on services;
 create trigger services_set_updated_at
 before update on services
 for each row
 execute procedure set_updated_at();
 
+drop trigger if exists cloud_accesses_set_updated_at on cloud_accesses;
 create trigger cloud_accesses_set_updated_at
 before update on cloud_accesses
 for each row
@@ -190,6 +207,7 @@ create table if not exists tv_slot_history (
   created_at timestamptz not null default now()
 );
 
+drop trigger if exists tv_slots_set_updated_at on tv_slots;
 create trigger tv_slots_set_updated_at
 before update on tv_slots
 for each row
