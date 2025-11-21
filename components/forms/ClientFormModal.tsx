@@ -485,7 +485,6 @@ useEffect(() => {
             return { serviceId, customPrice: null, soldBy };
           }
 
-          const soldBy = serviceVendors[serviceId]?.trim() || undefined;
           return {
             serviceId,
             customPrice: parseResult,
