@@ -433,16 +433,7 @@ useEffect(() => {
       values.document = normalizedDocument;
 
       const serviceIds = values.serviceIds ?? [];
-      
-      // Validação: pelo menos um serviço obrigatório (apenas para novo cadastro)
-      if (!defaultValues && serviceIds.length === 0) {
-        toast({
-          title: "Selecione pelo menos um serviço",
-          description: "É obrigatório escolher ao menos um serviço para cadastrar o cliente.",
-          status: "error",
-        });
-        return;
-      }
+      // Serviços são opcionais - o cliente pode ser cadastrado sem serviços selecionados
 
       let invalidServiceName: string | null = null;
       const serviceSelections =
