@@ -737,6 +737,52 @@ useEffect(() => {
                       <option key={option.label} value={option.label} />
                     ))}
                   </datalist>
+                  <Stack direction={{ base: "column", md: "row" }} spacing={2} mt={2}>
+                    {isAdmin ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        leftIcon={<FiUserPlus />}
+                        as={Link}
+                        href="/admin/usuarios"
+                      >
+                        Cadastrar vendedor
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        leftIcon={<FiSend />}
+                        onClick={async () => {
+                          const description = window.prompt(
+                            "Descreva o vendedor que deseja cadastrar (nome, e-mail, observações).",
+                          );
+                          if (!description) {
+                            return;
+                          }
+                          try {
+                            await createRequest("VENDOR_CREATE_REQUEST", {
+                              description,
+                              clientId: existingClientId ?? null,
+                            });
+                            toast({
+                              title: "Solicitação enviada",
+                              description: "O administrador foi notificado sobre sua solicitação.",
+                              status: "success",
+                            });
+                          } catch (error) {
+                            console.error(error);
+                            toast({
+                              title: "Falha ao solicitar cadastro",
+                              status: "error",
+                            });
+                          }
+                        }}
+                      >
+                        Solicitar novo vendedor
+                      </Button>
+                    )}
+                  </Stack>
                   <FormHelperText fontSize="xs" color="gray.500">
                     Vendedor responsável por abrir/obter este cliente
                   </FormHelperText>
