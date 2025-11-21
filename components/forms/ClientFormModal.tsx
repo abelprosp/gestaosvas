@@ -509,7 +509,39 @@ useEffect(() => {
       // TV Setup é opcional - só inclui se todos os campos obrigatórios estiverem preenchidos
       if (!defaultValues && isTvSelected) {
         const hasSoldBy = tvSetup.soldBy && tvSetup.soldBy.trim();
-        const hasExpiresAt = tvSetup.expiresAt && tvSetup.expiresAt.trim().length === 10;
+        
+        // Validar data de vencimento - aceita DD/MM/YYYY ou YYYY-MM-DD
+        const expiresAtTrimmed = tvSetup.expiresAt ? tvSetup.expiresAt.trim() : "";
+        let hasExpiresAt = false;
+        let expiresAtFormatted = expiresAtTrimmed;
+        
+        if (expiresAtTrimmed) {
+          // Aceitar DD/MM/YYYY (10 caracteres)
+          if (expiresAtTrimmed.length === 10 && expiresAtTrimmed.includes("/")) {
+            const parts = expiresAtTrimmed.split("/");
+            if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+              hasExpiresAt = true;
+              expiresAtFormatted = expiresAtTrimmed; // Será convertido no backend
+            }
+          }
+          // Aceitar YYYY-MM-DD (10 caracteres)
+          else if (expiresAtTrimmed.length === 10 && expiresAtTrimmed.includes("-")) {
+            const parts = expiresAtTrimmed.split("-");
+            if (parts.length === 3 && parts[0].length === 4 && parts[1].length === 2 && parts[2].length === 2) {
+              hasExpiresAt = true;
+              expiresAtFormatted = expiresAtTrimmed;
+            }
+          }
+        }
+        
+        // Log para debug
+        console.log("[ClientFormModal] Validação TV Setup:", {
+          hasSoldBy,
+          expiresAtOriginal: expiresAtTrimmed,
+          expiresAtFormatted,
+          hasExpiresAt,
+          willSend: hasSoldBy && hasExpiresAt,
+        });
         
         // Se o usuário selecionou TV mas não preencheu os campos, simplesmente não inclui o tvSetup
         // O cliente será criado sem acessos de TV configurados, mas pode adicionar depois
@@ -520,10 +552,17 @@ useEffect(() => {
             soldBy: tvSetup.soldBy.trim(),
             soldAt: tvSetup.soldAt || undefined,
             startsAt: tvSetup.startsAt || undefined,
-            expiresAt: tvSetup.expiresAt || undefined,
+            expiresAt: expiresAtFormatted,
             notes: tvSetup.notes?.trim() || undefined,
             hasTelephony: tvSetup.hasTelephony || undefined,
           };
+          console.log("[ClientFormModal] ✅ tvSetup será enviado:", tvSetupPayload);
+        } else {
+          console.warn("[ClientFormModal] ⚠️ tvSetup não será enviado - campos não preenchidos:", {
+            hasSoldBy,
+            hasExpiresAt,
+            expiresAtOriginal: expiresAtTrimmed,
+          });
         }
         // Se não tiver todos os campos, não inclui o tvSetup (não bloqueia a criação do cliente)
       }
