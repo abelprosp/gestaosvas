@@ -26,37 +26,50 @@ const updateUserSchema = z
 
 export const GET = createApiHandler(
   async (req) => {
-    const supabase = createServerClient();
-    
-    // Verificar se a Service Role Key está configurada
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      console.error("SUPABASE_SERVICE_ROLE_KEY não está configurada");
-      throw new Error("Configuração de servidor incompleta. Service Role Key não encontrada.");
+    try {
+      // Verificar se a Service Role Key está configurada
+      if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        console.error("[GET /admin/users] SUPABASE_SERVICE_ROLE_KEY não está configurada");
+        throw new HttpError(500, "Configuração de servidor incompleta. Service Role Key não encontrada.");
+      }
+
+      const supabase = createServerClient();
+      
+      console.log("[GET /admin/users] Tentando listar usuários...");
+      const { data, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      
+      if (error) {
+        console.error("[GET /admin/users] Erro ao listar usuários:", {
+          message: error.message,
+          status: (error as any)?.status,
+          name: error.name,
+        });
+        throw new HttpError(500, `Erro ao listar usuários: ${error.message}`, { originalError: error });
+      }
+
+      if (!data || !data.users) {
+        console.warn("[GET /admin/users] Resposta vazia ao listar usuários");
+        return NextResponse.json([]);
+      }
+
+      const users = data.users.map((user) => ({
+        id: user.id,
+        email: user.email,
+        role: (user.user_metadata as { role?: string } | undefined)?.role ?? "user",
+        name: (user.user_metadata as { name?: string } | undefined)?.name ?? null,
+        createdAt: user.created_at,
+        lastSignInAt: user.last_sign_in_at,
+      }));
+
+      console.log(`[GET /admin/users] Listados ${users.length} usuários com sucesso`);
+      return NextResponse.json(users);
+    } catch (error) {
+      console.error("[GET /admin/users] Erro não tratado:", error);
+      if (error instanceof HttpError) {
+        throw error;
+      }
+      throw new HttpError(500, `Erro inesperado: ${error instanceof Error ? error.message : String(error)}`);
     }
-
-    const { data, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    
-    if (error) {
-      console.error("Erro ao listar usuários:", error);
-      throw error;
-    }
-
-    if (!data || !data.users) {
-      console.warn("Resposta vazia ao listar usuários");
-      return NextResponse.json([]);
-    }
-
-    const users = data.users.map((user) => ({
-      id: user.id,
-      email: user.email,
-      role: (user.user_metadata as { role?: string } | undefined)?.role ?? "user",
-      name: (user.user_metadata as { name?: string } | undefined)?.name ?? null,
-      createdAt: user.created_at,
-      lastSignInAt: user.last_sign_in_at,
-    }));
-
-    console.log(`Listados ${users.length} usuários`);
-    return NextResponse.json(users);
   },
   { requireAdmin: true }
 );
