@@ -520,9 +520,9 @@ export const POST = createApiHandler(async (req) => {
   });
   
   // Adiciona opened_by se disponível (remova se a coluna não existir no banco ainda)
-  if (data.openedBy) {
-      (payload as any).opened_by = data.openedBy;
-  }
+  // if (data.openedBy) {
+  //     (payload as any).opened_by = data.openedBy;
+  // }
 
   // 1. Cria Cliente
   const { data: newClient, error: createError } = await supabase
