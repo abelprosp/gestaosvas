@@ -26,11 +26,13 @@ const clientSchema = z.object({
   address: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),
+  openedBy: z.string().optional(), // Vendedor que abriu o cliente
 });
 
 const serviceSelectionSchema = z.object({
   serviceId: z.string().uuid(),
   customPrice: z.number().min(0).nullable().optional(),
+  soldBy: z.string().optional(), // Vendedor específico para este serviço
 });
 
 const tvPlanTypeSchema = z.enum(["ESSENCIAL", "PREMIUM"]);

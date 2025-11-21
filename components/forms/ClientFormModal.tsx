@@ -52,9 +52,11 @@ export interface ClientFormValues {
   city?: string;
   state?: string;
   serviceIds?: string[];
+  openedBy?: string; // Vendedor que abriu o cliente
   serviceSelections?: Array<{
     serviceId: string;
     customPrice?: number | null;
+    soldBy?: string; // Vendedor específico para este serviço
   }>;
   tvSetup?: {
     quantity?: number;
@@ -71,6 +73,7 @@ export interface ClientFormValues {
     expiresAt: string;
     isTest?: boolean;
     notes?: string;
+    soldBy?: string; // Vendedor específico para este serviço Cloud
   }>;
 }
 
@@ -196,6 +199,7 @@ export function ClientFormModal({
       city: defaultValues?.city ?? "",
       state: defaultValues?.state ?? "",
       notes: defaultValues?.notes ?? "",
+      openedBy: defaultValues?.openedBy ?? "",
       serviceIds: defaultValues?.services?.map((service) => service.id) ?? [],
     }),
     [
@@ -236,6 +240,17 @@ export function ClientFormModal({
   });
 
   const [customPrices, setCustomPrices] = useState<Record<string, string>>(initialCustomPrices);
+  
+  // Estado para vendedores por serviço
+  const initialServiceVendors = useMemo(() => {
+    const map: Record<string, string> = {};
+    defaultValues?.services?.forEach((service) => {
+      // TODO: Quando implementar vendedor por serviço no backend, pegar de serviceSelections
+      map[service.id] = "";
+    });
+    return map;
+  }, [defaultValues]);
+  const [serviceVendors, setServiceVendors] = useState<Record<string, string>>(initialServiceVendors);
 
   const selectedServiceIds = useWatch({
     control,
@@ -454,23 +469,27 @@ useEffect(() => {
       const serviceSelections =
         serviceIds.map((serviceId) => {
           const service = serviceOptions.find((option) => option.id === serviceId);
+          const soldBy = serviceVendors[serviceId]?.trim() || undefined;
+          
           if (!service) {
-            return { serviceId, customPrice: null };
+            return { serviceId, customPrice: null, soldBy };
           }
 
           if (!service.allowCustomPrice) {
-            return { serviceId, customPrice: null };
+            return { serviceId, customPrice: null, soldBy };
           }
 
           const parseResult = parsePriceInput(customPrices[serviceId]);
           if (parseResult === undefined) {
             invalidServiceName = service.name;
-            return { serviceId, customPrice: null };
+            return { serviceId, customPrice: null, soldBy };
           }
 
+          const soldBy = serviceVendors[serviceId]?.trim() || undefined;
           return {
             serviceId,
             customPrice: parseResult,
+            soldBy,
           };
         }) ?? [];
 
@@ -551,6 +570,7 @@ useEffect(() => {
 
       await onSubmit({
         ...values,
+        openedBy: values.openedBy?.trim() || undefined,
         serviceIds: finalServiceIds,
         serviceSelections: finalServiceSelections,
         tvSetup: tvSetupPayload,
@@ -667,6 +687,25 @@ useEffect(() => {
               </GridItem>
               <GridItem>
                 <FormControl>
+                  <FormLabel>Vendedor que abriu o cliente</FormLabel>
+                  <Input
+                    list="client-form-opened-by-vendors"
+                    placeholder={vendorsLoading ? "Carregando vendedores..." : "Nome do vendedor"}
+                    {...register("openedBy")}
+                    autoComplete="off"
+                  />
+                  <datalist id="client-form-opened-by-vendors">
+                    {vendorOptions.map((option) => (
+                      <option key={option.label} value={option.label} />
+                    ))}
+                  </datalist>
+                  <FormHelperText fontSize="xs" color="gray.500">
+                    Vendedor responsável por abrir/obter este cliente
+                  </FormHelperText>
+                </FormControl>
+              </GridItem>
+              <GridItem>
+                <FormControl>
                   <FormLabel>Empresa</FormLabel>
                   <Input placeholder="Razão social" {...register("companyName")} />
                 </FormControl>
@@ -750,6 +789,34 @@ useEffect(() => {
                                           }
                                           isDisabled={!isSelected}
                                         />
+                                      </Stack>
+                                    )}
+                                    {isSelected && (
+                                      <Stack spacing={1} mt={2}>
+                                        <FormHelperText m={0} color="gray.500" fontSize="xs">
+                                          Vendedor específico para este serviço (opcional)
+                                        </FormHelperText>
+                                        <Input
+                                          size="sm"
+                                          list={`client-form-service-vendor-${service.id}`}
+                                          placeholder={vendorsLoading ? "Carregando..." : "Nome do vendedor"}
+                                          value={serviceVendors[service.id] ?? ""}
+                                          onMouseDown={(event) => event.stopPropagation()}
+                                          onClick={(event) => event.stopPropagation()}
+                                          onFocus={(event) => event.stopPropagation()}
+                                          onChange={(event) =>
+                                            setServiceVendors((prev) => ({
+                                              ...prev,
+                                              [service.id]: event.target.value,
+                                            }))
+                                          }
+                                          autoComplete="off"
+                                        />
+                                        <datalist id={`client-form-service-vendor-${service.id}`}>
+                                          {vendorOptions.map((option) => (
+                                            <option key={option.label} value={option.label} />
+                                          ))}
+                                        </datalist>
                                       </Stack>
                                     )}
                                   </Box>

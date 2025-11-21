@@ -88,6 +88,7 @@ export interface Client {
   address?: string | null;
   city?: string | null;
   state?: string | null;
+  openedBy?: string | null; // Vendedor que abriu o cliente
   createdAt: string;
   updatedAt: string;
   services?: Service[];
