@@ -21,15 +21,28 @@ export async function requireAuth(request: NextRequest): Promise<{ user: AuthUse
       return NextResponse.json({ message: "Token de acesso inválido" }, { status: 401 });
     }
 
-    // Para validar token de usuário, não precisamos da Service Role Key
-    // Podemos usar a ANON_KEY ou SERVICE_ROLE_KEY, ambos funcionam
+    // Para validar token de usuário, precisamos de um cliente Supabase
+    // Vamos usar ANON_KEY que é suficiente para validar tokens
     let supabase;
     try {
+      // Tentar criar cliente - se não conseguir, pode ser problema de configuração
       supabase = createServerClient(false); // false = não requer Service Role Key obrigatória
-    } catch (error) {
-      console.error("[requireAuth] Erro ao criar cliente Supabase:", error);
+    } catch (clientError) {
+      console.error("[requireAuth] Erro ao criar cliente Supabase:", clientError);
+      const errorMsg = clientError instanceof Error ? clientError.message : String(clientError);
       return NextResponse.json(
-        { message: "Erro de configuração do servidor" },
+        { 
+          message: "Erro de configuração do servidor",
+          details: { error: errorMsg }
+        },
+        { status: 500 }
+      );
+    }
+    
+    if (!supabase) {
+      console.error("[requireAuth] Cliente Supabase é null/undefined");
+      return NextResponse.json(
+        { message: "Erro ao inicializar cliente de autenticação" },
         { status: 500 }
       );
     }

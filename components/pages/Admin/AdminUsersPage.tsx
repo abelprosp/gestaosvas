@@ -97,12 +97,31 @@ export function AdminUsersPage() {
         return response.data;
       } catch (error: any) {
         console.error("Erro ao buscar usuários:", error);
-        const errorMessage = extractErrorMessage(error);
+        
+        // Extrair mensagem de erro mais detalhada
+        let errorMessage = "Erro ao carregar usuários";
+        if (error?.response?.data?.message) {
+          errorMessage = error.response.data.message;
+        } else if (error?.response?.data?.details) {
+          errorMessage = typeof error.response.data.details === "string" 
+            ? error.response.data.details 
+            : JSON.stringify(error.response.data.details);
+        } else if (error?.message) {
+          errorMessage = error.message;
+        }
+        
+        console.error("Detalhes do erro:", {
+          status: error?.response?.status,
+          data: error?.response?.data,
+          message: errorMessage,
+        });
+        
         toast({
           title: "Erro ao carregar usuários",
           description: errorMessage,
           status: "error",
-          duration: 5000,
+          duration: 10000,
+          isClosable: true,
         });
         throw error;
       }
