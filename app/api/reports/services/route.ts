@@ -97,9 +97,12 @@ export const GET = createApiHandler(async (req) => {
     const clientIds = clients.map((client) => client.id);
     const rows: ReportRow[] = [];
 
+    // Variável para armazenar dados de TV slots (usada para evitar duplicação)
+    let tvData: TvSlotRow[] | null = null;
+
     // TV assignments
     try {
-      const { data: tvData, error: tvError } = await supabase
+      const { data: tvSlots, error: tvError } = await supabase
         .from("tv_slots")
         .select(
           "id, client_id, slot_number, username, status, sold_by, sold_at, starts_at, expires_at, notes, plan_type, tv_accounts(email)",
@@ -110,7 +113,9 @@ export const GET = createApiHandler(async (req) => {
         throw tvError;
       }
 
-      (tvData as TvSlotRow[] | null | undefined)?.forEach((slot) => {
+      tvData = (tvSlots as TvSlotRow[] | null | undefined) ?? null;
+
+      tvData?.forEach((slot) => {
         const client = clients.find((item) => item.id === slot.client_id);
         if (!client) {
           return;
@@ -190,7 +195,7 @@ export const GET = createApiHandler(async (req) => {
 
       // Coletar IDs de clientes que já têm slots de TV para evitar duplicação
       const clientsWithTvSlots = new Set(
-        (tvData as TvSlotRow[] | null | undefined)?.map((slot) => slot.client_id).filter(Boolean) ?? [],
+        tvData?.map((slot) => slot.client_id).filter(Boolean) ?? [],
       );
 
       (serviceData as ClientServiceRow[] | null | undefined)?.forEach((relation) => {
@@ -251,6 +256,13 @@ export const GET = createApiHandler(async (req) => {
     if (document) {
       filteredRows = filteredRows.filter((row) => row.clientDocument === document);
     }
+
+    // Ordenar por nome do cliente e depois por categoria
+    filteredRows.sort((a, b) => {
+      const nameCompare = a.clientName.localeCompare(b.clientName, "pt-BR", { sensitivity: "base" });
+      if (nameCompare !== 0) return nameCompare;
+      return a.category.localeCompare(b.category);
+    });
 
     filteredRows = filteredRows.slice(0, safeLimit);
 
