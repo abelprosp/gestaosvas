@@ -22,6 +22,7 @@ type ClientRow = {
   notes: string | null;
   address: string | null;
   city: string | null;
+  zip_code: string | null;
   state: string | null;
   created_at: string;
   updated_at: string;
@@ -152,6 +153,7 @@ export function mapClientRow(row: ClientRow): Client {
     notes: row.notes,
     address: row.address,
     city: row.city,
+    zipCode: row.zip_code ?? null,
     state: row.state,
     // openedBy: (row as any).opened_by ?? null, // Comentado até criar coluna no banco
     openedBy: null, // Por enquanto null até criar migração
@@ -199,6 +201,7 @@ export function clientInsertPayload(data: Partial<Client>): Record<string, unkno
     notes: data.notes ?? null,
     address: data.address ?? null,
     city: data.city ?? null,
+    zip_code: data.zipCode ?? null,
     state: data.state ?? null,
   };
   
@@ -222,6 +225,7 @@ export function clientUpdatePayload(data: Partial<Client>): Record<string, unkno
     ...(data.notes !== undefined ? { notes: data.notes } : {}),
     ...(data.address !== undefined ? { address: data.address } : {}),
     ...(data.city !== undefined ? { city: data.city } : {}),
+    ...(data.zipCode !== undefined ? { zip_code: data.zipCode } : {}),
     ...(data.state !== undefined ? { state: data.state } : {}),
     updated_at: new Date().toISOString(),
   };

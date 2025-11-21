@@ -87,6 +87,7 @@ export interface Client {
   notes?: string | null;
   address?: string | null;
   city?: string | null;
+  zipCode?: string | null; // CEP
   state?: string | null;
   openedBy?: string | null; // Vendedor que abriu o cliente
   createdAt: string;

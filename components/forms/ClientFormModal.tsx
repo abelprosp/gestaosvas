@@ -50,6 +50,7 @@ export interface ClientFormValues {
   notes?: string;
   address?: string;
   city?: string;
+  zipCode?: string; // CEP
   state?: string;
   serviceIds?: string[];
   openedBy?: string; // Vendedor que abriu o cliente
@@ -197,6 +198,7 @@ export function ClientFormModal({
       companyName: defaultValues?.companyName ?? "",
       address: defaultValues?.address ?? "",
       city: defaultValues?.city ?? "",
+      zipCode: defaultValues?.zipCode ?? "",
       state: defaultValues?.state ?? "",
       notes: defaultValues?.notes ?? "",
       openedBy: defaultValues?.openedBy ?? "",
@@ -754,6 +756,24 @@ useEffect(() => {
                 <FormControl>
                   <FormLabel>Cidade</FormLabel>
                   <Input placeholder="São Paulo" {...register("city")} />
+                </FormControl>
+              </GridItem>
+              <GridItem>
+                <FormControl>
+                  <FormLabel>CEP</FormLabel>
+                  <Input
+                    placeholder="00000-000"
+                    maxLength={9}
+                    {...register("zipCode", {
+                      onChange: (e) => {
+                        const value = e.target.value.replace(/\D/g, "");
+                        if (value.length <= 8) {
+                          const formatted = value.replace(/(\d{5})(\d{3})/, "$1-$2");
+                          e.target.value = formatted;
+                        }
+                      },
+                    })}
+                  />
                 </FormControl>
               </GridItem>
               <GridItem>

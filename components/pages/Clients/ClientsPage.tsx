@@ -645,12 +645,18 @@ const getSortIcon = (key: string): ReactElement | undefined => {
                 const visibleAssignments = isTvExpanded ? assignments : assignments.slice(0, 1);
                 const hiddenCount = assignments.length - visibleAssignments.length;
                 const isExpanded = expandedClientId === client.id;
+                const hasTelephony = assignments.some((assignment) => assignment.hasTelephony === true);
 
                 return (
                   <Fragment key={client.id}>
                     <Tr>
                       <Td>
-                        <Text fontWeight="semibold">{client.name}</Text>
+                        <HStack spacing={2}>
+                          <Text fontWeight="semibold">{client.name}</Text>
+                          {hasTelephony && (
+                            <Box as={FiPhone} color="brand.500" title="Cliente possui telefonia" />
+                          )}
+                        </HStack>
                       </Td>
                       <Td>{client.document}</Td>
                       <Td>

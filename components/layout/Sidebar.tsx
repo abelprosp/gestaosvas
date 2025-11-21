@@ -43,7 +43,7 @@ import { IconType } from "react-icons";
 import { useAuth } from "@/context/AuthContext";
 
 const baseLinks: Array<{ label: string; to: string; icon: IconType }> = [
-  { label: "Dashboard", to: "/", icon: FiHome },
+  { label: "Dashboard", to: "/dashboard", icon: FiHome },
   { label: "Clientes", to: "/clientes", icon: FiUsers },
   { label: "Usuários TV", to: "/usuarios", icon: FiMonitor },
   { label: "Usuários Cloud", to: "/usuarios-cloud", icon: FiCloud },

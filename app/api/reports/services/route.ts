@@ -177,7 +177,7 @@ export const GET = createApiHandler(async (req) => {
       console.error("[reports] falha ao carregar cloud_accesses", error);
     }
 
-    // General services
+    // General services - exclui TV para evitar duplicação (TV já aparece em tv_slots)
     try {
       const { data: serviceData, error: serviceError } = await supabase
         .from("client_services")
@@ -188,13 +188,28 @@ export const GET = createApiHandler(async (req) => {
         throw serviceError;
       }
 
+      // Coletar IDs de clientes que já têm slots de TV para evitar duplicação
+      const clientsWithTvSlots = new Set(
+        (tvData as TvSlotRow[] | null | undefined)?.map((slot) => slot.client_id).filter(Boolean) ?? [],
+      );
+
       (serviceData as ClientServiceRow[] | null | undefined)?.forEach((relation) => {
         const client = clients.find((item) => item.id === relation.client_id);
         if (!client || !relation.service) {
           return;
         }
         const serviceName = relation.service.name ?? "Serviço";
-        const lower = serviceName.toLowerCase();
+        const lower = serviceName.toLowerCase().trim();
+        
+        // Pula serviços de TV que já aparecem em tv_slots para evitar duplicação
+        // TV pode aparecer como "TV", "TV ESSENCIAL", "TV PREMIUM", etc.
+        if (lower === "tv" || lower.startsWith("tv ")) {
+          // Se o cliente já tem slots de TV, não adiciona aqui para evitar duplicação
+          if (clientsWithTvSlots.has(relation.client_id)) {
+            return;
+          }
+        }
+        
         rows.push({
           id: `${relation.client_id}-${relation.service.id}`,
           category: lower.includes("hub")
