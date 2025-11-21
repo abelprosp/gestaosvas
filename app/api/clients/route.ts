@@ -243,12 +243,25 @@ async function handleTvServiceForClient(
     // Verificar se os campos obrigatórios para criar acessos estão preenchidos
     const hasSoldBy = tvSetup.soldBy && tvSetup.soldBy.trim();
     // Verificar se expiresAt está no formato correto (YYYY-MM-DD = 10 caracteres)
+    // Aceitar tanto formato YYYY-MM-DD quanto DD/MM/YYYY
     const expiresAtTrimmed = tvSetup.expiresAt ? tvSetup.expiresAt.trim() : "";
-    const hasExpiresAt = expiresAtTrimmed.length === 10;
+    
+    // Converter data se necessário (DD/MM/YYYY -> YYYY-MM-DD)
+    let expiresAtFormatted = expiresAtTrimmed;
+    if (expiresAtTrimmed.includes("/")) {
+      // Converter de DD/MM/YYYY para YYYY-MM-DD
+      const parts = expiresAtTrimmed.split("/");
+      if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+        expiresAtFormatted = `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+    }
+    
+    const hasExpiresAt = expiresAtFormatted.length === 10;
     
     console.log(`[handleTvServiceForClient] Verificando campos para cliente ${clientId}:`, {
       hasSoldBy,
-      expiresAtTrimmed,
+      expiresAtOriginal: expiresAtTrimmed,
+      expiresAtFormatted,
       hasExpiresAt,
       tvSetupKeys: Object.keys(tvSetup),
     });
@@ -269,16 +282,6 @@ async function handleTvServiceForClient(
             : tvSetup?.soldAt ?? undefined;
         const soldBy = tvSetup.soldBy.trim();
         
-        // Garantir que expiresAt está no formato YYYY-MM-DD
-        let expiresAtFormatted = expiresAtTrimmed;
-        if (expiresAtTrimmed.includes("/")) {
-          // Converter de DD/MM/YYYY para YYYY-MM-DD
-          const parts = expiresAtTrimmed.split("/");
-          if (parts.length === 3) {
-            expiresAtFormatted = `${parts[2]}-${parts[1]}-${parts[0]}`;
-          }
-        }
-        
         const params = {
           clientId,
           soldBy,
@@ -290,25 +293,39 @@ async function handleTvServiceForClient(
           hasTelephony: tvSetup?.hasTelephony ?? undefined,
         };
 
-        console.log(`[handleTvServiceForClient] Criando ${quantity} acesso(s) de TV para cliente ${clientId}`, params);
+        console.log(`[handleTvServiceForClient] 🚀 Criando ${quantity} acesso(s) de TV para cliente ${clientId}`, {
+          clientId,
+          quantity,
+          soldBy,
+          expiresAt: expiresAtFormatted,
+          planType,
+        });
         
         try {
           if (quantity > 1) {
-            await assignMultipleSlotsToClient({
+            const results = await assignMultipleSlotsToClient({
               ...params,
               quantity,
             });
+            console.log(`[handleTvServiceForClient] ✅ ${results.length} acesso(s) de TV criado(s) com sucesso para cliente ${clientId}`);
           } else {
-            await assignSlotToClient(params);
+            const result = await assignSlotToClient(params);
+            console.log(`[handleTvServiceForClient] ✅ 1 acesso de TV criado com sucesso para cliente ${clientId}:`, {
+              slotId: result.id,
+              email: result.account?.email,
+              username: result.username,
+            });
           }
-          
-          console.log(`[handleTvServiceForClient] ✅ ${quantity} acesso(s) de TV criado(s) com sucesso para cliente ${clientId}`);
         } catch (assignError) {
-          console.error(`[handleTvServiceForClient] ❌ Erro ao criar acessos de TV para cliente ${clientId}:`, assignError);
+          console.error(`[handleTvServiceForClient] ❌ Erro ao criar acessos de TV para cliente ${clientId}:`, {
+            error: assignError,
+            message: assignError instanceof Error ? assignError.message : String(assignError),
+            stack: assignError instanceof Error ? assignError.stack : undefined,
+          });
           throw assignError;
         }
       } else {
-        console.log(`[handleTvServiceForClient] Cliente ${clientId} já possui acessos de TV atribuídos`);
+        console.log(`[handleTvServiceForClient] ℹ️ Cliente ${clientId} já possui acessos de TV atribuídos`);
       }
     } else {
       console.log(`[handleTvServiceForClient] ⚠️ Campos obrigatórios não preenchidos (soldBy: ${hasSoldBy}, expiresAt: ${hasExpiresAt}), não criando acessos para cliente ${clientId}`);
