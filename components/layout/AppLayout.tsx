@@ -12,10 +12,16 @@ import { PropsWithChildren } from "react";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { VirtualAssistantChat } from "@/components/chat/VirtualAssistantChat";
+import { useProactiveAlerts } from "@/hooks/useProactiveAlerts";
+import { useAuth } from "@/context/AuthContext";
 
 export function AppLayout({ children }: PropsWithChildren) {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const drawerBg = useColorModeValue("white", "gray.900");
+  const { user } = useAuth();
+  
+  // Ativar alertas proativos apenas quando o usuário estiver autenticado
+  useProactiveAlerts(!!user);
   const backgroundImage = useColorModeValue(
     "/assets/bg-light.png",
     "/assets/bg-dark.png"

@@ -19,7 +19,7 @@ import {
   useToast,
 } from "@chakra-ui/react";
 import { useState, useEffect, useRef } from "react";
-import { FiMessageCircle, FiSend, FiX, FiUsers, FiFileText, FiMonitor, FiSettings, FiArrowRight, FiTrendingUp, FiLightbulb } from "react-icons/fi";
+import { FiMessageCircle, FiSend, FiX, FiUsers, FiFileText, FiMonitor, FiSettings, FiArrowRight, FiTrendingUp, FiLightbulb, FiTrash2, FiBarChart2 } from "react-icons/fi";
 import NextLink from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import {
@@ -60,22 +60,55 @@ const QUICK_COMMANDS = [
   { label: "⏰ Vencimentos próximos", command: "vencimentos" },
   { label: "📺 TV disponível", command: "tv disponível" },
   { label: "➕ Novo cliente", command: "cadastrar cliente" },
+  { label: "📝 Novo contrato", command: "criar contrato" },
   { label: "📈 Análise de vendas", command: "análise de vendas" },
+  { label: "📊 Relatório completo", command: "relatório completo" },
   { label: "💡 Sugestões", command: "sugestões" },
   { label: "❓ Ajuda", command: "ajuda" },
 ];
 
+const CHAT_HISTORY_KEY = "assistant_chat_history";
+const MAX_HISTORY_MESSAGES = 100;
+
+function loadChatHistory(): Message[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = localStorage.getItem(CHAT_HISTORY_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as Message[];
+      return Array.isArray(parsed) ? parsed : [];
+    }
+  } catch (error) {
+    console.error("Erro ao carregar histórico do chat:", error);
+  }
+  return [];
+}
+
+function saveChatHistory(messages: Message[]) {
+  if (typeof window === "undefined") return;
+  try {
+    // Limita o histórico aos últimos N mensagens
+    const limitedMessages = messages.slice(-MAX_HISTORY_MESSAGES);
+    localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(limitedMessages));
+  } catch (error) {
+    console.error("Erro ao salvar histórico do chat:", error);
+  }
+}
+
+const initialMessage: Message = {
+  sender: "assistant",
+  content: "Olá! Sou o assistente virtual. Como posso ajudar?",
+  type: "commands",
+  data: {},
+};
+
 export function VirtualAssistantChat() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      sender: "assistant",
-      content: "Olá! Sou o assistente virtual. Como posso ajudar?",
-      type: "commands",
-      data: {},
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const history = loadChatHistory();
+    return history.length > 0 ? history : [initialMessage];
+  });
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -96,6 +129,25 @@ export function VirtualAssistantChat() {
       scrollToBottom();
     }
   }, [messages, open]);
+
+  // Salvar histórico sempre que mensagens mudarem
+  useEffect(() => {
+    if (messages.length > 1 || (messages.length === 1 && messages[0] !== initialMessage)) {
+      saveChatHistory(messages);
+    }
+  }, [messages]);
+
+  // Carregar histórico quando componente montar (apenas uma vez)
+  const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
+  useEffect(() => {
+    if (!hasLoadedHistory) {
+      const history = loadChatHistory();
+      if (history.length > 0) {
+        setMessages(history);
+      }
+      setHasLoadedHistory(true);
+    }
+  }, [hasLoadedHistory]);
 
   const processMessage = async (question: string): Promise<Message> => {
     const lowerQuestion = question.toLowerCase().trim();
@@ -270,6 +322,89 @@ export function VirtualAssistantChat() {
       };
     }
 
+    // Criar novo contrato
+    if (/(criar.*contrato|novo.*contrato|adicionar.*contrato|gerar.*contrato)/i.test(lowerQuestion)) {
+      setTimeout(() => router.push("/contratos?action=new"), 500);
+      return {
+        sender: "assistant",
+        content: "Abrindo formulário para criar novo contrato...",
+        type: "text",
+        data: { route: "/contratos?action=new" },
+      };
+    }
+
+    // Relatório completo
+    if (/(relatório.*completo|relatório.*geral|visão.*geral|dashboard|painel)/i.test(lowerQuestion)) {
+      setTimeout(() => router.push("/relatorios/servicos"), 500);
+      return {
+        sender: "assistant",
+        content: "Abrindo relatório completo de serviços...",
+        type: "text",
+        data: { route: "/relatorios/servicos" },
+      };
+    }
+
+    // Limpar histórico
+    if (/(limpar.*histórico|apagar.*histórico|resetar.*chat|novo.*chat)/i.test(lowerQuestion)) {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(CHAT_HISTORY_KEY);
+      }
+      return {
+        sender: "assistant",
+        content: "Histórico limpo! Começando uma nova conversa...",
+        type: "text",
+      };
+    }
+
+    // Análises avançadas - Comparação de planos
+    if (/(comparar.*planos|plano.*essencial.*vs.*premium|diferença.*planos)/i.test(lowerQuestion)) {
+      try {
+        const stats = await getAssistantStats();
+        // Criar uma análise comparativa
+        return {
+          sender: "assistant",
+          content: `Comparação de planos TV:\n\n📺 TV Essencial: Disponível para clientes básicos\n🎬 TV Premium: Disponível para clientes premium\n\nTotal de TV ativos: ${stats.tvActive}\n\nPara mais detalhes, use "análise de vendas" para ver tendências.`,
+          type: "text",
+        };
+      } catch (error) {
+        return {
+          sender: "assistant",
+          content: "Desculpe, não consegui fazer a comparação no momento.",
+        };
+      }
+    }
+
+    // Tendências
+    if (/(tendência|tendências|evolução|crescimento|progresso)/i.test(lowerQuestion)) {
+      try {
+        const sales = await getSalesAnalysis();
+        const last3Months = sales.points.slice(-3);
+        const first3Months = sales.points.slice(0, 3);
+        
+        const recentTotal = last3Months.reduce((sum, p) => sum + p.total, 0);
+        const oldTotal = first3Months.length > 0 
+          ? first3Months.reduce((sum, p) => sum + p.total, 0)
+          : recentTotal;
+        
+        const growth = oldTotal > 0 
+          ? ((recentTotal - oldTotal) / oldTotal * 100).toFixed(1)
+          : "0";
+        
+        const trend = parseFloat(growth) > 0 ? "📈 Crescimento" : parseFloat(growth) < 0 ? "📉 Declínio" : "➡️ Estável";
+        
+        return {
+          sender: "assistant",
+          content: `Tendência de vendas:\n\n${trend}: ${Math.abs(parseFloat(growth))}%\n\nÚltimos 3 meses: ${recentTotal} vendas\nVendas anteriores: ${oldTotal}\n\nUse "análise de vendas" para ver gráficos detalhados.`,
+          type: "text",
+        };
+      } catch (error) {
+        return {
+          sender: "assistant",
+          content: "Desculpe, não consegui analisar as tendências no momento.",
+        };
+      }
+    }
+
     // Ajuda
     if (/^(ajuda|help|comandos|menu|o que você pode|o que posso)/i.test(lowerQuestion)) {
       return {
@@ -417,7 +552,29 @@ export function VirtualAssistantChat() {
             <Text fontWeight="semibold" fontSize="lg">
               Assistente virtual
             </Text>
-            <IconButton aria-label="Fechar" icon={<FiX />} size="sm" variant="ghost" onClick={() => setOpen(false)} />
+            <Flex gap={2}>
+              <Tooltip label="Limpar histórico">
+                <IconButton
+                  aria-label="Limpar histórico"
+                  icon={<FiTrash2 />}
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    if (window.confirm("Deseja realmente limpar o histórico de conversas?")) {
+                      localStorage.removeItem(CHAT_HISTORY_KEY);
+                      setMessages([initialMessage]);
+                      toast({
+                        title: "Histórico limpo",
+                        description: "O histórico de conversas foi apagado.",
+                        status: "success",
+                        duration: 2000,
+                      });
+                    }
+                  }}
+                />
+              </Tooltip>
+              <IconButton aria-label="Fechar" icon={<FiX />} size="sm" variant="ghost" onClick={() => setOpen(false)} />
+            </Flex>
           </Flex>
 
           <Stack spacing={3} flex={1} overflowY="auto" mb={3} pr={1} maxH="calc(70vh - 140px)">
@@ -682,9 +839,30 @@ export function VirtualAssistantChat() {
                       Você também pode:
                     </Text>
                     <VStack align="stretch" spacing={1}>
-                      <Text fontSize="xs">• Buscar clientes: "buscar cliente João"</Text>
-                      <Text fontSize="xs">• Ver estatísticas: "quantos clientes temos"</Text>
-                      <Text fontSize="xs">• Navegar: "ir para clientes"</Text>
+                      <Text fontSize="xs" fontWeight="semibold">📊 Estatísticas e análises:</Text>
+                      <Text fontSize="xs">• "estatísticas" - Mostrar estatísticas gerais</Text>
+                      <Text fontSize="xs">• "análise de vendas" - Gráfico de vendas</Text>
+                      <Text fontSize="xs">• "tendências" - Análise de crescimento</Text>
+                      <Text fontSize="xs">• "comparar planos" - Comparação TV Essencial vs Premium</Text>
+                      <Divider my={2} />
+                      <Text fontSize="xs" fontWeight="semibold">🔍 Buscas:</Text>
+                      <Text fontSize="xs">• "buscar cliente João" - Buscar clientes</Text>
+                      <Text fontSize="xs">• "contratos pendentes" - Ver contratos aguardando</Text>
+                      <Text fontSize="xs">• "vencimentos" - Serviços próximos do vencimento</Text>
+                      <Text fontSize="xs">• "tv disponível" - Slots TV livres</Text>
+                      <Divider my={2} />
+                      <Text fontSize="xs" fontWeight="semibold">➕ Ações rápidas:</Text>
+                      <Text fontSize="xs">• "cadastrar cliente" - Novo cliente</Text>
+                      <Text fontSize="xs">• "criar contrato" - Novo contrato</Text>
+                      <Text fontSize="xs">• "relatório completo" - Abrir relatórios</Text>
+                      <Divider my={2} />
+                      <Text fontSize="xs" fontWeight="semibold">🧭 Navegação:</Text>
+                      <Text fontSize="xs">• "ir para clientes" - Navegar para páginas</Text>
+                      <Text fontSize="xs">• "ir para dashboard" - Ir para o início</Text>
+                      <Divider my={2} />
+                      <Text fontSize="xs" fontWeight="semibold">⚙️ Utilitários:</Text>
+                      <Text fontSize="xs">• "sugestões" - Ver recomendações proativas</Text>
+                      <Text fontSize="xs">• "limpar histórico" - Resetar conversa</Text>
                     </VStack>
                   </Box>
                 ) : (
