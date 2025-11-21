@@ -145,6 +145,21 @@ function normalizeDocumentInput(value: string | undefined): string {
   return (value ?? "").replace(/\D/g, "");
 }
 
+function formatPhoneInput(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length <= 10) {
+    // Telefone fixo: (11) 3456-7890
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  } else {
+    // Celular: (11) 98765-4321
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
+  }
+}
+
 function detectDocumentType(value: string | undefined): "CPF" | "CNPJ" | "UNKNOWN" {
   const digits = normalizeDocumentInput(value);
   if (digits.length === 11) return "CPF";
@@ -549,11 +564,30 @@ useEffect(() => {
       });
       handleClose();
     } catch (error) {
-      console.error(error);
+      console.error("Erro ao salvar cliente:", error);
+      
+      // Extrair mensagem de erro mais detalhada
+      let errorMessage = "Erro ao salvar cliente";
+      if (error && typeof error === "object") {
+        if ("response" in error) {
+          const axiosError = error as { response?: { data?: { message?: string; details?: unknown } } };
+          if (axiosError.response?.data?.message) {
+            errorMessage = axiosError.response.data.message;
+          } else if (axiosError.response?.data?.details) {
+            errorMessage = typeof axiosError.response.data.details === "string"
+              ? axiosError.response.data.details
+              : JSON.stringify(axiosError.response.data.details);
+          }
+        } else if ("message" in error && typeof (error as { message?: string }).message === "string") {
+          errorMessage = (error as { message: string }).message;
+        }
+      }
+      
       toast({
         title: "Erro ao salvar cliente",
+        description: errorMessage,
         status: "error",
-        duration: 4000,
+        duration: 10000,
         isClosable: true,
       });
     }
@@ -589,7 +623,13 @@ useEffect(() => {
               <GridItem>
                 <FormControl>
                   <FormLabel>Telefone</FormLabel>
-                  <Input placeholder="(11) 98888-7777" {...register("phone")}
+                  <Input
+                    placeholder="(11) 98888-7777"
+                    {...register("phone")}
+                    onChange={(e) => {
+                      const formatted = formatPhoneInput(e.target.value);
+                      setValue("phone", formatted, { shouldDirty: true });
+                    }}
                   />
                 </FormControl>
               </GridItem>
