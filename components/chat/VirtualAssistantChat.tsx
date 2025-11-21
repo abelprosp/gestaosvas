@@ -19,7 +19,7 @@ import {
   useToast,
 } from "@chakra-ui/react";
 import { useState, useEffect, useRef } from "react";
-import { FiMessageCircle, FiSend, FiX, FiUsers, FiFileText, FiMonitor, FiSettings, FiArrowRight } from "react-icons/fi";
+import { FiMessageCircle, FiSend, FiX, FiUsers, FiFileText, FiMonitor, FiSettings, FiArrowRight, FiTrendingUp, FiLightbulb } from "react-icons/fi";
 import NextLink from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import {
@@ -28,15 +28,19 @@ import {
   getPendingContracts,
   getAvailableTVSlots,
   getExpiringServices,
+  getSalesAnalysis,
+  getProactiveSuggestions,
   type ClientSearchResult,
   type PendingContract,
   type ExpiringService,
+  type SalesAnalysis,
+  type ProactiveSuggestion,
 } from "@/lib/api/assistant";
 
 interface Message {
   sender: "assistant" | "user";
   content: string;
-  type?: "text" | "stats" | "search" | "commands" | "contracts" | "expiring";
+  type?: "text" | "stats" | "search" | "commands" | "contracts" | "expiring" | "sales" | "suggestions";
   data?: {
     stats?: { clients: number; contracts: number; tvActive: number; services: number };
     clients?: ClientSearchResult[];
@@ -44,16 +48,21 @@ interface Message {
     expiring?: ExpiringService[];
     tvAvailable?: number;
     route?: string;
+    sales?: SalesAnalysis;
+    suggestions?: ProactiveSuggestion[];
   };
 }
 
 const QUICK_COMMANDS = [
-  { label: "Quantos clientes temos?", command: "quantos clientes" },
-  { label: "Mostrar estatísticas", command: "estatísticas" },
-  { label: "Contratos pendentes", command: "contratos pendentes" },
-  { label: "Vencimentos próximos", command: "vencimentos" },
-  { label: "Slots TV disponíveis", command: "tv disponível" },
-  { label: "Ajuda", command: "ajuda" },
+  { label: "📊 Mostrar estatísticas", command: "estatísticas" },
+  { label: "🔍 Buscar cliente", command: "buscar cliente" },
+  { label: "📄 Contratos pendentes", command: "contratos pendentes" },
+  { label: "⏰ Vencimentos próximos", command: "vencimentos" },
+  { label: "📺 TV disponível", command: "tv disponível" },
+  { label: "➕ Novo cliente", command: "cadastrar cliente" },
+  { label: "📈 Análise de vendas", command: "análise de vendas" },
+  { label: "💡 Sugestões", command: "sugestões" },
+  { label: "❓ Ajuda", command: "ajuda" },
 ];
 
 export function VirtualAssistantChat() {
@@ -206,6 +215,59 @@ export function VirtualAssistantChat() {
           content: "Desculpe, não consegui verificar os slots de TV no momento.",
         };
       }
+    }
+
+    // Análise de vendas
+    if (/(análise.*vendas|vendas.*análise|tendência.*vendas|relatório.*vendas|gráfico.*vendas)/i.test(lowerQuestion)) {
+      try {
+        const sales = await getSalesAnalysis();
+        return {
+          sender: "assistant",
+          type: "sales",
+          content: "Aqui está a análise de vendas dos últimos 12 meses:",
+          data: { sales },
+        };
+      } catch (error) {
+        return {
+          sender: "assistant",
+          content: "Desculpe, não consegui buscar a análise de vendas no momento.",
+        };
+      }
+    }
+
+    // Sugestões proativas
+    if (/(sugestão|sugestões|recomendação|recomendações|o que fazer|dicas|insights)/i.test(lowerQuestion)) {
+      try {
+        const suggestions = await getProactiveSuggestions();
+        if (suggestions.length === 0) {
+          return {
+            sender: "assistant",
+            content: "Tudo está em ordem! Não há sugestões no momento.",
+          };
+        }
+        return {
+          sender: "assistant",
+          type: "suggestions",
+          content: `Encontrei ${suggestions.length} sugestão(ões) para você:`,
+          data: { suggestions },
+        };
+      } catch (error) {
+        return {
+          sender: "assistant",
+          content: "Desculpe, não consegui gerar sugestões no momento.",
+        };
+      }
+    }
+
+    // Cadastrar novo cliente
+    if (/(cadastrar.*cliente|novo.*cliente|adicionar.*cliente|criar.*cliente)/i.test(lowerQuestion)) {
+      setTimeout(() => router.push("/clientes?action=new"), 500);
+      return {
+        sender: "assistant",
+        content: "Abrindo formulário para cadastrar novo cliente...",
+        type: "text",
+        data: { route: "/clientes?action=new" },
+      };
     }
 
     // Ajuda
@@ -476,6 +538,122 @@ export function VirtualAssistantChat() {
                               {formatDate(item.expiresAt)}
                             </Badge>
                           </Flex>
+                        </Box>
+                      ))}
+                    </VStack>
+                  </Box>
+                ) : message.type === "sales" && message.data?.sales ? (
+                  <Box alignSelf="flex-start" bg={cardBg} p={4} borderRadius="lg" maxW="100%">
+                    <Text fontWeight="semibold" mb={2}>
+                      {message.content}
+                    </Text>
+                    <VStack align="stretch" spacing={3}>
+                      <Box p={3} bg={assistantBubbleBg} borderRadius="md">
+                        <Text fontSize="sm" fontWeight="medium" mb={1}>
+                          Total de vendas: {message.data.sales.totalSales}
+                        </Text>
+                        <Text fontSize="xs" color="gray.500">
+                          Período: {new Date(message.data.sales.range.start).toLocaleDateString("pt-BR")} até{" "}
+                          {new Date(message.data.sales.range.end).toLocaleDateString("pt-BR")}
+                        </Text>
+                      </Box>
+                      {message.data.sales.services.length > 0 && (
+                        <Box>
+                          <Text fontSize="sm" fontWeight="medium" mb={2}>
+                            Serviços:
+                          </Text>
+                          <VStack align="stretch" spacing={1}>
+                            {message.data.sales.services.slice(0, 5).map((service) => (
+                              <Flex key={service.key} justify="space-between" align="center" fontSize="xs">
+                                <Text>{service.name}</Text>
+                                <Badge size="sm" colorScheme={service.group === "TV" ? "purple" : "blue"}>
+                                  {service.group}
+                                </Badge>
+                              </Flex>
+                            ))}
+                          </VStack>
+                        </Box>
+                      )}
+                      <Button
+                        as={NextLink}
+                        href="/relatorios/servicos"
+                        size="sm"
+                        mt={2}
+                        colorScheme="brand"
+                        variant="outline"
+                        leftIcon={<FiFileText />}
+                      >
+                        Ver relatórios completos
+                      </Button>
+                    </VStack>
+                  </Box>
+                ) : message.type === "suggestions" && message.data?.suggestions ? (
+                  <Box alignSelf="flex-start" bg={cardBg} p={4} borderRadius="lg" maxW="100%">
+                    <Text fontWeight="semibold" mb={2}>
+                      {message.content}
+                    </Text>
+                    <VStack align="stretch" spacing={2}>
+                      {message.data.suggestions.map((suggestion, idx) => (
+                        <Box
+                          key={idx}
+                          p={3}
+                          bg={assistantBubbleBg}
+                          borderRadius="md"
+                          borderLeftWidth={3}
+                          borderLeftColor={
+                            suggestion.type === "warning"
+                              ? "red.500"
+                              : suggestion.type === "info"
+                                ? "blue.500"
+                                : suggestion.type === "success"
+                                  ? "green.500"
+                                  : "purple.500"
+                          }
+                        >
+                          <Flex justify="space-between" align="start" mb={suggestion.action ? 2 : 0}>
+                            <Box flex={1}>
+                              <Text fontWeight="medium" fontSize="sm" mb={1}>
+                                {suggestion.title}
+                              </Text>
+                              <Text fontSize="xs" color="gray.500">
+                                {suggestion.description}
+                              </Text>
+                            </Box>
+                            <Badge
+                              size="sm"
+                              colorScheme={
+                                suggestion.type === "warning"
+                                  ? "red"
+                                  : suggestion.type === "info"
+                                    ? "blue"
+                                    : suggestion.type === "success"
+                                      ? "green"
+                                      : "purple"
+                              }
+                              ml={2}
+                            >
+                              {suggestion.type === "warning"
+                                ? "Atenção"
+                                : suggestion.type === "info"
+                                  ? "Info"
+                                  : suggestion.type === "success"
+                                    ? "Sucesso"
+                                    : "Ação"}
+                            </Badge>
+                          </Flex>
+                          {suggestion.action && (
+                            <Button
+                              as={NextLink}
+                              href={suggestion.action.route}
+                              size="xs"
+                              colorScheme="brand"
+                              variant="outline"
+                              leftIcon={<FiArrowRight />}
+                              mt={2}
+                            >
+                              {suggestion.action.label}
+                            </Button>
+                          )}
                         </Box>
                       ))}
                     </VStack>

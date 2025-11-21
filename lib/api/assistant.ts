@@ -60,3 +60,38 @@ export async function getExpiringServices(days: number = 30): Promise<ExpiringSe
   return response.data.results;
 }
 
+export interface SalesAnalysis {
+  totalSales: number;
+  services: Array<{ key: string; name: string; group: "TV" | "SERVICO" }>;
+  points: Array<{
+    month: string;
+    label: string;
+    totals: Record<string, number>;
+    total: number;
+  }>;
+  range: {
+    start: string;
+    end: string;
+  };
+}
+
+export async function getSalesAnalysis(): Promise<SalesAnalysis> {
+  const response = await api.get<SalesAnalysis>("/stats/sales");
+  return response.data;
+}
+
+export interface ProactiveSuggestion {
+  type: "warning" | "info" | "success" | "action";
+  title: string;
+  description: string;
+  action?: {
+    label: string;
+    route: string;
+  };
+}
+
+export async function getProactiveSuggestions(): Promise<ProactiveSuggestion[]> {
+  const response = await api.get<{ results: ProactiveSuggestion[] }>("/assistant/suggestions");
+  return response.data.results;
+}
+
