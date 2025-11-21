@@ -874,8 +874,8 @@ useEffect(() => {
                 borderColor={cardBorder}
                 bg={cardBg}
               >
-                <Text fontWeight="semibold" mb={3}>
-                  Configurar acessos de TV
+                <Text fontWeight="semibold" mb={3} color="brand.500">
+                  ⚡ Configuração Inicial de TV (Acesso será gerado automaticamente)
                 </Text>
                 <SimpleGrid columns={{ base: 1, md: 2, xl: 3 }} spacing={4}>
                   <FormControl>

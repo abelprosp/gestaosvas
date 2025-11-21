@@ -406,11 +406,13 @@ export function TVAssignmentsManager({ clientId, isTvSelected, isOpen }: TVAssig
             />
           </FormControl>
           <GridItem colSpan={{ base: 1, md: 2, xl: 1 }}>
-            <FormControl isRequired>
-              <FormLabel>Vendedor</FormLabel>
+            <FormControl>
+              <FormLabel>
+                Vendedor <Text as="span" color="gray.500" fontSize="sm">(opcional)</Text>
+              </FormLabel>
               <Input
                 list="tv-assign-vendors"
-                placeholder={vendorsLoading ? "Carregando vendedores..." : "Nome do vendedor"}
+                placeholder={vendorsLoading ? "Carregando..." : "Selecione ou deixe em branco"}
                 value={assignForm.soldBy}
                 onChange={(event) => setAssignForm((prev) => ({ ...prev, soldBy: event.target.value }))}
                 isDisabled={isReadOnly}
