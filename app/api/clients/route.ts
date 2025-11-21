@@ -326,6 +326,29 @@ async function handleTvServiceForClient(
             });
           }
         } catch (assignError) {
+          // Verificar se é erro de schema (HttpError 503) - verificar propriedades diretamente
+          // Não podemos confiar apenas no instanceof em ambientes compilados
+          const isHttpError503 = 
+            assignError && 
+            typeof assignError === "object" &&
+            (("status" in assignError && (assignError as { status?: number }).status === 503) ||
+            (assignError instanceof HttpError && assignError.status === 503));
+          
+          // Verificar também pelos códigos de schema do Supabase
+          const schemaCodes = ["PGRST200", "PGRST201", "PGRST202", "PGRST203", "PGRST204", "PGRST205"];
+          const isSchemaError = 
+            assignError && 
+            typeof assignError === "object" && 
+            "code" in assignError &&
+            schemaCodes.includes((assignError as { code?: string }).code ?? "");
+          
+          if (isHttpError503 || isSchemaError) {
+            // É erro de schema - não relançar, apenas logar
+            console.warn(`[handleTvServiceForClient] ⚠️ Schema de TV não disponível para cliente ${clientId}. Serviço será salvo sem acessos de TV.`);
+            return; // Retorna sem lançar erro - cliente será salvo normalmente
+          }
+          
+          // Outro tipo de erro, loga e relança
           console.error(`[handleTvServiceForClient] ❌ Erro ao criar acessos de TV para cliente ${clientId}:`, {
             error: assignError,
             message: assignError instanceof Error ? assignError.message : String(assignError),
@@ -627,6 +650,7 @@ export const POST = createApiHandler(async (req) => {
       console.log("[POST /api/clients] ✅ Configurações de TV processadas com sucesso");
     } catch (tvError) {
       // Verificar se é erro de schema (tabela não existe)
+      // Verificar pelos códigos de schema do Supabase
       const schemaCodes = ["PGRST200", "PGRST201", "PGRST202", "PGRST203", "PGRST204", "PGRST205"];
       const isSchemaError = 
         tvError && 
@@ -634,18 +658,25 @@ export const POST = createApiHandler(async (req) => {
         "code" in tvError &&
         schemaCodes.includes((tvError as { code?: string }).code ?? "");
       
-      // Verificar também se é HttpError 503 (que indica schema missing)
+      // Verificar se é HttpError 503 - verificar propriedades diretamente (instanceof pode falhar em produção)
       const isHttpError503 = 
-        tvError instanceof HttpError && 
-        (tvError as HttpError).status === 503;
+        (tvError instanceof HttpError && tvError.status === 503) ||
+        (tvError && 
+         typeof tvError === "object" &&
+         "status" in tvError &&
+         (tvError as { status?: number }).status === 503);
       
-      if (isSchemaError || isHttpError503) {
-        console.warn("[POST /api/clients] Schema de TV não disponível, cliente será salvo sem acessos de TV");
+      // Verificar também pela mensagem de erro
+      const errorMessage = tvError instanceof Error ? tvError.message : String(tvError);
+      const isSchemaErrorMessage = errorMessage.includes("Schema de TV") || errorMessage.includes("schema.sql");
+      
+      if (isSchemaError || isHttpError503 || isSchemaErrorMessage) {
+        console.warn("[POST /api/clients] ⚠️ Schema de TV não disponível, cliente será salvo sem acessos de TV");
         // Não lança erro, apenas continua sem configurar TV
         // O cliente será salvo normalmente, apenas sem acessos de TV
       } else {
         // Outro tipo de erro, propaga
-        console.error("[POST /api/clients] Erro ao processar TV:", tvError);
+        console.error("[POST /api/clients] ❌ Erro ao processar TV:", tvError);
         throw tvError;
       }
     }
