@@ -106,6 +106,7 @@ async function createAccountBatch(supabase: any, index: number): Promise<boolean
   const slotsToInsert = Array.from({ length: USERS_PER_ACCOUNT }, (_, i) => ({
     tv_account_id: insertedAccount.id,
     slot_number: i + 1,
+    username: `#${i + 1}`, // Formato: #1, #2, #3, etc.
     status: "AVAILABLE",
     password: generateNumericPassword(),
   }));
