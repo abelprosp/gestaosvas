@@ -39,10 +39,10 @@ const tvSetupSchema = z
   .object({
     quantity: z.number().int().min(1).max(50).optional(),
     planType: tvPlanTypeSchema.optional(),
-    soldBy: z.string().min(1, "Responsável é obrigatório."),
+    soldBy: z.string().min(1).optional(),
     soldAt: z.string().optional(),
     startsAt: z.string().optional(),
-    expiresAt: z.string().min(1, "Informe uma data de vencimento."),
+    expiresAt: z.string().optional(),
     notes: z.string().optional(),
     hasTelephony: z.boolean().optional(),
   })
