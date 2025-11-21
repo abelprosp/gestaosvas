@@ -39,7 +39,7 @@ const tvPlanTypeSchema = z.enum(["ESSENCIAL", "PREMIUM"]);
 
 const tvSetupSchema = z
   .object({
-    quantity: z.number().int().min(1).max(50).optional(),
+    quantity: z.union([z.number().int().min(1).max(50), z.string()]).optional(),
     planType: tvPlanTypeSchema.optional(),
     soldBy: z.string().min(1).optional(),
     soldAt: z.string().optional(),
@@ -248,8 +248,11 @@ async function handleTvServiceForClient(
     if (hasSoldBy && hasExpiresAt) {
       const alreadyAssigned = await clientHasTvAssignment(clientId);
       if (!alreadyAssigned) {
-        const quantity =
-          tvSetup?.quantity && Number.isFinite(tvSetup.quantity) && tvSetup.quantity > 0 ? tvSetup.quantity : 1;
+        // Converter quantity de string para number
+        const parsedQuantity = tvSetup.quantity 
+          ? (typeof tvSetup.quantity === "string" ? parseInt(tvSetup.quantity, 10) : tvSetup.quantity)
+          : 1;
+        const quantity = Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? Math.min(50, parsedQuantity) : 1;
         const planType: TVPlanType = tvSetup?.planType ?? "ESSENCIAL";
         const soldAt =
           tvSetup?.soldAt && tvSetup.soldAt.length === 10
@@ -267,6 +270,8 @@ async function handleTvServiceForClient(
           hasTelephony: tvSetup?.hasTelephony ?? undefined,
         };
 
+        console.log(`[handleTvServiceForClient] Criando ${quantity} acesso(s) de TV para cliente ${clientId}`);
+        
         if (quantity > 1) {
           await assignMultipleSlotsToClient({
             ...params,
@@ -275,7 +280,13 @@ async function handleTvServiceForClient(
         } else {
           await assignSlotToClient(params);
         }
+        
+        console.log(`[handleTvServiceForClient] ${quantity} acesso(s) de TV criado(s) com sucesso`);
+      } else {
+        console.log(`[handleTvServiceForClient] Cliente ${clientId} já possui acessos de TV atribuídos`);
       }
+    } else {
+      console.log(`[handleTvServiceForClient] Campos obrigatórios não preenchidos (soldBy: ${hasSoldBy}, expiresAt: ${hasExpiresAt}), não criando acessos`);
     }
     // Se campos não estão preenchidos, simplesmente não cria acessos (não dá erro)
   } else if (!hasTv) {
@@ -549,8 +560,11 @@ export const POST = createApiHandler(async (req) => {
     await syncClientServices(data.id, selections);
     
     // Tentar processar TV, mas não falhar se schema não estiver disponível
+    // Os acessos serão gerados automaticamente se tvSetup estiver preenchido
     try {
+      console.log("[POST /api/clients] Processando serviço TV, clientId:", data.id, "tvSetup:", tvSetup ? "presente" : "ausente");
       await handleTvServiceForClient(data.id, selections, tvSetup);
+      console.log("[POST /api/clients] Acessos de TV processados com sucesso");
     } catch (tvError) {
       // Verificar se é erro de schema (tabela não existe)
       const schemaCodes = ["PGRST200", "PGRST201", "PGRST202", "PGRST203", "PGRST204", "PGRST205"];
@@ -571,6 +585,7 @@ export const POST = createApiHandler(async (req) => {
         // O cliente será salvo normalmente, apenas sem acessos de TV
       } else {
         // Outro tipo de erro, propaga
+        console.error("[POST /api/clients] Erro ao processar TV:", tvError);
         throw tvError;
       }
     }
