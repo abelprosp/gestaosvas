@@ -27,7 +27,9 @@ import {
   Collapse,
   Grid,
   Select,
+  Checkbox,
 } from "@chakra-ui/react";
+import { FiPhone } from "react-icons/fi";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Fragment, ReactElement, useEffect, useMemo, useState } from "react";
 import {
@@ -232,6 +234,7 @@ export function ClientsPage() {
 
   const [page, setPage] = useState(1);
   const [documentTypeFilter, setDocumentTypeFilter] = useState<"ALL" | "CPF" | "CNPJ">("ALL");
+  const [telephonyFilter, setTelephonyFilter] = useState<boolean>(false);
   const limit = 50;
 
   const {
@@ -256,7 +259,7 @@ export function ClientsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, documentTypeFilter]);
+  }, [searchTerm, documentTypeFilter, telephonyFilter]);
 
   const clients = useMemo<Client[]>(() => clientsResponse?.data ?? [], [clientsResponse]);
   const totalClients = clientsResponse?.total ?? 0;
@@ -271,7 +274,15 @@ export function ClientsPage() {
 
   const filteredClients = useMemo<Client[]>(() => {
     const term = searchTerm.toLowerCase();
-    const scopedClients: Client[] = clients;
+    let scopedClients: Client[] = clients;
+    
+    // Filtro de telefonia
+    if (telephonyFilter) {
+      scopedClients = scopedClients.filter((client: Client) => {
+        return (client.tvAssignments ?? []).some((assignment: ClientTVAssignment) => assignment.hasTelephony === true);
+      });
+    }
+    
     const filtered = term
       ? scopedClients.filter((client: Client) => {
           const baseMatch = [client.name, client.email, client.document, client.companyName, client.costCenter]
@@ -474,7 +485,7 @@ const getSortIcon = (key: string): ReactElement | undefined => {
         />
       </Flex>
 
-      <Flex gap={4} direction={{ base: "column", md: "row" }}>
+      <Flex gap={4} direction={{ base: "column", md: "row" }} align={{ base: "stretch", md: "center" }}>
         <InputGroup maxW={{ base: "full", md: "360px" }}>
           <InputLeftElement pointerEvents="none">
             <FiSearch color="#999" />
@@ -494,6 +505,17 @@ const getSortIcon = (key: string): ReactElement | undefined => {
           <option value="CPF">Apenas CPF</option>
           <option value="CNPJ">Apenas CNPJ</option>
         </Select>
+        <Checkbox
+          isChecked={telephonyFilter}
+          onChange={(event) => setTelephonyFilter(event.target.checked)}
+          colorScheme="brand"
+          size="md"
+        >
+          <HStack spacing={2}>
+            <Box as={FiPhone} />
+            <Text>Apenas com telefonia</Text>
+          </HStack>
+        </Checkbox>
       </Flex>
 
       <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={{ base: 4, md: 6 }}>

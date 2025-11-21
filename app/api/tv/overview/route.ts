@@ -120,6 +120,7 @@ export const GET = createApiHandler(async (req) => {
       expiresAt: mapped.expiresAt,
       notes: mapped.notes,
       planType: finalPlanType,
+      hasTelephony: mapped.hasTelephony ?? null,
       client: row.client ?? null,
       clientId: mapped.clientId ?? null,
       profileLabel: null as string | null,

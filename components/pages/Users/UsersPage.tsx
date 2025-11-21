@@ -27,6 +27,7 @@ import {
   Tr,
   useColorModeValue,
   useToast,
+  Checkbox,
 } from "@chakra-ui/react";
 import { Fragment, ReactElement, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -39,6 +40,7 @@ import {
   FiEdit,
   FiKey,
   FiSend,
+  FiPhone,
 } from "react-icons/fi";
 import { fetchTVOverview, regenerateTVSlotPassword, releaseTVSlot, updateTVSlot } from "@/lib/api/tv";
 import { PaginatedResponse, TVOverviewRecord, TVSlotStatus } from "@/types";
@@ -161,6 +163,7 @@ export function UsersPage() {
   const [statusFilter, setStatusFilter] = useState<TVSlotStatus | "ALL">("ALL");
   const [availabilityFilter, setAvailabilityFilter] = useState<"ALL" | "AVAILABLE" | "ASSIGNED">("ALL");
   const [expirationFilter, setExpirationFilter] = useState<ExpirationCategory | "ALL">("ALL");
+  const [telephonyFilter, setTelephonyFilter] = useState<boolean>(false);
   const [exportDocument, setExportDocument] = useState("");
   const [pendingSlotId, setPendingSlotId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -378,7 +381,9 @@ export function UsersPage() {
           ? category === "NO_DATE"
           : category === expirationFilter;
 
-      return matchesSearch && matchesStatus && matchesAvailability && matchesExpiration;
+      const matchesTelephony = !telephonyFilter || (record as any).hasTelephony === true;
+
+      return matchesSearch && matchesStatus && matchesAvailability && matchesExpiration && matchesTelephony;
     });
     if (!sortConfig) {
       return filtered;
@@ -414,6 +419,7 @@ export function UsersPage() {
   }, [
     availabilityFilter,
     expirationFilter,
+    telephonyFilter,
     searchTerm,
     sortConfig,
     sortedRecords,
@@ -534,6 +540,17 @@ export function UsersPage() {
           <option value="SAFE">Mais de 5 dias</option>
           <option value="NO_DATE">Sem data definida</option>
         </Select>
+        <Checkbox
+          isChecked={telephonyFilter}
+          onChange={(event) => setTelephonyFilter(event.target.checked)}
+          colorScheme="brand"
+          size="md"
+        >
+          <HStack spacing={2}>
+            <Box as={FiPhone} />
+            <Text>Apenas com telefonia</Text>
+          </HStack>
+        </Checkbox>
       </Stack>
 
       <Stack direction={{ base: "column", md: "row" }} spacing={4} align={{ base: "stretch", md: "flex-end" }}>
@@ -747,7 +764,14 @@ export function UsersPage() {
                   <Fragment key={record.id}>
                     <Tr>
                       <Td>
+                        <HStack spacing={2}>
                         <Text fontWeight="semibold">{record.email}</Text>
+                        {(record as any).hasTelephony && (
+                          <Tooltip label="Cliente com telefonia">
+                            <Box as={FiPhone} color="brand.500" />
+                          </Tooltip>
+                        )}
+                      </HStack>
                       </Td>
                       <Td display={{ base: "none", md: "table-cell" }}>
                         <Badge colorScheme="blue">#{record.slotNumber}</Badge>
