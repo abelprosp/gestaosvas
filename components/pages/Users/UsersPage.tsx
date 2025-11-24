@@ -50,6 +50,7 @@ import {
   FiPlus,
   FiSend,
   FiPhone,
+  FiTrash2,
 } from "react-icons/fi";
 import { fetchTVOverview, regenerateTVSlotPassword, releaseTVSlot, updateTVSlot, createTVAccount } from "@/lib/api/tv";
 import { PaginatedResponse, TVOverviewRecord, TVSlotStatus } from "@/types";
@@ -888,13 +889,35 @@ export function UsersPage() {
                         </HStack>
                       </Td>
                       <Td textAlign="right">
-                        <IconButton
-                          aria-label={isExpanded ? "Ocultar detalhes" : "Exibir detalhes"}
-                          icon={isExpanded ? <FiChevronUp /> : <FiChevronDown />}
-                          size="sm"
-                          variant="ghost"
-                          onClick={toggleExpanded}
-                        />
+                        <HStack spacing={2} justify="flex-end">
+                          {isAdmin && record.status === "ASSIGNED" && (
+                            <Tooltip label="Excluir acesso">
+                              <IconButton
+                                aria-label="Excluir acesso"
+                                icon={<FiTrash2 />}
+                                size="sm"
+                                variant="ghost"
+                                colorScheme="red"
+                                onClick={() => {
+                                  if (releaseMutation.isPending) return;
+                                  const confirmed = window.confirm(
+                                    `Tem certeza que deseja excluir este acesso?\n\nIsso removerá o acesso do cliente ${record.client?.name || "desconhecido"} e liberará o slot.`
+                                  );
+                                  if (!confirmed) return;
+                                  releaseMutation.mutate(record.id);
+                                }}
+                                isLoading={releasing && (releaseMutation.variables as string | undefined) === record.id}
+                              />
+                            </Tooltip>
+                          )}
+                          <IconButton
+                            aria-label={isExpanded ? "Ocultar detalhes" : "Exibir detalhes"}
+                            icon={isExpanded ? <FiChevronUp /> : <FiChevronDown />}
+                            size="sm"
+                            variant="ghost"
+                            onClick={toggleExpanded}
+                          />
+                        </HStack>
                       </Td>
                     </Tr>
                     <Tr>
