@@ -104,5 +104,8 @@ BEGIN
 END $$;
 
 -- Fim da migração
-RAISE NOTICE 'Migração concluída com sucesso!';
+DO $$
+BEGIN
+  RAISE NOTICE 'Migração concluída com sucesso!';
+END $$;
 
