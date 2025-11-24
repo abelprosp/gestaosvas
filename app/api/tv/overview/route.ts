@@ -76,11 +76,16 @@ export const GET = createApiHandler(async (req) => {
   }
 
   // Filtrar apenas slots atribuídos a clientes
-  data = (data ?? []).filter((slot) => {
+  const filteredData = (data ?? []).filter((slot) => {
     return slot.status === "ASSIGNED" && slot.client_id !== null;
   });
 
-  const formatted = (data ?? []).map((row) => {
+  // Ajustar count para refletir apenas slots atribuídos
+  if (count !== null && count !== undefined) {
+    count = filteredData.length;
+  }
+
+  const formatted = filteredData.map((row) => {
     const mapped = mapTVSlotRow(row);
     
     return {
