@@ -886,7 +886,7 @@ export function UsersPage() {
                               isDisabled={!isAdmin}
                             />
                           </Tooltip>
-                          {isAdmin && record.status === "ASSIGNED" && record.client && (
+                          {isAdmin && record.status === "ASSIGNED" && (record.clientId || record.client) && (
                             <Tooltip label="Excluir acesso">
                               <IconButton
                                 aria-label="Excluir acesso"
@@ -896,8 +896,9 @@ export function UsersPage() {
                                 colorScheme="red"
                                 onClick={() => {
                                   if (releaseMutation.isPending) return;
+                                  const clientName = record.client?.name || "desconhecido";
                                   const confirmed = window.confirm(
-                                    `Tem certeza que deseja excluir este acesso?\n\nIsso removerá o acesso do cliente ${record.client?.name || "desconhecido"} e liberará o slot.`
+                                    `Tem certeza que deseja excluir este acesso?\n\nIsso removerá o acesso do cliente ${clientName} e liberará o slot.`
                                   );
                                   if (!confirmed) return;
                                   releaseMutation.mutate(record.id);
