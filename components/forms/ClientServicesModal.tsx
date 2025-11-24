@@ -151,6 +151,8 @@ export function ClientServicesModal({
   const [tvSetup, setTvSetup] = useState<TvSetupState>(buildInitialTvSetup());
   const [cloudSetups, setCloudSetups] = useState<Record<string, CloudSetupState>>({});
   const [customPrices, setCustomPrices] = useState<Record<string, string>>({});
+  const [customPricesEssencial, setCustomPricesEssencial] = useState<Record<string, string>>({});
+  const [customPricesPremium, setCustomPricesPremium] = useState<Record<string, string>>({});
   const [additionalEssencial, setAdditionalEssencial] = useState<string>("0");
   const [additionalPremium, setAdditionalPremium] = useState<string>("0");
 
@@ -160,12 +162,23 @@ export function ClientServicesModal({
 
     // Carregar preços personalizados
     const prices: Record<string, string> = {};
+    const pricesEssencial: Record<string, string> = {};
+    const pricesPremium: Record<string, string> = {};
     (client.services ?? []).forEach((service) => {
       if (service.customPrice !== undefined && service.customPrice !== null) {
-        prices[service.id] = service.customPrice.toFixed(2).replace(".", ",");
+        // Se for serviço TV, verificar se há preços separados (por enquanto usar o mesmo para ambos)
+        if (service.name.toLowerCase().includes("tv")) {
+          // Por enquanto, usar o mesmo preço para ambos (pode ser ajustado depois se houver estrutura no backend)
+          pricesEssencial[service.id] = service.customPrice.toFixed(2).replace(".", ",");
+          pricesPremium[service.id] = service.customPrice.toFixed(2).replace(".", ",");
+        } else {
+          prices[service.id] = service.customPrice.toFixed(2).replace(".", ",");
+        }
       }
     });
     setCustomPrices(prices);
+    setCustomPricesEssencial(pricesEssencial);
+    setCustomPricesPremium(pricesPremium);
 
     // Carregar configurações Cloud
     const cloudMap: Record<string, CloudSetupState> = {};
@@ -247,6 +260,8 @@ export function ClientServicesModal({
     setTvSetup(buildInitialTvSetup());
     setCloudSetups({});
     setCustomPrices({});
+    setCustomPricesEssencial({});
+    setCustomPricesPremium({});
     setAdditionalEssencial("0");
     setAdditionalPremium("0");
     onClose();
@@ -256,8 +271,33 @@ export function ClientServicesModal({
     try {
       const serviceIds = values.serviceIds ?? [];
       const serviceSelections = serviceIds.map((serviceId) => {
-        const priceStr = customPrices[serviceId];
-        const customPrice = priceStr ? parseFloat(priceStr.replace(",", ".")) : null;
+        const service = serviceOptions.find((s) => s.id === serviceId);
+        const isTvService = service?.name.toLowerCase().includes("tv");
+        
+        let customPrice: number | null = null;
+        
+        if (isTvService) {
+          // Para serviços TV, verificar se é ESSENCIAL ou PREMIUM
+          const isEssencial = service?.name.toLowerCase().includes("essencial");
+          const isPremium = service?.name.toLowerCase().includes("premium");
+          
+          if (isEssencial) {
+            const priceStr = customPricesEssencial[serviceId];
+            customPrice = priceStr ? parseFloat(priceStr.replace(",", ".")) : null;
+          } else if (isPremium) {
+            const priceStr = customPricesPremium[serviceId];
+            customPrice = priceStr ? parseFloat(priceStr.replace(",", ".")) : null;
+          } else {
+            // Se for um serviço TV genérico, usar o preço do ESSENCIAL como padrão
+            const priceStr = customPricesEssencial[serviceId] || customPricesPremium[serviceId];
+            customPrice = priceStr ? parseFloat(priceStr.replace(",", ".")) : null;
+          }
+        } else {
+          // Para outros serviços, usar o preço normal
+          const priceStr = customPrices[serviceId];
+          customPrice = priceStr ? parseFloat(priceStr.replace(",", ".")) : null;
+        }
+        
         return {
           serviceId,
           customPrice: isNaN(customPrice ?? NaN) ? null : customPrice,
@@ -432,21 +472,55 @@ export function ClientServicesModal({
               {selectedServiceIds
                 .map((id) => serviceOptions.find((s) => s.id === id))
                 .filter((s) => s?.allowCustomPrice)
-                .map((service) => (
-                  <Box key={service!.id} p={4} bg={cardBg} borderRadius="lg" borderWidth={1} borderColor={cardBorder}>
-                    <FormControl>
-                      <FormLabel>Preço personalizado - {service!.name}</FormLabel>
-                      <Input
-                        placeholder="0,00"
-                        value={customPrices[service!.id] ?? ""}
-                        onChange={(e) => {
-                          const value = e.target.value.replace(/[^\d,]/g, "");
-                          setCustomPrices((prev) => ({ ...prev, [service!.id]: value }));
-                        }}
-                      />
-                    </FormControl>
-                  </Box>
-                ))}
+                .map((service) => {
+                  const isTvService = service!.name.toLowerCase().includes("tv");
+                  return (
+                    <Box key={service!.id} p={4} bg={cardBg} borderRadius="lg" borderWidth={1} borderColor={cardBorder}>
+                      {isTvService ? (
+                        <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={4}>
+                          <GridItem>
+                            <FormControl>
+                              <FormLabel>Preço personalizado - {service!.name} ESSENCIAL</FormLabel>
+                              <Input
+                                placeholder="0,00"
+                                value={customPricesEssencial[service!.id] ?? ""}
+                                onChange={(e) => {
+                                  const value = e.target.value.replace(/[^\d,]/g, "");
+                                  setCustomPricesEssencial((prev) => ({ ...prev, [service!.id]: value }));
+                                }}
+                              />
+                            </FormControl>
+                          </GridItem>
+                          <GridItem>
+                            <FormControl>
+                              <FormLabel>Preço personalizado - {service!.name} PREMIUM</FormLabel>
+                              <Input
+                                placeholder="0,00"
+                                value={customPricesPremium[service!.id] ?? ""}
+                                onChange={(e) => {
+                                  const value = e.target.value.replace(/[^\d,]/g, "");
+                                  setCustomPricesPremium((prev) => ({ ...prev, [service!.id]: value }));
+                                }}
+                              />
+                            </FormControl>
+                          </GridItem>
+                        </Grid>
+                      ) : (
+                        <FormControl>
+                          <FormLabel>Preço personalizado - {service!.name}</FormLabel>
+                          <Input
+                            placeholder="0,00"
+                            value={customPrices[service!.id] ?? ""}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/[^\d,]/g, "");
+                              setCustomPrices((prev) => ({ ...prev, [service!.id]: value }));
+                            }}
+                          />
+                        </FormControl>
+                      )}
+                    </Box>
+                  );
+                })}
 
               {/* Configuração TV */}
               {isTvSelected && (
