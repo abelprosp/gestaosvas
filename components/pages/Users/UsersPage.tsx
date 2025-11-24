@@ -713,6 +713,18 @@ export function UsersPage() {
                   renewMutation.isPending &&
                   (renewMutation.variables as RenewVariables | undefined)?.slotId === record.id;
                 const isExpanded = expandedId === record.id;
+                
+                // Debug: verificar condições para exibir botão excluir
+                const shouldShowDelete = isAdmin && record.status === "ASSIGNED" && (record.clientId || record.client);
+                if (record.status === "ASSIGNED" && (record.clientId || record.client)) {
+                  console.log("[UsersPage] Debug excluir:", {
+                    isAdmin,
+                    status: record.status,
+                    clientId: record.clientId,
+                    hasClient: !!record.client,
+                    shouldShowDelete,
+                  });
+                }
 
                 const handleContact = () => {
                   if (record.client?.email) {
