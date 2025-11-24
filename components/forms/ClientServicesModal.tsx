@@ -28,8 +28,15 @@ import {
 } from "@chakra-ui/react";
 import { useForm, Controller } from "react-hook-form";
 import { useState, useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Service, Client } from "@/types";
 import { TVPlanType } from "@/types";
+import { fetchVendors, Vendor } from "@/lib/api/users";
+import { vendorDisplayName } from "@/lib/utils/vendors";
+import { useAuth } from "@/context/AuthContext";
+import { createRequest } from "@/lib/api/requests";
+import { FiUserPlus, FiSend } from "react-icons/fi";
+import { Link } from "@chakra-ui/next-js";
 
 const CLOUD_SERVICE_KEYWORDS = ["cloud", "hub", "hubplay", "telemedicina", "telepet"];
 
@@ -112,8 +119,21 @@ export function ClientServicesModal({
   serviceOptions,
 }: ClientServicesModalProps) {
   const toast = useToast();
+  const { isAdmin } = useAuth();
+  const { data: vendors = [], isLoading: vendorsLoading } = useQuery<Vendor[]>({
+    queryKey: ["vendors"],
+    queryFn: fetchVendors,
+    enabled: isOpen,
+  });
   const cardBg = useColorModeValue("rgba(255,255,255,0.78)", "rgba(15, 23, 42, 0.7)");
   const cardBorder = useColorModeValue("rgba(226,232,240,0.6)", "rgba(45,55,72,0.6)");
+
+  const vendorOptions = useMemo(() => {
+    return vendors
+      .map((vendor) => vendorDisplayName(vendor))
+      .filter((label): label is string => Boolean(label))
+      .map((label) => ({ label }));
+  }, [vendors]);
 
   const currentServiceIds = useMemo(() => client.services?.map((s) => s.id) ?? [], [client.services]);
 
@@ -417,13 +437,67 @@ export function ClientServicesModal({
                         </Select>
                       </FormControl>
                     </GridItem>
-                    <GridItem>
+                    <GridItem colSpan={{ base: 1, md: 2 }}>
                       <FormControl>
                         <FormLabel>Vendido por</FormLabel>
                         <Input
+                          list="client-services-vendors"
+                          placeholder={vendorsLoading ? "Carregando vendedores..." : "Nome do vendedor"}
                           value={tvSetup.soldBy}
                           onChange={(e) => setTvSetup((prev) => ({ ...prev, soldBy: e.target.value }))}
+                          autoComplete="off"
                         />
+                        <datalist id="client-services-vendors">
+                          {vendorOptions.map((option) => (
+                            <option key={option.label} value={option.label} />
+                          ))}
+                        </datalist>
+                        <Stack direction={{ base: "column", md: "row" }} spacing={2} mt={2}>
+                          {isAdmin ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              leftIcon={<FiUserPlus />}
+                              as={Link}
+                              href="/admin/usuarios"
+                            >
+                              Cadastrar vendedor
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              leftIcon={<FiSend />}
+                              onClick={async () => {
+                                const description = window.prompt(
+                                  "Descreva o vendedor que deseja cadastrar (nome, e-mail, observações).",
+                                );
+                                if (!description) {
+                                  return;
+                                }
+                                try {
+                                  await createRequest("VENDOR_CREATE_REQUEST", {
+                                    description,
+                                    clientId: client.id ?? null,
+                                  });
+                                  toast({
+                                    title: "Solicitação enviada",
+                                    description: "O administrador foi notificado sobre sua solicitação.",
+                                    status: "success",
+                                  });
+                                } catch (error) {
+                                  console.error(error);
+                                  toast({
+                                    title: "Falha ao solicitar cadastro",
+                                    status: "error",
+                                  });
+                                }
+                              }}
+                            >
+                              Solicitar novo vendedor
+                            </Button>
+                          )}
+                        </Stack>
                       </FormControl>
                     </GridItem>
                     <GridItem>

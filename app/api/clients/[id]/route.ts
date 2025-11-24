@@ -229,38 +229,96 @@ async function handleTvServiceForClient(
     const hasSoldBy = tvSetup.soldBy && tvSetup.soldBy.trim();
     const hasExpiresAt = tvSetup.expiresAt && tvSetup.expiresAt.trim().length >= 8;
     
-    // Só cria acessos se os campos obrigatórios estiverem preenchidos
+    // Só cria/atualiza acessos se os campos obrigatórios estiverem preenchidos
     if (hasSoldBy && hasExpiresAt) {
-      const alreadyAssigned = await clientHasTvAssignment(clientId);
-      if (!alreadyAssigned) {
-        const quantity =
-          tvSetup?.quantity && Number.isFinite(tvSetup.quantity) && tvSetup.quantity > 0 ? tvSetup.quantity : 1;
-        const planType: TVPlanType = tvSetup?.planType ?? "ESSENCIAL";
-        const soldAt =
-          tvSetup?.soldAt && tvSetup.soldAt.length === 10
-            ? new Date(`${tvSetup.soldAt}T12:00:00`).toISOString()
-            : tvSetup?.soldAt ?? undefined;
-        const soldBy = tvSetup.soldBy.trim();
-        const params = {
-          clientId,
-          soldBy,
-          soldAt,
-          startsAt: tvSetup?.startsAt ?? undefined,
-          expiresAt: tvSetup.expiresAt,
-          notes: tvSetup?.notes?.trim() || undefined,
-          planType,
-          hasTelephony: tvSetup?.hasTelephony ?? undefined,
-        };
+      const supabase = createServerClient();
+      
+      // Buscar quantidade atual de acessos
+      const { data: currentSlots, error: countError } = await supabase
+        .from("tv_slots")
+        .select("id")
+        .eq("client_id", clientId)
+        .eq("status", "ASSIGNED");
+      
+      if (countError && !isSchemaMissing(countError)) {
+        throw countError;
+      }
+      
+      const currentQuantity = currentSlots?.length ?? 0;
+      const desiredQuantity =
+        tvSetup?.quantity && Number.isFinite(tvSetup.quantity) && tvSetup.quantity > 0 ? tvSetup.quantity : 1;
+      
+      const planType: TVPlanType = tvSetup?.planType ?? "ESSENCIAL";
+      const soldAt =
+        tvSetup?.soldAt && tvSetup.soldAt.length === 10
+          ? new Date(`${tvSetup.soldAt}T12:00:00`).toISOString()
+          : tvSetup?.soldAt ?? undefined;
+      const soldBy = tvSetup.soldBy.trim();
+      const params = {
+        clientId,
+        soldBy,
+        soldAt,
+        startsAt: tvSetup?.startsAt ?? undefined,
+        expiresAt: tvSetup.expiresAt,
+        notes: tvSetup?.notes?.trim() || undefined,
+        planType,
+        hasTelephony: tvSetup?.hasTelephony ?? undefined,
+      };
 
-        if (quantity > 1) {
+      if (currentQuantity === 0) {
+        // Criar novos acessos
+        if (desiredQuantity > 1) {
           await assignMultipleSlotsToClient({
             ...params,
-            quantity,
+            quantity: desiredQuantity,
           });
         } else {
           await assignSlotToClient(params);
         }
+      } else if (desiredQuantity !== currentQuantity) {
+        // Atualizar quantidade: remover ou adicionar acessos
+        if (desiredQuantity > currentQuantity) {
+          // Adicionar mais acessos
+          const toAdd = desiredQuantity - currentQuantity;
+          await assignMultipleSlotsToClient({
+            ...params,
+            quantity: toAdd,
+          });
+        } else {
+          // Remover acessos extras (manter apenas os primeiros)
+          const toRemove = currentQuantity - desiredQuantity;
+          const { data: slotsToRemove } = await supabase
+            .from("tv_slots")
+            .select("id")
+            .eq("client_id", clientId)
+            .eq("status", "ASSIGNED")
+            .order("created_at", { ascending: false })
+            .limit(toRemove);
+          
+          if (slotsToRemove && slotsToRemove.length > 0) {
+            const slotIds = slotsToRemove.map((s) => s.id);
+            // Liberar slots específicos
+            const { error: releaseError } = await supabase
+              .from("tv_slots")
+              .update({
+                client_id: null,
+                status: "AVAILABLE",
+                sold_by: null,
+                sold_at: null,
+                starts_at: new Date().toISOString().slice(0, 10),
+                expires_at: null,
+                notes: null,
+                plan_type: null,
+              })
+              .in("id", slotIds);
+            
+            if (releaseError && !isSchemaMissing(releaseError)) {
+              throw releaseError;
+            }
+          }
+        }
       }
+      // Se a quantidade é a mesma, não precisa fazer nada
     }
     // Se campos não estão preenchidos, simplesmente não cria acessos (não dá erro)
   } else if (!hasTv) {

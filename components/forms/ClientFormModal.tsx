@@ -468,13 +468,18 @@ useEffect(() => {
       }
       values.document = normalizedDocument;
 
-      // No modo básico, não envia serviços
-      const serviceIds = mode === "basic" ? [] : (values.serviceIds ?? []);
+      // No modo básico ao editar, não envia serviços (mantém os existentes)
+      // No modo básico ao criar, não envia serviços (cria sem serviços)
+      const isBasicMode = mode === "basic";
+      const isEditing = !!defaultValues;
+      
+      // Se estiver editando no modo básico, não envia serviceIds para manter os existentes
+      const serviceIds = isBasicMode && isEditing ? undefined : (values.serviceIds ?? []);
       // Serviços são opcionais - o cliente pode ser cadastrado sem serviços selecionados
 
       let invalidServiceName: string | null = null;
-      const serviceSelections = mode === "basic" ? [] :
-        serviceIds.map((serviceId) => {
+      const serviceSelections = (isBasicMode && isEditing) ? undefined :
+        (isBasicMode ? [] : (serviceIds ?? []).map((serviceId) => {
           const service = serviceOptions.find((option) => option.id === serviceId);
           const soldBy = serviceVendors[serviceId]?.trim() || undefined;
           
@@ -602,8 +607,20 @@ useEffect(() => {
         cloudSetupsPayload = setups.length > 0 ? setups : undefined;
       }
 
-      // No modo básico, não envia serviços
-      if (mode === "basic") {
+      // No modo básico ao editar, não envia serviços (mantém os existentes)
+      // No modo básico ao criar, cria sem serviços
+      if (isBasicMode && isEditing) {
+        // Ao editar no modo básico, não envia serviceIds para manter os existentes
+        // Criar objeto sem serviceIds, serviceSelections, tvSetup, cloudSetups
+        const { serviceIds: _, serviceSelections: __, tvSetup: ___, cloudSetups: ____, ...basicData } = values;
+        await onSubmit({
+          ...basicData,
+          openedBy: values.openedBy?.trim() || undefined,
+          // Não envia serviceIds, serviceSelections, tvSetup, cloudSetups
+          // O backend manterá os existentes quando esses campos não forem fornecidos
+        });
+      } else if (isBasicMode) {
+        // Ao criar no modo básico, cria sem serviços
         await onSubmit({
           ...values,
           openedBy: values.openedBy?.trim() || undefined,
