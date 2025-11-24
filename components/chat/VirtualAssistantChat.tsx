@@ -97,8 +97,8 @@ function saveChatHistory(messages: Message[]) {
 
 const initialMessage: Message = {
   sender: "assistant",
-  content: "Olá! Sou o assistente virtual. Como posso ajudar?",
-  type: "commands",
+  content: "Olá! 👋 Sou o assistente virtual do sistema de gestão de serviços. Como posso ajudar você hoje?",
+  type: "text",
   data: {},
 };
 
@@ -151,6 +151,330 @@ export function VirtualAssistantChat() {
 
   const processMessage = async (question: string): Promise<Message> => {
     const lowerQuestion = question.toLowerCase().trim();
+
+    // ========== SAUDAÇÕES E INTERAÇÕES SOCIAIS ==========
+    
+    // Saudações gerais
+    if (/^(olá|ola|oi|oie|hey|hi|hello)$/i.test(lowerQuestion)) {
+      const greetings = [
+        "Olá! 👋 Como posso ajudar você hoje?",
+        "Oi! 😊 Em que posso ser útil?",
+        "Olá! Estou aqui para ajudar. O que você precisa?",
+      ];
+      return {
+        sender: "assistant",
+        content: greetings[Math.floor(Math.random() * greetings.length)],
+        type: "text",
+      };
+    }
+
+    // Bom dia
+    if (/^(bom dia|bomdia|good morning)$/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: "Bom dia! ☀️ Como posso ajudar você hoje?",
+        type: "text",
+      };
+    }
+
+    // Boa tarde
+    if (/^(boa tarde|boatarde|good afternoon)$/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: "Boa tarde! 🌤️ Em que posso ser útil?",
+        type: "text",
+      };
+    }
+
+    // Boa noite
+    if (/^(boa noite|boanoite|good evening|good night)$/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: "Boa noite! 🌙 Como posso ajudar?",
+        type: "text",
+      };
+    }
+
+    // Tudo bem / Como vai
+    if (/^(tudo bem|tudo bom|como vai|como está|como vc está|como você está|como ta|como está você)$/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: "Tudo ótimo, obrigado! 😊 Estou aqui para ajudar você com o sistema. O que você precisa?",
+        type: "text",
+      };
+    }
+
+    // Agradecimentos
+    if (/^(obrigado|obrigada|valeu|thanks|thank you|grato|grata)$/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: "De nada! 😊 Fico feliz em ajudar. Precisa de mais alguma coisa?",
+        type: "text",
+      };
+    }
+
+    // Despedidas
+    if (/^(tchau|até logo|até mais|bye|até breve|falou|flw)$/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: "Até logo! 👋 Estarei aqui sempre que precisar. Tenha um ótimo dia!",
+        type: "text",
+      };
+    }
+
+    // ========== PERGUNTAS SOBRE O SISTEMA ==========
+
+    // Como cadastrar cliente
+    if (/(como.*cadastrar.*cliente|como.*adicionar.*cliente|como.*criar.*cliente|passo.*a.*passo.*cliente|tutorial.*cliente)/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: `Para cadastrar um novo cliente no sistema, siga estes passos:
+
+1️⃣ Acesse o menu lateral e clique em "Clientes" (ou use o comando "cadastrar cliente")
+
+2️⃣ Clique no botão "Novo cliente" ou "Adicionar cliente"
+
+3️⃣ Preencha os dados obrigatórios:
+   • Nome completo
+   • E-mail
+   • Documento (CPF ou CNPJ)
+   • Centro de custo (LUXUS ou NEXUS)
+
+4️⃣ Preencha dados opcionais (se necessário):
+   • Telefone
+   • Empresa
+   • Endereço, Cidade, Estado
+   • CEP
+   • Observações
+
+5️⃣ Clique em "Salvar"
+
+💡 Dica: Após cadastrar o cliente, você pode adicionar serviços clicando no botão "Serviços" na lista de clientes.
+
+Quer que eu abra a página de clientes para você?`,
+        type: "text",
+        data: { route: "/clientes?action=new" },
+      };
+    }
+
+    // Como editar cliente
+    if (/(como.*editar.*cliente|como.*alterar.*cliente|como.*modificar.*cliente|atualizar.*cliente)/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: `Para editar um cliente:
+
+1️⃣ Acesse a página "Clientes" no menu
+
+2️⃣ Encontre o cliente na lista (use a busca se necessário)
+
+3️⃣ Clique no botão "Editar" ao lado do cliente
+
+4️⃣ Modifique os dados desejados
+
+5️⃣ Clique em "Salvar"
+
+💡 Importante: 
+• Para editar informações de contato, use o botão "Editar"
+• Para adicionar ou modificar serviços, use o botão "Serviços"
+• As alterações são salvas imediatamente
+
+Quer que eu abra a página de clientes?`,
+        type: "text",
+        data: { route: "/clientes" },
+      };
+    }
+
+    // Como adicionar serviços a um cliente
+    if (/(como.*adicionar.*serviço|como.*adicionar.*serviços|como.*vincular.*serviço|adicionar.*serviço.*cliente)/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: `Para adicionar serviços a um cliente:
+
+1️⃣ Acesse a página "Clientes"
+
+2️⃣ Encontre o cliente na lista
+
+3️⃣ Clique no botão "Serviços" (ou "Adicionar serviços" se ainda não tiver)
+
+4️⃣ Selecione os serviços desejados:
+   • Marque os checkboxes dos serviços
+   • Para TV: configure quantidade Essencial e Premium
+   • Para Cloud: configure data de vencimento
+   • Defina preços personalizados se necessário
+
+5️⃣ Preencha as informações obrigatórias:
+   • Para TV: Vendedor e Data de vencimento
+   • Para Cloud: Data de vencimento
+
+6️⃣ Clique em "Salvar serviços"
+
+💡 Dica: Os acessos de TV são gerados automaticamente quando você salva!
+
+Quer que eu abra a página de clientes?`,
+        type: "text",
+        data: { route: "/clientes" },
+      };
+    }
+
+    // Como criar contrato
+    if (/(como.*criar.*contrato|como.*gerar.*contrato|como.*fazer.*contrato|passo.*a.*passo.*contrato)/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: `Para criar um novo contrato:
+
+1️⃣ Acesse "Contratos" no menu (ou use "criar contrato")
+
+2️⃣ Clique em "Novo contrato"
+
+3️⃣ Selecione o cliente
+
+4️⃣ Escolha um template (opcional) ou crie um contrato personalizado
+
+5️⃣ Preencha os campos do contrato:
+   • Título
+   • Campos personalizados (se houver)
+   • Conteúdo (pode editar se necessário)
+
+6️⃣ Clique em "Criar contrato"
+
+7️⃣ Após criar, você pode:
+   • Enviar para assinatura
+   • Visualizar prévia
+   • Editar ou cancelar
+
+💡 Dica: Use templates para agilizar a criação de contratos similares.
+
+Quer que eu abra a página de contratos?`,
+        type: "text",
+        data: { route: "/contratos?action=new" },
+      };
+    }
+
+    // Como ver relatórios
+    if (/(como.*ver.*relatório|como.*gerar.*relatório|onde.*relatório|relatórios.*onde)/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: `Para acessar os relatórios do sistema:
+
+1️⃣ Acesse "Relatórios" no menu lateral
+
+2️⃣ Você verá o relatório completo de serviços com:
+   • Resumo por serviços
+   • Estatísticas de vendas
+   • Gráficos e análises
+
+3️⃣ Na página de clientes, você também pode:
+   • Exportar CSV de todos os clientes
+   • Exportar por documento específico
+   • Filtrar e exportar resultados
+
+💡 Dica: Use "relatório completo" para ver análises detalhadas.
+
+Quer que eu abra os relatórios?`,
+        type: "text",
+        data: { route: "/relatorios/servicos" },
+      };
+    }
+
+    // Como gerenciar usuários TV
+    if (/(como.*gerenciar.*tv|como.*ver.*usuários.*tv|acessos.*tv|onde.*usuários.*tv)/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: `Para gerenciar usuários e acessos de TV:
+
+1️⃣ Acesse "Usuários TV" no menu
+
+2️⃣ Você verá todos os acessos ativos atribuídos a clientes
+
+3️⃣ Para cada acesso, você pode:
+   • Ver detalhes (cliente, plano, vencimento)
+   • Gerar nova senha
+   • Definir senha manualmente
+   • Renovar vencimento
+   • Excluir acesso (apenas admin)
+   • Adicionar comentários
+
+4️⃣ Use os filtros para:
+   • Buscar por cliente, email ou CPF/CNPJ
+   • Filtrar por status
+   • Filtrar por vencimento
+   • Filtrar por telefonia
+
+💡 Importante: Apenas acessos atribuídos a clientes aparecem na lista. Slots disponíveis não são exibidos.
+
+Quer que eu abra a página de usuários TV?`,
+        type: "text",
+        data: { route: "/usuarios" },
+      };
+    }
+
+    // Como funciona o sistema de TV
+    if (/(como.*funciona.*tv|sistema.*tv|acessos.*tv.*como|planos.*tv)/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: `O sistema de TV funciona assim:
+
+📺 **Planos disponíveis:**
+• TV Essencial: Plano básico
+• TV Premium: Plano premium
+
+🔧 **Funcionamento:**
+1. Ao adicionar serviço TV a um cliente, você define:
+   • Quantidade de acessos Essencial
+   • Quantidade de acessos Premium
+   • Vendedor
+   • Data de vencimento
+   • Outras configurações
+
+2. O sistema automaticamente:
+   • Cria emails de acesso (formato: 1a8@nexusrs.com.br)
+   • Gera senhas de 4 dígitos
+   • Atribui os slots ao cliente
+   • Organiza por email e slot
+
+3. Os acessos aparecem em "Usuários TV" onde você pode:
+   • Ver todos os acessos ativos
+   • Gerenciar senhas
+   • Renovar vencimentos
+   • Excluir acessos
+
+💡 Dica: Os emails são criados automaticamente quando necessário. Não precisa criar manualmente!
+
+Quer saber mais sobre alguma funcionalidade específica?`,
+        type: "text",
+      };
+    }
+
+    // O que é o sistema / Sobre o sistema
+    if (/(o que é|o que é este|sobre o sistema|o que faz|para que serve|quem criou)/i.test(lowerQuestion) && !/(cliente|contrato|serviço|tv)/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: `Este é o **Sistema de Gestão de Serviços de Telefonia** 🎯
+
+**Funcionalidades principais:**
+• 📋 Gestão completa de clientes
+• 📄 Criação e gerenciamento de contratos
+• 📺 Controle de acessos de TV (Essencial e Premium)
+• ☁️ Gestão de serviços Cloud
+• 📊 Relatórios e análises de vendas
+• 👥 Gerenciamento de usuários e colaboradores
+• 📈 Dashboard com estatísticas em tempo real
+
+**O que você pode fazer:**
+• Cadastrar e editar clientes
+• Vincular serviços aos clientes
+• Gerar contratos personalizados
+• Acompanhar vencimentos
+• Ver relatórios detalhados
+• Gerenciar acessos de TV
+• Exportar dados
+
+Estou aqui para ajudar você a usar todas essas funcionalidades! 😊
+
+Quer saber como fazer algo específico?`,
+        type: "text",
+      };
+    }
 
     // Comandos de estatísticas
     if (
@@ -470,45 +794,306 @@ Quer que eu abra a página de usuários para você?`,
       };
     }
 
-    // Respostas padrão baseadas em palavras-chave
+    // ========== PERGUNTAS ESPECÍFICAS POR TÓPICO ==========
+
+    // Perguntas sobre clientes
     if (/cliente/i.test(lowerQuestion)) {
+      if (/(onde|onde está|localizar|encontrar)/i.test(lowerQuestion)) {
+        return {
+          sender: "assistant",
+          content: `Para acessar a página de clientes:
+
+1️⃣ Clique em "Clientes" no menu lateral
+2️⃣ Ou use o comando "ir para clientes"
+
+Na página de clientes você pode:
+• Ver todos os clientes cadastrados
+• Buscar clientes por nome, email ou documento
+• Cadastrar novos clientes
+• Editar informações
+• Adicionar serviços
+• Exportar dados
+
+Quer que eu abra a página de clientes?`,
+          type: "text",
+          data: { route: "/clientes" },
+        };
+      }
       return {
         sender: "assistant",
         content:
-          "Para gerenciar clientes, abra a aba 'Clientes' no menu. Você pode cadastrar, editar, buscar e exportar dados. Use 'buscar cliente [nome]' para encontrar clientes específicos.",
+          "Para gerenciar clientes, abra a aba 'Clientes' no menu. Você pode cadastrar, editar, buscar e exportar dados. Use 'buscar cliente [nome]' para encontrar clientes específicos. Digite 'como cadastrar cliente' para ver o passo a passo completo.",
       };
     }
 
+    // Perguntas sobre contratos
     if (/contrato/i.test(lowerQuestion)) {
+      if (/(onde|onde está|localizar|encontrar)/i.test(lowerQuestion)) {
+        return {
+          sender: "assistant",
+          content: `Para acessar contratos:
+
+1️⃣ Clique em "Contratos" no menu lateral
+2️⃣ Ou use o comando "ir para contratos"
+
+Na página de contratos você pode:
+• Ver todos os contratos
+• Criar novos contratos
+• Enviar para assinatura
+• Acompanhar status
+• Ver contratos pendentes
+
+Digite "como criar contrato" para ver o passo a passo completo.
+
+Quer que eu abra a página de contratos?`,
+          type: "text",
+          data: { route: "/contratos" },
+        };
+      }
       return {
         sender: "assistant",
         content:
-          "Na aba 'Contratos', você pode gerar novos documentos, acompanhar status e exportar relatórios. Use 'contratos pendentes' para ver o que está aguardando.",
+          "Na aba 'Contratos', você pode gerar novos documentos, acompanhar status e exportar relatórios. Use 'contratos pendentes' para ver o que está aguardando. Digite 'como criar contrato' para ver o passo a passo.",
       };
     }
 
+    // Perguntas sobre TV
     if (/tv|usuário.*tv/i.test(lowerQuestion)) {
+      if (/(onde|onde está|localizar|encontrar)/i.test(lowerQuestion)) {
+        return {
+          sender: "assistant",
+          content: `Para acessar usuários TV:
+
+1️⃣ Clique em "Usuários TV" no menu lateral
+2️⃣ Ou use o comando "ir para tv"
+
+Na página você verá:
+• Todos os acessos ativos atribuídos a clientes
+• Informações de cada acesso (email, senha, plano, cliente)
+• Opções para gerenciar acessos
+
+Digite "como funciona tv" para entender melhor o sistema.
+
+Quer que eu abra a página de usuários TV?`,
+          type: "text",
+          data: { route: "/usuarios" },
+        };
+      }
       return {
         sender: "assistant",
         content:
-          "Acesse 'Usuários TV' para ver acessos ativos, planos e vencimentos. Os emails são criados automaticamente. Use 'tv disponível' para ver quantos slots estão livres.",
+          "Acesse 'Usuários TV' para ver acessos ativos, planos e vencimentos. Os emails são criados automaticamente. Use 'tv disponível' para ver quantos slots estão livres. Digite 'como funciona tv' para entender melhor o sistema.",
       };
     }
 
+    // Perguntas sobre serviços
     if (/serviço/i.test(lowerQuestion)) {
+      if (/(onde|onde está|localizar|encontrar)/i.test(lowerQuestion)) {
+        return {
+          sender: "assistant",
+          content: `Para acessar serviços:
+
+1️⃣ Clique em "Serviços" no menu lateral
+2️⃣ Ou use o comando "ir para serviços"
+
+Na página de serviços você pode:
+• Ver todos os serviços cadastrados
+• Criar novos serviços
+• Editar serviços existentes
+• Definir preços padrão
+
+Quer que eu abra a página de serviços?`,
+          type: "text",
+          data: { route: "/servicos" },
+        };
+      }
       return {
         sender: "assistant",
         content:
-          "Os serviços são gerenciados na aba 'Serviços'. Você pode criar novos serviços, definir preços e personalizar valores por cliente.",
+          "Os serviços são gerenciados na aba 'Serviços'. Você pode criar novos serviços, definir preços e personalizar valores por cliente. Digite 'como adicionar serviço' para ver o passo a passo.",
       };
     }
 
-    // Resposta genérica
+    // Perguntas sobre dashboard
+    if (/(dashboard|painel|início|home|página inicial)/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: `O dashboard mostra:
+
+📊 **Estatísticas gerais:**
+• Total de CPFs e CNPJs
+• Cadastros do último mês
+• Distribuição por planos
+
+📈 **Gráficos:**
+• Vendas mensais por serviço
+• Análise de tendências
+• Comparação de planos
+
+📋 **Resumo:**
+• Serviços e clientes vinculados
+• Meta de acessos de TV
+• Progresso em tempo real
+
+Para acessar, clique em "Dashboard" no menu ou use "ir para dashboard".
+
+Quer que eu abra o dashboard?`,
+        type: "text",
+        data: { route: "/" },
+      };
+    }
+
+    // Perguntas sobre exportação
+    if (/(exportar|exportação|baixar|download|csv|excel)/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: `Para exportar dados:
+
+**Na página de Clientes:**
+1. Use "Exportar filtrados" para exportar os clientes visíveis
+2. Ou use "Exportar documento" com um CPF/CNPJ específico
+
+**Na página de Usuários TV:**
+1. Use os filtros para selecionar os dados desejados
+2. Clique em "Exportar filtrados"
+
+**Formato:**
+• Os dados são exportados em CSV
+• Podem ser abertos no Excel ou Google Sheets
+
+Quer que eu abra a página de clientes para exportar?`,
+        type: "text",
+        data: { route: "/clientes" },
+      };
+    }
+
+    // Perguntas sobre vencimentos
+    if (/(vencimento|vencer|expirar|renovar)/i.test(lowerQuestion) && !/(próximo|próximos)/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: `Sobre vencimentos:
+
+**Como ver vencimentos próximos:**
+• Digite "vencimentos" para ver serviços que vencem em até 30 dias
+• Ou acesse "Usuários TV" e use os filtros
+
+**Como renovar um acesso:**
+1. Acesse "Usuários TV"
+2. Clique no ícone de detalhes do acesso
+3. Clique em "Renovar"
+4. Informe a nova data de vencimento
+
+**Avisos automáticos:**
+• O sistema mostra alertas para serviços próximos do vencimento
+• Cores indicam urgência (verde, amarelo, vermelho)
+
+Quer ver os vencimentos próximos agora?`,
+        type: "text",
+      };
+    }
+
+    // Perguntas sobre preços
+    if (/(preço|preços|valor|valores|quanto custa)/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: `Sobre preços no sistema:
+
+**Preços padrão:**
+• Cada serviço tem um preço padrão definido
+• Você pode ver/editá-los em "Serviços"
+
+**Preços personalizados:**
+• Ao adicionar serviços a um cliente, você pode definir preços personalizados
+• Para TV, há preços separados para Essencial e Premium
+• Os preços personalizados sobrescrevem os padrão apenas para aquele cliente
+
+**Onde definir:**
+• Preços padrão: Página "Serviços"
+• Preços personalizados: Ao adicionar serviços a um cliente
+
+Quer que eu abra a página de serviços?`,
+        type: "text",
+        data: { route: "/servicos" },
+      };
+    }
+
+    // Perguntas sobre planos TV
+    if (/(plano.*tv|essencial.*premium|diferença.*planos|qual.*plano)/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: `Sobre os planos de TV:
+
+📺 **TV Essencial:**
+• Plano básico de TV
+• Pode ter preço personalizado diferente do Premium
+
+🎬 **TV Premium:**
+• Plano premium de TV
+• Pode ter preço personalizado diferente do Essencial
+
+**Funcionamento:**
+• Um cliente pode ter acessos Essencial E Premium ao mesmo tempo
+• Cada tipo de acesso é contado separadamente
+• Você define quantidades de cada tipo ao adicionar serviços
+
+**Onde configurar:**
+• Ao adicionar serviços TV a um cliente
+• Defina quantidades separadas para Essencial e Premium
+
+Quer saber mais sobre como adicionar serviços TV?`,
+        type: "text",
+      };
+    }
+
+    // ========== RESPOSTA PADRÃO INTELIGENTE ==========
+    
+    // Tentar identificar a intenção mesmo sem match exato
+    if (/(quem|qual|quando|onde|por que|porque|por quê|como|o que)/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: `Desculpe, não entendi completamente sua pergunta. 😅
+
+Posso ajudar com:
+• 📋 Cadastro e gestão de clientes
+• 📄 Criação de contratos
+• 📺 Gerenciamento de acessos TV
+• 📊 Relatórios e estatísticas
+• 🔍 Busca de informações
+• ❓ Dúvidas sobre o sistema
+
+Tente reformular sua pergunta ou digite "ajuda" para ver todos os comandos disponíveis.
+
+Exemplos de perguntas:
+• "Como cadastrar um cliente?"
+• "Como criar um contrato?"
+• "Como adicionar serviços?"
+• "Onde estão os relatórios?"`,
+        type: "text",
+      };
+    }
+
+    // Resposta genérica amigável
     return {
       sender: "assistant",
-      content:
-        "Posso ajudar com estatísticas, buscar clientes, verificar contratos pendentes, vencimentos e mais. Digite 'ajuda' para ver todos os comandos disponíveis.",
-      type: "commands",
+      content: `Olá! 😊 Não entendi completamente sua pergunta, mas estou aqui para ajudar!
+
+Posso ajudar você com:
+• 📋 **Clientes**: Cadastrar, editar, buscar
+• 📄 **Contratos**: Criar, enviar, acompanhar
+• 📺 **TV**: Gerenciar acessos, planos, vencimentos
+• 📊 **Relatórios**: Estatísticas, análises, exportações
+• 🔍 **Busca**: Encontrar clientes, verificar status
+• ❓ **Dúvidas**: Explicar como usar o sistema
+
+**Exemplos de perguntas:**
+• "Como cadastrar um cliente?"
+• "Como criar um contrato?"
+• "Como adicionar serviços a um cliente?"
+• "Onde estão os relatórios?"
+• "Como funciona o sistema de TV?"
+
+Digite "ajuda" para ver todos os comandos disponíveis ou faça uma pergunta específica! 😊`,
+      type: "text",
     };
   };
 
@@ -862,33 +1447,24 @@ Quer que eu abra a página de usuários para você?`,
                     </VStack>
                     <Divider my={3} />
                     <Text fontSize="xs" color="gray.500" mb={2}>
-                      Você também pode:
+                      Você também pode fazer perguntas como:
                     </Text>
                     <VStack align="stretch" spacing={1}>
-                      <Text fontSize="xs" fontWeight="semibold">📊 Estatísticas e análises:</Text>
-                      <Text fontSize="xs">• "estatísticas" - Mostrar estatísticas gerais</Text>
-                      <Text fontSize="xs">• "análise de vendas" - Gráfico de vendas</Text>
-                      <Text fontSize="xs">• "tendências" - Análise de crescimento</Text>
-                      <Text fontSize="xs">• "comparar planos" - Comparação TV Essencial vs Premium</Text>
+                      <Text fontSize="xs" fontWeight="semibold">📋 Sobre o sistema:</Text>
+                      <Text fontSize="xs">• "Como cadastrar um cliente?"</Text>
+                      <Text fontSize="xs">• "Como criar um contrato?"</Text>
+                      <Text fontSize="xs">• "Como adicionar serviços?"</Text>
+                      <Text fontSize="xs">• "Como funciona o sistema de TV?"</Text>
                       <Divider my={2} />
-                      <Text fontSize="xs" fontWeight="semibold">🔍 Buscas:</Text>
+                      <Text fontSize="xs" fontWeight="semibold">📊 Consultas:</Text>
+                      <Text fontSize="xs">• "estatísticas" - Mostrar estatísticas gerais</Text>
                       <Text fontSize="xs">• "buscar cliente João" - Buscar clientes</Text>
                       <Text fontSize="xs">• "contratos pendentes" - Ver contratos aguardando</Text>
                       <Text fontSize="xs">• "vencimentos" - Serviços próximos do vencimento</Text>
-                      <Text fontSize="xs">• "tv disponível" - Slots TV livres</Text>
-                      <Divider my={2} />
-                      <Text fontSize="xs" fontWeight="semibold">➕ Ações rápidas:</Text>
-                      <Text fontSize="xs">• "cadastrar cliente" - Novo cliente</Text>
-                      <Text fontSize="xs">• "criar contrato" - Novo contrato</Text>
-                      <Text fontSize="xs">• "relatório completo" - Abrir relatórios</Text>
                       <Divider my={2} />
                       <Text fontSize="xs" fontWeight="semibold">🧭 Navegação:</Text>
                       <Text fontSize="xs">• "ir para clientes" - Navegar para páginas</Text>
                       <Text fontSize="xs">• "ir para dashboard" - Ir para o início</Text>
-                      <Divider my={2} />
-                      <Text fontSize="xs" fontWeight="semibold">⚙️ Utilitários:</Text>
-                      <Text fontSize="xs">• "sugestões" - Ver recomendações proativas</Text>
-                      <Text fontSize="xs">• "limpar histórico" - Resetar conversa</Text>
                     </VStack>
                   </Box>
                 ) : (
