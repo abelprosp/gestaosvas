@@ -241,21 +241,14 @@ async function handleTvServiceForClient(
   const serviceIds = selections.map((selection) => selection.serviceId);
   const services = await fetchServicesByIds(serviceIds);
   
-  // Detectar serviço TV (case insensitive) - TV ESSENCIAL ou TV PREMIUM
-  const hasTv = services.some((service) => {
-    const serviceName = (service.name ?? "").toLowerCase();
-    return serviceName.includes("tv essencial") || serviceName.includes("tv premium");
-  });
+  // Detectar serviço TV (case insensitive)
+  const hasTv = services.some((service) => (service.name ?? "").toLowerCase().includes("tv"));
   
   // Determinar planType baseado no serviço selecionado
-  const tvService = services.find((service) => {
-    const name = (service.name ?? "").toLowerCase();
-    return name.includes("tv essencial") || name.includes("tv premium");
-  });
+  const tvService = services.find((service) => (service.name ?? "").toLowerCase().includes("tv"));
   
-  const planTypeFromService = tvService?.name?.toLowerCase().includes("premium") 
-    ? ("PREMIUM" as TVPlanType)
-    : ("ESSENCIAL" as TVPlanType);
+  const planTypeFromService =
+    tvService?.name?.toLowerCase().includes("premium") ? ("PREMIUM" as TVPlanType) : ("ESSENCIAL" as TVPlanType);
 
   if (!hasTv) {
     // Se não tem TV, libera slots se houver

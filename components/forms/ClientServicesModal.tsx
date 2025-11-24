@@ -197,10 +197,8 @@ export function ClientServicesModal({
   }, [isOpen, client, currentServiceIds, reset]);
 
   const tvServices = useMemo(
-    () => serviceOptions.filter((service) => {
-      const name = service.name.toLowerCase();
-      return name.includes("tv essencial") || name.includes("tv premium");
-    }),
+    () =>
+      serviceOptions.filter((service) => service.name.toLowerCase().includes("tv")),
     [serviceOptions],
   );
 
