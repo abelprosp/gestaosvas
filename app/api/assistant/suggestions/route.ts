@@ -54,6 +54,7 @@ export const GET = createApiHandler(async (req) => {
         supabase
           .from("cloud_accesses")
           .select("id")
+          .not("client_id", "is", null)
           .lte("expires_at", sevenDaysStr)
           .gte("expires_at", todayStr)
           .limit(10),
@@ -61,6 +62,7 @@ export const GET = createApiHandler(async (req) => {
           .from("tv_slots")
           .select("id")
           .eq("status", "ASSIGNED")
+          .not("client_id", "is", null)
           .not("expires_at", "is", null)
           .lte("expires_at", sevenDaysStr)
           .gte("expires_at", todayStr)
