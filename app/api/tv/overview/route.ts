@@ -23,7 +23,8 @@ export const GET = createApiHandler(async (req) => {
   let query = supabase
     .from("tv_slots")
     .select("*, client_id, tv_accounts(*), client:clients(name, id, email, phone, document)", { count: "exact" })
-    .neq("status", "USED")
+    .eq("status", "ASSIGNED")
+    .not("client_id", "is", null)
     .order("email", { ascending: true, foreignTable: "tv_accounts" })
     .order("slot_number", { ascending: true });
 
@@ -74,52 +75,27 @@ export const GET = createApiHandler(async (req) => {
     throw error;
   }
 
-  const availableSlotIds = (data ?? [])
-    .filter((slot) => slot.status === "AVAILABLE" && !slot.client_id)
-    .map((slot) => slot.id);
-
-  if (availableSlotIds.length > 0) {
-    const { data: assignedHistory } = await supabase
-      .from("tv_slot_history")
-      .select("tv_slot_id")
-      .eq("action", "ASSIGNED")
-      .in("tv_slot_id", availableSlotIds);
-
-    const usedSlotIds = new Set((assignedHistory ?? []).map((h) => h.tv_slot_id));
-
-    data = (data ?? []).filter((slot) => {
-      if (slot.status === "AVAILABLE" && !slot.client_id && usedSlotIds.has(slot.id)) {
-        return false;
-      }
-      return true;
-    });
-
-    if (count !== null && count !== undefined) {
-      count = count - usedSlotIds.size;
-    }
-  }
+  // Filtrar apenas slots atribuídos a clientes
+  data = (data ?? []).filter((slot) => {
+    return slot.status === "ASSIGNED" && slot.client_id !== null;
+  });
 
   const formatted = (data ?? []).map((row) => {
     const mapped = mapTVSlotRow(row);
-    
-    // Se não há cliente conectado, forçar status AVAILABLE e planType null
-    const hasClient = mapped.clientId || row.client?.id;
-    const finalStatus = hasClient ? mapped.status : "AVAILABLE";
-    const finalPlanType = hasClient ? (mapped.planType ?? null) : null;
     
     return {
       id: mapped.id,
       slotNumber: mapped.slotNumber,
       username: mapped.username,
       email: mapped.account?.email ?? "",
-      status: finalStatus,
+      status: mapped.status,
       password: mapped.password,
       soldBy: mapped.soldBy,
       soldAt: mapped.soldAt,
       startsAt: mapped.startsAt,
       expiresAt: mapped.expiresAt,
       notes: mapped.notes,
-      planType: finalPlanType,
+      planType: mapped.planType ?? null,
       hasTelephony: mapped.hasTelephony ?? null,
       client: row.client ?? null,
       clientId: mapped.clientId ?? null,
