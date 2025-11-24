@@ -36,7 +36,7 @@ import { vendorDisplayName } from "@/lib/utils/vendors";
 import { useAuth } from "@/context/AuthContext";
 import { createRequest } from "@/lib/api/requests";
 import { FiUserPlus, FiSend } from "react-icons/fi";
-import { Link } from "@chakra-ui/next-js";
+import Link from "next/link";
 
 const CLOUD_SERVICE_KEYWORDS = ["cloud", "hub", "hubplay", "telemedicina", "telepet"];
 

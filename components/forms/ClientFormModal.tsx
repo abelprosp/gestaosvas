@@ -478,31 +478,34 @@ useEffect(() => {
       // Serviços são opcionais - o cliente pode ser cadastrado sem serviços selecionados
 
       let invalidServiceName: string | null = null;
-      const serviceSelections = (isBasicMode && isEditing) ? undefined :
-        (isBasicMode ? [] : (serviceIds ?? []).map((serviceId) => {
-          const service = serviceOptions.find((option) => option.id === serviceId);
-          const soldBy = serviceVendors[serviceId]?.trim() || undefined;
-          
-          if (!service) {
-            return { serviceId, customPrice: null, soldBy };
-          }
+      const serviceSelections = (isBasicMode && isEditing) 
+        ? undefined 
+        : (isBasicMode 
+          ? [] 
+          : (serviceIds ?? []).map((serviceId) => {
+              const service = serviceOptions.find((option) => option.id === serviceId);
+              const soldBy = serviceVendors[serviceId]?.trim() || undefined;
+              
+              if (!service) {
+                return { serviceId, customPrice: null, soldBy };
+              }
 
-          if (!service.allowCustomPrice) {
-            return { serviceId, customPrice: null, soldBy };
-          }
+              if (!service.allowCustomPrice) {
+                return { serviceId, customPrice: null, soldBy };
+              }
 
-          const parseResult = parsePriceInput(customPrices[serviceId]);
-          if (parseResult === undefined) {
-            invalidServiceName = service.name;
-            return { serviceId, customPrice: null, soldBy };
-          }
+              const parseResult = parsePriceInput(customPrices[serviceId]);
+              if (parseResult === undefined) {
+                invalidServiceName = service.name;
+                return { serviceId, customPrice: null, soldBy };
+              }
 
-          return {
-            serviceId,
-            customPrice: parseResult,
-            soldBy,
-          };
-        }) ?? [];
+              return {
+                serviceId,
+                customPrice: parseResult,
+                soldBy,
+              };
+            }));
 
       if (invalidServiceName) {
         toast({
