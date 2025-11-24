@@ -295,18 +295,6 @@ async function syncCloudAccesses(
       .map((service) => service.id),
   );
 
-  if (selectedSet && selectedSet.size > 0) {
-    const cloudServiceIds = Array.from(selectedSet).filter((id) => cloudServiceIdsSet.has(id));
-    const missing = cloudServiceIds.filter((serviceId) => !setupMap.has(serviceId));
-    if (missing.length) {
-      const missingNames = services
-        .filter((s) => missing.includes(s.id))
-        .map((s) => s.name)
-        .join(", ");
-      throw new HttpError(400, `Informe o vencimento para os seguintes serviços: ${missingNames}`);
-    }
-  }
-
   const { data: existingData, error: existingError } = await supabase
     .from("cloud_accesses")
     .select("service_id")
@@ -320,6 +308,19 @@ async function syncCloudAccesses(
   }
 
   const existingIds = new Set<string>((existingData ?? []).map((row: { service_id: string }) => row.service_id));
+
+  // Só exige configuração para serviços Cloud que não têm acesso existente
+  if (selectedSet && selectedSet.size > 0) {
+    const cloudServiceIds = Array.from(selectedSet).filter((id) => cloudServiceIdsSet.has(id));
+    const missing = cloudServiceIds.filter((serviceId) => !setupMap.has(serviceId) && !existingIds.has(serviceId));
+    if (missing.length) {
+      const missingNames = services
+        .filter((s) => missing.includes(s.id))
+        .map((s) => s.name)
+        .join(", ");
+      throw new HttpError(400, `Informe o vencimento para os seguintes serviços: ${missingNames}`);
+    }
+  }
 
   const upsertTargets = selectedSet
     ? Array.from(selectedSet)
