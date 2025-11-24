@@ -46,6 +46,7 @@ import {
 import { api } from "@/lib/api/client";
 import { Client, ClientTVAssignment, PaginatedResponse, Service, StatsOverview } from "@/types";
 import { ClientFormModal, ClientFormValues } from "@/components/forms/ClientFormModal";
+import { ClientServicesModal, ClientServicesFormValues } from "@/components/forms/ClientServicesModal";
 import { formatDate } from "@/lib/utils/format";
 import { exportToCsv, exportToPdf } from "@/lib/utils/exporters";
 import Papa from "papaparse";
@@ -101,6 +102,7 @@ export function ClientsPage() {
   const [expandedAssignments, setExpandedAssignments] = useState<Record<string, boolean>>({});
   const [expandedClientId, setExpandedClientId] = useState<string | null>(null);
   const formModal = useDisclosure();
+  const servicesModal = useDisclosure();
   const handleExportCsv = () => {
     if (!filteredClients.length) {
       toast({ title: "Nenhum cliente para exportar", status: "info" });
@@ -426,6 +428,30 @@ const getSortIcon = (key: string): ReactElement | undefined => {
     formModal.onOpen();
   };
 
+  const openServicesModal = (client: Client) => {
+    setSelectedClient(client);
+    servicesModal.onOpen();
+  };
+
+  const updateClientServices = useMutation({
+    mutationFn: async ({ id, values }: { id: string; values: ClientServicesFormValues }) => {
+      await api.put(`/clients/${id}`, values);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+    },
+  });
+
+  const handleUpdateServices = async (values: ClientServicesFormValues) => {
+    if (!selectedClient) return;
+    if (!isAdmin) {
+      await handleAuthorizationRequest("CLIENT_UPDATE_REQUEST", { clientId: selectedClient.id, values });
+      servicesModal.onClose();
+      return;
+    }
+    await updateClientServices.mutateAsync({ id: selectedClient.id, values });
+  };
+
   const sectionBg = useColorModeValue("rgba(255,255,255,0.78)", "rgba(15, 23, 42, 0.7)");
   const sectionBorder = useColorModeValue("rgba(226,232,240,0.6)", "rgba(45, 55, 72, 0.6)");
   const mutedText = useColorModeValue("gray.500", "gray.400");
@@ -700,12 +726,23 @@ const getSortIcon = (key: string): ReactElement | undefined => {
                       </Td>
                       <Td textAlign="right">
                         <HStack justify="flex-end" spacing={2}>
-                          <IconButton
-                            aria-label="Editar"
-                            icon={<FiEdit />}
+                          <Button
+                            size="sm"
+                            leftIcon={<FiEdit />}
                             variant="ghost"
                             onClick={() => openEditModal(client)}
-                          />
+                          >
+                            Editar
+                          </Button>
+                          <Button
+                            size="sm"
+                            leftIcon={<FiFilePlus />}
+                            variant="ghost"
+                            onClick={() => openServicesModal(client)}
+                            title={client.services && client.services.length > 0 ? "Editar serviços" : "Adicionar serviços"}
+                          >
+                            Serviços
+                          </Button>
                           <IconButton
                             aria-label="Excluir"
                             icon={<FiTrash />}
@@ -901,7 +938,17 @@ const getSortIcon = (key: string): ReactElement | undefined => {
         onSubmit={selectedClient ? handleUpdate : handleCreate}
         defaultValues={selectedClient}
         serviceOptions={services}
+        mode={selectedClient ? "basic" : "basic"}
       />
+      {selectedClient && (
+        <ClientServicesModal
+          isOpen={servicesModal.isOpen}
+          onClose={servicesModal.onClose}
+          onSubmit={handleUpdateServices}
+          client={selectedClient}
+          serviceOptions={services}
+        />
+      )}
     </VStack>
   );
 }

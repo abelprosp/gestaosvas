@@ -84,6 +84,7 @@ interface ClientFormModalProps {
   onSubmit: (values: ClientFormValues) => Promise<void>;
   defaultValues?: Client;
   serviceOptions: Service[];
+  mode?: "basic" | "full"; // "basic" = apenas informações, "full" = com serviços
 }
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
@@ -177,6 +178,7 @@ export function ClientFormModal({
   onSubmit,
   defaultValues,
   serviceOptions,
+  mode = "full",
 }: ClientFormModalProps) {
   const toast = useToast();
   const { isAdmin } = useAuth();
@@ -466,11 +468,12 @@ useEffect(() => {
       }
       values.document = normalizedDocument;
 
-      const serviceIds = values.serviceIds ?? [];
+      // No modo básico, não envia serviços
+      const serviceIds = mode === "basic" ? [] : (values.serviceIds ?? []);
       // Serviços são opcionais - o cliente pode ser cadastrado sem serviços selecionados
 
       let invalidServiceName: string | null = null;
-      const serviceSelections =
+      const serviceSelections = mode === "basic" ? [] :
         serviceIds.map((serviceId) => {
           const service = serviceOptions.find((option) => option.id === serviceId);
           const soldBy = serviceVendors[serviceId]?.trim() || undefined;
@@ -506,12 +509,17 @@ useEffect(() => {
       }
 
       let tvSetupPayload: ClientFormValues["tvSetup"] | undefined;
-      const parsedQuantity = tvSetup.quantity ? parseInt(tvSetup.quantity, 10) : NaN;
-      const quantity =
-        Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? Math.min(50, parsedQuantity) : 1;
       
-      // TV Setup é opcional - só inclui se todos os campos obrigatórios estiverem preenchidos
-      if (!defaultValues && isTvSelected) {
+      // No modo básico, não envia configurações de TV/Cloud
+      if (mode === "basic") {
+        tvSetupPayload = undefined;
+      } else {
+        const parsedQuantity = tvSetup.quantity ? parseInt(tvSetup.quantity, 10) : NaN;
+        const quantity =
+          Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? Math.min(50, parsedQuantity) : 1;
+        
+        // TV Setup é opcional - só inclui se todos os campos obrigatórios estiverem preenchidos
+        if (!defaultValues && isTvSelected) {
         const hasSoldBy = tvSetup.soldBy && tvSetup.soldBy.trim();
         
         // Validar data de vencimento - aceita DD/MM/YYYY ou YYYY-MM-DD
@@ -570,9 +578,12 @@ useEffect(() => {
         }
         // Se não tiver todos os campos, não inclui o tvSetup (não bloqueia a criação do cliente)
       }
+      }
 
       let cloudSetupsPayload: ClientFormValues["cloudSetups"];
-      if (selectedCloudServiceIds.length) {
+      if (mode === "basic") {
+        cloudSetupsPayload = undefined;
+      } else if (selectedCloudServiceIds.length) {
         const setups: NonNullable<ClientFormValues["cloudSetups"]> = [];
         // Apenas inclui serviços Cloud que tiverem vencimento preenchido
         // Serviços selecionados sem vencimento não serão adicionados, mas não bloqueiam a criação
@@ -591,7 +602,18 @@ useEffect(() => {
         cloudSetupsPayload = setups.length > 0 ? setups : undefined;
       }
 
-      // MANTER serviços mesmo se campos obrigatórios não estiverem preenchidos
+      // No modo básico, não envia serviços
+      if (mode === "basic") {
+        await onSubmit({
+          ...values,
+          openedBy: values.openedBy?.trim() || undefined,
+          serviceIds: [],
+          serviceSelections: [],
+          tvSetup: undefined,
+          cloudSetups: undefined,
+        });
+      } else {
+        // MANTER serviços mesmo se campos obrigatórios não estiverem preenchidos
       // O serviço será salvo, apenas sem acessos/configurações especiais
       // Isso permite que o cliente tenha o serviço cadastrado e possa configurar depois
       const finalServiceIds = [...serviceIds];
@@ -601,19 +623,20 @@ useEffect(() => {
       // NÃO remove Cloud dos serviços - se selecionou, deve ser salvo
       // Apenas não cria acessos se campos não estiverem preenchidos
       
-      // Ajusta serviceSelections para corresponder aos serviceIds (mantém todos)
-      const finalServiceSelections = serviceSelections.filter((selection) =>
-        finalServiceIds.includes(selection.serviceId)
-      );
+        // Ajusta serviceSelections para corresponder aos serviceIds (mantém todos)
+        const finalServiceSelections = serviceSelections.filter((selection) =>
+          finalServiceIds.includes(selection.serviceId)
+        );
 
-      await onSubmit({
-        ...values,
-        openedBy: values.openedBy?.trim() || undefined,
-        serviceIds: finalServiceIds,
-        serviceSelections: finalServiceSelections,
-        tvSetup: tvSetupPayload,
-        cloudSetups: cloudSetupsPayload,
-      });
+        await onSubmit({
+          ...values,
+          openedBy: values.openedBy?.trim() || undefined,
+          serviceIds: finalServiceIds,
+          serviceSelections: finalServiceSelections,
+          tvSetup: tvSetupPayload,
+          cloudSetups: cloudSetupsPayload,
+        });
+      }
       toast({
         title: defaultValues ? "Cliente atualizado" : "Cliente cadastrado",
         status: "success",
@@ -836,6 +859,7 @@ useEffect(() => {
                   <Textarea placeholder="Notas adicionais" rows={3} {...register("notes")} />
                 </FormControl>
               </GridItem>
+              {mode === "full" && (
               <GridItem colSpan={{ base: 1, md: 2 }}>
                 <FormControl>
                   <FormLabel>Serviços contratados</FormLabel>
@@ -932,8 +956,9 @@ useEffect(() => {
                   )}
                 </FormControl>
               </GridItem>
+              )}
             </Grid>
-            {isTvSelected && !defaultValues && (
+            {mode === "full" && isTvSelected && !defaultValues && (
               <Box
                 mt={6}
                 p={4}
@@ -1123,7 +1148,7 @@ useEffect(() => {
                 </SimpleGrid>
               </Box>
             )}
-            {isCloudSelected && (
+            {mode === "full" && isCloudSelected && (
               <Box
                 mt={6}
                 p={4}
@@ -1202,7 +1227,7 @@ useEffect(() => {
               </Box>
             )}
             {/* TVAssignmentsManager só aparece quando editando cliente existente */}
-            {tvServices.length > 0 && defaultValues?.id && (
+            {mode === "full" && tvServices.length > 0 && defaultValues?.id && (
               <TVAssignmentsManager
                 clientId={defaultValues.id}
                 isTvSelected={isTvSelected}
