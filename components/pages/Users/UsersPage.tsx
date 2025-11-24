@@ -886,16 +886,12 @@ export function UsersPage() {
                               isDisabled={!isAdmin}
                             />
                           </Tooltip>
-                        </HStack>
-                      </Td>
-                      <Td textAlign="right">
-                        <HStack spacing={2} justify="flex-end">
-                          {isAdmin && record.status === "ASSIGNED" && (
+                          {isAdmin && record.status === "ASSIGNED" && record.client && (
                             <Tooltip label="Excluir acesso">
                               <IconButton
                                 aria-label="Excluir acesso"
                                 icon={<FiTrash2 />}
-                                size="sm"
+                                size="xs"
                                 variant="ghost"
                                 colorScheme="red"
                                 onClick={() => {
@@ -910,14 +906,16 @@ export function UsersPage() {
                               />
                             </Tooltip>
                           )}
-                          <IconButton
-                            aria-label={isExpanded ? "Ocultar detalhes" : "Exibir detalhes"}
-                            icon={isExpanded ? <FiChevronUp /> : <FiChevronDown />}
-                            size="sm"
-                            variant="ghost"
-                            onClick={toggleExpanded}
-                          />
                         </HStack>
+                      </Td>
+                      <Td textAlign="right">
+                        <IconButton
+                          aria-label={isExpanded ? "Ocultar detalhes" : "Exibir detalhes"}
+                          icon={isExpanded ? <FiChevronUp /> : <FiChevronDown />}
+                          size="sm"
+                          variant="ghost"
+                          onClick={toggleExpanded}
+                        />
                       </Td>
                     </Tr>
                     <Tr>
