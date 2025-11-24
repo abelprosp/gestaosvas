@@ -898,7 +898,7 @@ export function UsersPage() {
                               isDisabled={!isAdmin}
                             />
                           </Tooltip>
-                          {isAdmin && record.status === "ASSIGNED" && (record.clientId || record.client) && (
+                          {shouldShowDelete && (
                             <Tooltip label="Excluir acesso">
                               <IconButton
                                 aria-label="Excluir acesso"
