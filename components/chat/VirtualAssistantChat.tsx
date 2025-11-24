@@ -729,13 +729,144 @@ Quer saber como fazer algo específico?`,
       }
     }
 
-    // Ajuda
-    if (/^(ajuda|help|comandos|menu|o que você pode|o que posso)/i.test(lowerQuestion)) {
+    // Ajuda / O que você pode fazer
+    if (/^(ajuda|help|comandos|menu|o que você pode|o que posso|quais.*comandos|lista.*comandos)/i.test(lowerQuestion)) {
       return {
         sender: "assistant",
         type: "commands",
-        content: "Aqui estão alguns comandos úteis:",
+        content: "Aqui estão alguns comandos e perguntas que você pode fazer:",
         data: {},
+      };
+    }
+
+    // O que é / Para que serve
+    if (/(o que é|para que serve|o que faz|qual.*função)/i.test(lowerQuestion) && /(sistema|aplicativo|app|software)/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: `Este é o **Sistema de Gestão de Serviços de Telefonia** 🎯
+
+**Para que serve:**
+Este sistema foi desenvolvido para gerenciar de forma completa e eficiente todos os aspectos dos serviços de telefonia oferecidos pela sua empresa.
+
+**Funcionalidades principais:**
+• 📋 **Gestão de Clientes**: Cadastro completo, histórico, busca avançada
+• 📄 **Contratos**: Criação, envio, assinatura digital e acompanhamento
+• 📺 **TV**: Controle total de acessos Essencial e Premium
+• ☁️ **Cloud**: Gestão de serviços cloud e Hub
+• 📊 **Relatórios**: Análises detalhadas, gráficos, exportações
+• 👥 **Usuários**: Gerenciamento de colaboradores e permissões
+• 📈 **Dashboard**: Visão geral em tempo real
+
+**Benefícios:**
+✅ Organização completa de clientes e serviços
+✅ Automação de processos (emails TV, senhas, etc.)
+✅ Relatórios e análises para tomada de decisão
+✅ Controle de vencimentos e renovações
+✅ Interface intuitiva e fácil de usar
+
+Quer saber como usar alguma funcionalidade específica? 😊`,
+        type: "text",
+      };
+    }
+
+    // Como usar o sistema
+    if (/(como.*usar|tutorial|guia|manual|como começar|primeiros passos)/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: `**Guia rápido de uso do sistema:**
+
+🚀 **Primeiros passos:**
+1. Comece cadastrando seus clientes
+2. Adicione serviços aos clientes
+3. Gere contratos quando necessário
+4. Acompanhe vencimentos e renovações
+
+📋 **Fluxo básico:**
+1. **Cadastrar Cliente** → "Como cadastrar um cliente?"
+2. **Adicionar Serviços** → "Como adicionar serviços?"
+3. **Criar Contrato** → "Como criar um contrato?"
+4. **Acompanhar** → Use o dashboard e relatórios
+
+💡 **Dicas:**
+• Use a busca para encontrar clientes rapidamente
+• Configure alertas de vencimento
+• Exporte dados regularmente
+• Use templates para agilizar contratos
+
+**Páginas principais:**
+• 🏠 Dashboard: Visão geral
+• 👥 Clientes: Gestão de clientes
+• 📄 Contratos: Documentos
+• 📺 Usuários TV: Acessos ativos
+• 📊 Relatórios: Análises
+
+Quer ver o passo a passo de alguma funcionalidade específica?`,
+        type: "text",
+      };
+    }
+
+    // Problemas / Erros
+    if (/(erro|problema|não funciona|não está funcionando|bug|dificuldade|não consigo)/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: `Entendo que você está com alguma dificuldade. Vamos resolver! 😊
+
+**O que você pode fazer:**
+1. **Descreva o problema**: Me diga o que você estava tentando fazer
+2. **Verifique permissões**: Algumas ações requerem permissão de administrador
+3. **Tente novamente**: Às vezes é um problema temporário
+
+**Problemas comuns:**
+• **Não consigo cadastrar**: Verifique se tem permissão de admin
+• **Dados não salvam**: Verifique se preencheu campos obrigatórios
+• **Página não carrega**: Tente atualizar a página (F5)
+• **Busca não funciona**: Use pelo menos 2 caracteres
+
+**Ainda com problemas?**
+• Verifique sua conexão com a internet
+• Limpe o cache do navegador
+• Entre em contato com o administrador do sistema
+
+Me diga qual é o problema específico que você está enfrentando e eu vou ajudar! 🛠️`,
+        type: "text",
+      };
+    }
+
+    // Informações sobre permissões
+    if (/(permissão|admin|administrador|acesso negado|não tenho acesso|não posso)/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: `Sobre **permissões e acesso**:
+
+🔐 **Níveis de acesso:**
+• **Admin**: Acesso total ao sistema
+• **Usuário/Vendedor**: Acesso limitado a algumas funcionalidades
+
+**O que cada nível pode fazer:**
+
+**Admin pode:**
+✅ Cadastrar/editar/excluir clientes
+✅ Gerenciar todos os serviços
+✅ Criar e gerenciar contratos
+✅ Cadastrar novos usuários
+✅ Excluir acessos TV
+✅ Ver todos os relatórios
+
+**Usuário/Vendedor pode:**
+✅ Ver e buscar clientes
+✅ Cadastrar novos clientes
+✅ Adicionar serviços (com aprovação em alguns casos)
+✅ Ver relatórios básicos
+❌ Não pode excluir acessos
+❌ Não pode cadastrar usuários
+
+**Se você não tem acesso:**
+• Solicite ao administrador do sistema
+• Use a opção "Solicitar" quando disponível
+• O administrador receberá uma notificação
+
+Quer saber mais sobre alguma funcionalidade específica?`,
+        type: "text",
       };
     }
 
