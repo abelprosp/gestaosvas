@@ -137,7 +137,10 @@ export function ClientServicesModal({
       .map((label) => ({ label }));
   }, [vendors]);
 
-  const currentServiceIds = useMemo(() => client.services?.map((s) => s.id) ?? [], [client.services]);
+  const currentServiceIds = useMemo(() => {
+    if (!client || !client.services) return [];
+    return client.services.map((s) => s.id);
+  }, [client?.services]);
 
   const { control, handleSubmit, reset, watch, setValue } = useForm<ClientServicesFormValues>({
     defaultValues: {
@@ -154,11 +157,11 @@ export function ClientServicesModal({
 
   // Carregar dados existentes
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !client) return;
 
     // Carregar preços personalizados
     const prices: Record<string, string> = {};
-    client.services?.forEach((service) => {
+    (client.services ?? []).forEach((service) => {
       if (service.customPrice !== undefined && service.customPrice !== null) {
         prices[service.id] = service.customPrice.toFixed(2).replace(".", ",");
       }
@@ -167,7 +170,7 @@ export function ClientServicesModal({
 
     // Carregar configurações Cloud
     const cloudMap: Record<string, CloudSetupState> = {};
-    client.cloudAccesses?.forEach((access) => {
+    (client.cloudAccesses ?? []).forEach((access) => {
       if (access.serviceId) {
         cloudMap[access.serviceId] = {
           expiresAt: access.expiresAt ? access.expiresAt.slice(0, 10) : "",
@@ -285,7 +288,7 @@ export function ClientServicesModal({
           
           // Se já existem acessos e foi informada quantidade adicional, usar quantidade adicional
           // Caso contrário, usar a quantidade base
-          const existingCount = client.tvAssignments?.length ?? 0;
+          const existingCount = client?.tvAssignments?.length ?? 0;
           const additionalCount = parseInt(additionalSlots) || 0;
           const finalQuantity = existingCount > 0 && additionalCount > 0 ? additionalCount : baseQuantity;
 
@@ -344,6 +347,10 @@ export function ClientServicesModal({
       });
     }
   };
+
+  if (!client) {
+    return null;
+  }
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} size="4xl">
@@ -489,7 +496,7 @@ export function ClientServicesModal({
                                 try {
                                   await createRequest("VENDOR_CREATE_REQUEST", {
                                     description,
-                                    clientId: client.id ?? null,
+                                    clientId: client?.id ?? null,
                                   });
                                   toast({
                                     title: "Solicitação enviada",
@@ -560,7 +567,7 @@ export function ClientServicesModal({
                         />
                       </FormControl>
                     </GridItem>
-                    {client.tvAssignments && client.tvAssignments.length > 0 && (
+                    {client?.tvAssignments && client.tvAssignments.length > 0 && (
                       <GridItem colSpan={{ base: 1, md: 2 }}>
                         <Box p={3} bg={additionalSlotsBg} borderRadius="md" borderWidth={1} borderColor={additionalSlotsBorder}>
                           <Text fontWeight="semibold" mb={2} fontSize="sm">

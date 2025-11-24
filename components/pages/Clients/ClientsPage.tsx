@@ -940,7 +940,7 @@ const getSortIcon = (key: string): ReactElement | undefined => {
         serviceOptions={services}
         mode={selectedClient ? "basic" : "basic"}
       />
-      {selectedClient && (
+      {selectedClient && selectedClient.id && (
         <ClientServicesModal
           isOpen={servicesModal.isOpen}
           onClose={servicesModal.onClose}
