@@ -40,6 +40,11 @@ function isSchemaUnavailable(error: ApiError) {
   return typeof code === "string" && code.startsWith("PGRST2");
 }
 
+export async function createTVAccount(email: string) {
+  const response = await api.post<{ account: any; slots: any[] }>("/tv/accounts", { email });
+  return response.data;
+}
+
 export async function fetchClientTVAssignments(clientId: string): Promise<ClientTVAssignment[]> {
   try {
     const response = await api.get<ClientTVAssignment[]>(`/tv/slots`, {

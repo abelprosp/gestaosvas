@@ -24,6 +24,7 @@ type ClientRow = {
   city: string | null;
   zip_code: string | null;
   state: string | null;
+  opened_by: string | null;
   created_at: string;
   updated_at: string;
   client_services?:
@@ -155,8 +156,7 @@ export function mapClientRow(row: ClientRow): Client {
     city: row.city,
     zipCode: row.zip_code ?? null,
     state: row.state,
-    // openedBy: (row as any).opened_by ?? null, // Comentado até criar coluna no banco
-    openedBy: null, // Por enquanto null até criar migração
+    openedBy: row.opened_by ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     services: [],
@@ -205,11 +205,10 @@ export function clientInsertPayload(data: Partial<Client>): Record<string, unkno
     state: data.state ?? null,
   };
   
-  // Adicionar opened_by apenas se existir no banco (verificar se a coluna existe)
-  // Por enquanto, comentado até criar migração no banco
-  // if (data.openedBy) {
-  //   payload.opened_by = data.openedBy;
-  // }
+  // Adicionar opened_by se fornecido
+  if (data.openedBy !== undefined) {
+    payload.opened_by = data.openedBy ?? null;
+  }
   
   return payload;
 }
@@ -230,11 +229,10 @@ export function clientUpdatePayload(data: Partial<Client>): Record<string, unkno
     updated_at: new Date().toISOString(),
   };
   
-  // Adicionar opened_by apenas se existir no banco (verificar se a coluna existe)
-  // Por enquanto, comentado até criar migração no banco
-  // if (data.openedBy !== undefined) {
-  //   payload.opened_by = data.openedBy ?? null;
-  // }
+  // Adicionar opened_by se fornecido
+  if (data.openedBy !== undefined) {
+    payload.opened_by = data.openedBy ?? null;
+  }
   
   return payload;
 }
