@@ -444,6 +444,32 @@ export function VirtualAssistantChat() {
       }
     }
 
+    // Cadastrar usuário/colaborador
+    if (/(cadastrar|registrar|adicionar|novo).*(usuário|usuario|colaborador|funcionário|funcionario|admin|administrador)/i.test(lowerQuestion)) {
+      return {
+        sender: "assistant",
+        content: `Para cadastrar um novo usuário/colaborador no sistema, siga estes passos:
+
+1️⃣ Acesse o menu lateral e clique em "Admin" → "Usuários" (ou acesse diretamente /admin/usuarios)
+
+2️⃣ Clique no botão "Novo usuário" ou "Adicionar usuário"
+
+3️⃣ Preencha os dados:
+   • Nome completo
+   • E-mail (será usado para login)
+   • Senha (ou deixe o sistema gerar)
+   • Função/Papel (Admin, Vendedor, etc.)
+
+4️⃣ Salve o cadastro
+
+💡 Dica: Apenas administradores podem cadastrar novos usuários. Se você não tem acesso, solicite ao administrador do sistema.
+
+Quer que eu abra a página de usuários para você?`,
+        type: "text",
+        data: { route: "/admin/usuarios" },
+      };
+    }
+
     // Respostas padrão baseadas em palavras-chave
     if (/cliente/i.test(lowerQuestion)) {
       return {

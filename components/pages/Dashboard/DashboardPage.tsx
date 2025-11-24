@@ -366,27 +366,25 @@ export function DashboardPage() {
         </Text>
 
         <SimpleGrid columns={{ base: 1, md: 3, xl: 4 }} spacing={4} mt={6}>
-          {availableServices
-            .filter((service) => service.group !== "TV")
-            .map((service) => {
-              const salesTotals = salesData.points.reduce((acc, point) => acc + (point.totals[service.key] ?? 0), 0);
-              return (
-                <Box key={service.key} borderWidth={1} borderColor={cardBorder} bg={listBg} p={4} borderRadius="xl">
-                  <HStack justify="space-between" mb={2}>
-                    <Text fontWeight="semibold">{service.name}</Text>
-                    <Badge colorScheme="blue" borderRadius="full">
-                      Serviço
-                    </Badge>
-                  </HStack>
-                  <Text fontSize="sm" color={mutedText}>
-                    Clientes referenciados
-                  </Text>
-                  <Text fontSize="2xl" fontWeight="bold" color="brand.600">
-                    {salesTotals}
-                  </Text>
-                </Box>
-              );
-            })}
+          {availableServices.map((service) => {
+            const salesTotals = salesData.points.reduce((acc, point) => acc + (point.totals[service.key] ?? 0), 0);
+            return (
+              <Box key={service.key} borderWidth={1} borderColor={cardBorder} bg={listBg} p={4} borderRadius="xl">
+                <HStack justify="space-between" mb={2}>
+                  <Text fontWeight="semibold">{service.name}</Text>
+                  <Badge colorScheme={service.group === "TV" ? "teal" : "blue"} borderRadius="full">
+                    {service.group === "TV" ? "TV" : "Serviço"}
+                  </Badge>
+                </HStack>
+                <Text fontSize="sm" color={mutedText}>
+                  Clientes referenciados
+                </Text>
+                <Text fontSize="2xl" fontWeight="bold" color="brand.600">
+                  {salesTotals}
+                </Text>
+              </Box>
+            );
+          })}
           <Box borderWidth={1} borderColor={cardBorder} bg={listBg} p={4} borderRadius="xl">
             <HStack justify="space-between" mb={2}>
               <Text fontWeight="semibold">TV (Essencial + Premium)</Text>
@@ -395,10 +393,10 @@ export function DashboardPage() {
               </Badge>
             </HStack>
             <Text fontSize="sm" color={mutedText}>
-              Clientes referenciados
+              Acessos ativos
             </Text>
             <Text fontSize="2xl" fontWeight="bold" color="brand.600">
-              {data.planSummary.reduce((acc, item) => acc + item.clients, 0)}
+              {data.planSummary.reduce((acc, item) => acc + item.slots, 0)}
             </Text>
 
             <Button
@@ -415,7 +413,7 @@ export function DashboardPage() {
                 {data.planSummary.map((item) => (
                   <HStack key={item.plan} justify="space-between" fontSize="sm">
                     <Text color={mutedText}>{item.plan === "ESSENCIAL" ? "TV Essencial" : "TV Premium"}</Text>
-                    <Text fontWeight="semibold">{item.clients}</Text>
+                    <Text fontWeight="semibold">{item.slots} acessos</Text>
                   </HStack>
                 ))}
               </VStack>
