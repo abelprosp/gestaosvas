@@ -37,8 +37,10 @@ const tvPlanTypeSchema = z.enum(["ESSENCIAL", "PREMIUM"]);
 
 const tvSetupSchema = z
   .object({
-    quantity: z.number().int().min(1).max(50).optional(),
-    planType: tvPlanTypeSchema.optional(),
+    quantity: z.number().int().min(1).max(50).optional(), // Mantido para compatibilidade
+    planType: tvPlanTypeSchema.optional(), // Mantido para compatibilidade
+    quantityEssencial: z.number().int().min(0).max(50).optional(),
+    quantityPremium: z.number().int().min(0).max(50).optional(),
     soldBy: z.string().min(1).optional(),
     soldAt: z.string().optional(),
     startsAt: z.string().optional(),
@@ -239,10 +241,10 @@ async function handleTvServiceForClient(
     if (hasSoldBy && hasExpiresAt) {
       const supabase = createServerClient();
       
-      // Buscar quantidade atual de acessos
-      const { data: currentSlots, error: countError } = await supabase
+      // Buscar slots atuais separados por tipo
+      const { data: allCurrentSlots, error: countError } = await supabase
         .from("tv_slots")
-        .select("id")
+        .select("id, plan_type")
         .eq("client_id", clientId)
         .eq("status", "ASSIGNED");
       
@@ -250,61 +252,67 @@ async function handleTvServiceForClient(
         throw countError;
       }
       
-      const currentQuantity = currentSlots?.length ?? 0;
-      const desiredQuantity =
-        tvSetup?.quantity && Number.isFinite(tvSetup.quantity) && tvSetup.quantity > 0 ? tvSetup.quantity : 1;
+      // Determinar quantidades desejadas (nova API com quantidades separadas ou antiga API)
+      let desiredEssencial = 0;
+      let desiredPremium = 0;
       
-      // Usar planType do tvSetup se fornecido, senão usar do serviço, senão ESSENCIAL
-      const planType: TVPlanType = tvSetup?.planType ?? planTypeFromService ?? "ESSENCIAL";
+      if (tvSetup.quantityEssencial !== undefined || tvSetup.quantityPremium !== undefined) {
+        // Nova API: quantidades separadas
+        desiredEssencial = Number.isFinite(tvSetup.quantityEssencial) && tvSetup.quantityEssencial !== undefined && tvSetup.quantityEssencial >= 0 
+          ? Math.min(50, tvSetup.quantityEssencial) : 0;
+        desiredPremium = Number.isFinite(tvSetup.quantityPremium) && tvSetup.quantityPremium !== undefined && tvSetup.quantityPremium >= 0
+          ? Math.min(50, tvSetup.quantityPremium) : 0;
+      } else if (tvSetup.quantity !== undefined) {
+        // API antiga: quantidade única com planType
+        const planType: TVPlanType = tvSetup?.planType ?? planTypeFromService ?? "ESSENCIAL";
+        const totalQuantity = Number.isFinite(tvSetup.quantity) && tvSetup.quantity > 0 ? Math.min(50, tvSetup.quantity) : 1;
+        if (planType === "PREMIUM") {
+          desiredPremium = totalQuantity;
+        } else {
+          desiredEssencial = totalQuantity;
+        }
+      }
+      
+      // Contar quantidades atuais
+      const currentEssencial = (allCurrentSlots ?? []).filter((s) => (s.plan_type ?? "ESSENCIAL") === "ESSENCIAL").length;
+      const currentPremium = (allCurrentSlots ?? []).filter((s) => s.plan_type === "PREMIUM").length;
+      
       const soldAt =
         tvSetup?.soldAt && tvSetup.soldAt.length === 10
           ? new Date(`${tvSetup.soldAt}T12:00:00`).toISOString()
           : tvSetup?.soldAt ?? undefined;
       const soldBy = tvSetup.soldBy.trim();
-      const params = {
-        clientId,
-        soldBy,
-        soldAt,
-        startsAt: tvSetup?.startsAt ?? undefined,
-        expiresAt: tvSetup.expiresAt,
-        notes: tvSetup?.notes?.trim() || undefined,
-        planType,
-        hasTelephony: tvSetup?.hasTelephony ?? undefined,
-      };
-
-      if (currentQuantity === 0) {
-        // Criar novos acessos
-        if (desiredQuantity > 1) {
+      
+      // Processar ESSENCIAL
+      if (desiredEssencial !== currentEssencial) {
+        if (desiredEssencial > currentEssencial) {
+          // Adicionar mais acessos ESSENCIAL
+          const toAdd = desiredEssencial - currentEssencial;
           await assignMultipleSlotsToClient({
-            ...params,
-            quantity: desiredQuantity,
-          });
-        } else {
-          await assignSlotToClient(params);
-        }
-      } else if (desiredQuantity !== currentQuantity) {
-        // Atualizar quantidade: remover ou adicionar acessos
-        if (desiredQuantity > currentQuantity) {
-          // Adicionar mais acessos
-          const toAdd = desiredQuantity - currentQuantity;
-          await assignMultipleSlotsToClient({
-            ...params,
+            clientId,
+            soldBy,
+            soldAt,
+            startsAt: tvSetup?.startsAt ?? undefined,
+            expiresAt: tvSetup.expiresAt,
+            notes: tvSetup?.notes?.trim() || undefined,
+            planType: "ESSENCIAL",
+            hasTelephony: tvSetup?.hasTelephony ?? undefined,
             quantity: toAdd,
           });
         } else {
-          // Remover acessos extras (manter apenas os primeiros)
-          const toRemove = currentQuantity - desiredQuantity;
+          // Remover acessos ESSENCIAL extras
+          const toRemove = currentEssencial - desiredEssencial;
           const { data: slotsToRemove } = await supabase
             .from("tv_slots")
             .select("id")
             .eq("client_id", clientId)
             .eq("status", "ASSIGNED")
+            .or("plan_type.is.null,plan_type.eq.ESSENCIAL")
             .order("created_at", { ascending: false })
             .limit(toRemove);
           
           if (slotsToRemove && slotsToRemove.length > 0) {
             const slotIds = slotsToRemove.map((s) => s.id);
-            // Liberar slots específicos
             const { error: releaseError } = await supabase
               .from("tv_slots")
               .update({
@@ -325,7 +333,75 @@ async function handleTvServiceForClient(
           }
         }
       }
-      // Se a quantidade é a mesma, não precisa fazer nada
+      
+      // Processar PREMIUM
+      if (desiredPremium !== currentPremium) {
+        if (desiredPremium > currentPremium) {
+          // Adicionar mais acessos PREMIUM
+          const toAdd = desiredPremium - currentPremium;
+          await assignMultipleSlotsToClient({
+            clientId,
+            soldBy,
+            soldAt,
+            startsAt: tvSetup?.startsAt ?? undefined,
+            expiresAt: tvSetup.expiresAt,
+            notes: tvSetup?.notes?.trim() || undefined,
+            planType: "PREMIUM",
+            hasTelephony: tvSetup?.hasTelephony ?? undefined,
+            quantity: toAdd,
+          });
+        } else {
+          // Remover acessos PREMIUM extras
+          const toRemove = currentPremium - desiredPremium;
+          const { data: slotsToRemove } = await supabase
+            .from("tv_slots")
+            .select("id")
+            .eq("client_id", clientId)
+            .eq("status", "ASSIGNED")
+            .eq("plan_type", "PREMIUM")
+            .order("created_at", { ascending: false })
+            .limit(toRemove);
+          
+          if (slotsToRemove && slotsToRemove.length > 0) {
+            const slotIds = slotsToRemove.map((s) => s.id);
+            const { error: releaseError } = await supabase
+              .from("tv_slots")
+              .update({
+                client_id: null,
+                status: "AVAILABLE",
+                sold_by: null,
+                sold_at: null,
+                starts_at: new Date().toISOString().slice(0, 10),
+                expires_at: null,
+                notes: null,
+                plan_type: null,
+              })
+              .in("id", slotIds);
+            
+            if (releaseError && !isSchemaMissing(releaseError)) {
+              throw releaseError;
+            }
+          }
+        }
+      }
+      
+      // Atualizar informações dos slots existentes (vendedor, datas, etc) para ambos os tipos
+      const { error: updateError } = await supabase
+        .from("tv_slots")
+        .update({
+          sold_by: soldBy,
+          sold_at: soldAt,
+          starts_at: tvSetup?.startsAt ?? undefined,
+          expires_at: tvSetup.expiresAt,
+          notes: tvSetup?.notes?.trim() || null,
+          has_telephony: tvSetup?.hasTelephony ?? null,
+        })
+        .eq("client_id", clientId)
+        .eq("status", "ASSIGNED");
+      
+      if (updateError && !isSchemaMissing(updateError)) {
+        throw updateError;
+      }
     }
     // Se campos não estão preenchidos, simplesmente não cria acessos (não dá erro)
   } else if (!hasTv) {

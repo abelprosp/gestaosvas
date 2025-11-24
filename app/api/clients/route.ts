@@ -39,8 +39,10 @@ const tvPlanTypeSchema = z.enum(["ESSENCIAL", "PREMIUM"]);
 
 const tvSetupSchema = z
   .object({
-    quantity: z.union([z.number().int().min(1).max(50), z.string()]).optional(),
-    planType: tvPlanTypeSchema.optional(),
+    quantity: z.union([z.number().int().min(1).max(50), z.string()]).optional(), // Mantido para compatibilidade
+    planType: tvPlanTypeSchema.optional(), // Mantido para compatibilidade
+    quantityEssencial: z.number().int().min(0).max(50).optional(),
+    quantityPremium: z.number().int().min(0).max(50).optional(),
     soldBy: z.string().min(1).optional(),
     soldAt: z.string().optional(),
     startsAt: z.string().optional(),
@@ -292,35 +294,71 @@ async function handleTvServiceForClient(
         }
     }
 
-    if (tvSetup.quantity) {
-        const q = typeof tvSetup.quantity === 'string' ? parseInt(tvSetup.quantity) : tvSetup.quantity;
-        if (q > 0) quantity = q;
-    }
-
-    if (tvSetup.planType) planType = tvSetup.planType;
     if (tvSetup.notes) notes = tvSetup.notes;
     if (tvSetup.hasTelephony !== undefined) hasTelephony = tvSetup.hasTelephony;
     if (tvSetup.soldAt) soldAt = tvSetup.soldAt;
     if (tvSetup.startsAt) startsAt = tvSetup.startsAt;
   }
 
-  const params = {
+  const baseParams = {
       clientId,
       soldBy,
       soldAt,
       startsAt,
       expiresAt: expiresAtStr,
       notes,
-      planType,
       hasTelephony
   };
 
   try {
-      if (quantity > 1) {
-          await assignMultipleSlotsToClient({ ...params, quantity });
+      // Processar quantidades separadas (nova API) ou quantidade única (API antiga)
+      let quantityEssencial = 0;
+      let quantityPremium = 0;
+      
+      if (tvSetup?.quantityEssencial !== undefined || tvSetup?.quantityPremium !== undefined) {
+        // Nova API: quantidades separadas
+        quantityEssencial = Number.isFinite(tvSetup.quantityEssencial) && tvSetup.quantityEssencial !== undefined && tvSetup.quantityEssencial >= 0
+          ? Math.min(50, tvSetup.quantityEssencial) : 0;
+        quantityPremium = Number.isFinite(tvSetup.quantityPremium) && tvSetup.quantityPremium !== undefined && tvSetup.quantityPremium >= 0
+          ? Math.min(50, tvSetup.quantityPremium) : 0;
+      } else if (tvSetup?.quantity) {
+        // API antiga: quantidade única com planType
+        const q = typeof tvSetup.quantity === 'string' ? parseInt(tvSetup.quantity) : tvSetup.quantity;
+        const finalPlanType = tvSetup.planType ?? planType;
+        if (q > 0) {
+          if (finalPlanType === "PREMIUM") {
+            quantityPremium = q;
+          } else {
+            quantityEssencial = q;
+          }
+        }
       } else {
-          await assignSlotToClient(params);
+        // Sem tvSetup, usar padrão
+        if (planType === "PREMIUM") {
+          quantityPremium = quantity;
+        } else {
+          quantityEssencial = quantity;
+        }
       }
+      
+      // Criar acessos ESSENCIAL
+      if (quantityEssencial > 0) {
+        if (quantityEssencial > 1) {
+          await assignMultipleSlotsToClient({ ...baseParams, planType: "ESSENCIAL", quantity: quantityEssencial });
+        } else {
+          await assignSlotToClient({ ...baseParams, planType: "ESSENCIAL" });
+        }
+      }
+      
+      // Criar acessos PREMIUM
+      if (quantityPremium > 0) {
+        if (quantityPremium > 1) {
+          await assignMultipleSlotsToClient({ ...baseParams, planType: "PREMIUM", quantity: quantityPremium });
+        } else {
+          await assignSlotToClient({ ...baseParams, planType: "PREMIUM" });
+        }
+      }
+      
       console.log("[handleTvServiceForClient] ✅ Sucesso ao criar TV");
   } catch (e) {
       console.error("[handleTvServiceForClient] ❌ Falha ao criar TV", e);

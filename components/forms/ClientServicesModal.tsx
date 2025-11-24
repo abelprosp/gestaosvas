@@ -47,8 +47,8 @@ export interface ClientServicesFormValues {
     customPrice?: number | null;
   }>;
   tvSetup?: {
-    quantity?: number;
-    planType?: TVPlanType;
+    quantityEssencial?: number;
+    quantityPremium?: number;
     soldBy?: string;
     soldAt?: string;
     startsAt?: string;
@@ -73,8 +73,8 @@ interface ClientServicesModalProps {
 }
 
 type TvSetupState = {
-  quantity: string;
-  planType: TVPlanType;
+  quantityEssencial: string;
+  quantityPremium: string;
   soldBy: string;
   soldAt: string;
   startsAt: string;
@@ -92,8 +92,8 @@ type CloudSetupState = {
 function buildInitialTvSetup(): TvSetupState {
   const today = new Date().toISOString().slice(0, 10);
   return {
-    quantity: "1",
-    planType: "ESSENCIAL" as TVPlanType,
+    quantityEssencial: "0",
+    quantityPremium: "0",
     soldBy: "",
     soldAt: today,
     startsAt: today,
@@ -127,8 +127,6 @@ export function ClientServicesModal({
   });
   const cardBg = useColorModeValue("rgba(255,255,255,0.78)", "rgba(15, 23, 42, 0.7)");
   const cardBorder = useColorModeValue("rgba(226,232,240,0.6)", "rgba(45,55,72,0.6)");
-  const additionalSlotsBg = useColorModeValue("blue.50", "blue.900");
-  const additionalSlotsBorder = useColorModeValue("blue.200", "blue.700");
 
   const vendorOptions = useMemo(() => {
     return vendors
@@ -153,7 +151,6 @@ export function ClientServicesModal({
   const [tvSetup, setTvSetup] = useState<TvSetupState>(buildInitialTvSetup());
   const [cloudSetups, setCloudSetups] = useState<Record<string, CloudSetupState>>({});
   const [customPrices, setCustomPrices] = useState<Record<string, string>>({});
-  const [additionalSlots, setAdditionalSlots] = useState<string>("0");
 
   // Carregar dados existentes
   useEffect(() => {
@@ -184,9 +181,13 @@ export function ClientServicesModal({
     // Carregar configuração TV (se houver)
     if (client.tvAssignments && client.tvAssignments.length > 0) {
       const firstAssignment = client.tvAssignments[0];
+      // Contar quantidades por tipo de plano
+      const essencialCount = client.tvAssignments.filter((a) => (a.planType ?? "ESSENCIAL") === "ESSENCIAL").length;
+      const premiumCount = client.tvAssignments.filter((a) => a.planType === "PREMIUM").length;
+      
       setTvSetup({
-        quantity: String(client.tvAssignments.length),
-        planType: (firstAssignment.planType as TVPlanType) ?? "ESSENCIAL",
+        quantityEssencial: String(essencialCount),
+        quantityPremium: String(premiumCount),
         soldBy: firstAssignment.soldBy ?? "",
         soldAt: firstAssignment.soldAt ? firstAssignment.soldAt.slice(0, 10) : new Date().toISOString().slice(0, 10),
         startsAt: firstAssignment.startsAt ? firstAssignment.startsAt.slice(0, 10) : new Date().toISOString().slice(0, 10),
@@ -283,25 +284,24 @@ export function ClientServicesModal({
         }
 
         if (hasSoldBy && hasExpiresAt) {
-          const parsedQuantity = tvSetup.quantity ? parseInt(tvSetup.quantity, 10) : NaN;
-          const baseQuantity = Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? Math.min(50, parsedQuantity) : 1;
-          
-          // Se já existem acessos e foi informada quantidade adicional, usar quantidade adicional
-          // Caso contrário, usar a quantidade base
-          const existingCount = client?.tvAssignments?.length ?? 0;
-          const additionalCount = parseInt(additionalSlots) || 0;
-          const finalQuantity = existingCount > 0 && additionalCount > 0 ? additionalCount : baseQuantity;
+          const parsedEssencial = parseInt(tvSetup.quantityEssencial || "0", 10);
+          const parsedPremium = parseInt(tvSetup.quantityPremium || "0", 10);
+          const quantityEssencial = Number.isFinite(parsedEssencial) && parsedEssencial >= 0 ? Math.min(50, parsedEssencial) : 0;
+          const quantityPremium = Number.isFinite(parsedPremium) && parsedPremium >= 0 ? Math.min(50, parsedPremium) : 0;
 
-          tvSetupPayload = {
-            quantity: finalQuantity,
-            planType: tvSetup.planType,
-            soldBy: tvSetup.soldBy.trim(),
-            soldAt: tvSetup.soldAt || undefined,
-            startsAt: tvSetup.startsAt || undefined,
-            expiresAt: expiresAtFormatted,
-            notes: tvSetup.notes?.trim() || undefined,
-            hasTelephony: tvSetup.hasTelephony || undefined,
-          };
+          // Se pelo menos uma quantidade for maior que 0, criar payload
+          if (quantityEssencial > 0 || quantityPremium > 0) {
+            tvSetupPayload = {
+              quantityEssencial,
+              quantityPremium,
+              soldBy: tvSetup.soldBy.trim(),
+              soldAt: tvSetup.soldAt || undefined,
+              startsAt: tvSetup.startsAt || undefined,
+              expiresAt: expiresAtFormatted,
+              notes: tvSetup.notes?.trim() || undefined,
+              hasTelephony: tvSetup.hasTelephony || undefined,
+            };
+          }
         }
       }
 
@@ -426,33 +426,42 @@ export function ClientServicesModal({
               {isTvSelected && (
                 <Box p={4} bg={cardBg} borderRadius="lg" borderWidth={1} borderColor={cardBorder}>
                   <Text fontWeight="semibold" mb={4}>
-                    Configuração TV
+                    ⚡ Configuração de TV (Acessos serão gerados automaticamente)
                   </Text>
+                  {client?.tvAssignments && client.tvAssignments.length > 0 && (
+                    <Text fontSize="sm" color="gray.500" mb={3}>
+                      Acessos existentes: {client.tvAssignments.length} (Essencial: {client.tvAssignments.filter((a) => (a.planType ?? "ESSENCIAL") === "ESSENCIAL").length}, Premium: {client.tvAssignments.filter((a) => a.planType === "PREMIUM").length})
+                    </Text>
+                  )}
                   <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={4}>
                     <GridItem>
                       <FormControl>
-                        <FormLabel>Quantidade</FormLabel>
+                        <FormLabel>Quantidade TV ESSENCIAL</FormLabel>
                         <Input
                           type="number"
-                          min={1}
+                          min={0}
                           max={50}
-                          value={tvSetup.quantity}
-                          onChange={(e) => setTvSetup((prev) => ({ ...prev, quantity: e.target.value }))}
+                          value={tvSetup.quantityEssencial}
+                          onChange={(e) => setTvSetup((prev) => ({ ...prev, quantityEssencial: e.target.value }))}
                         />
+                        <Text fontSize="xs" color="gray.500" mt={1}>
+                          Total de acessos Essencial que o cliente terá
+                        </Text>
                       </FormControl>
                     </GridItem>
                     <GridItem>
                       <FormControl>
-                        <FormLabel>Plano</FormLabel>
-                        <Select
-                          value={tvSetup.planType}
-                          onChange={(e) =>
-                            setTvSetup((prev) => ({ ...prev, planType: e.target.value as TVPlanType }))
-                          }
-                        >
-                          <option value="ESSENCIAL">Essencial</option>
-                          <option value="PREMIUM">Premium</option>
-                        </Select>
+                        <FormLabel>Quantidade TV PREMIUM</FormLabel>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={50}
+                          value={tvSetup.quantityPremium}
+                          onChange={(e) => setTvSetup((prev) => ({ ...prev, quantityPremium: e.target.value }))}
+                        />
+                        <Text fontSize="xs" color="gray.500" mt={1}>
+                          Total de acessos Premium que o cliente terá
+                        </Text>
                       </FormControl>
                     </GridItem>
                     <GridItem colSpan={{ base: 1, md: 2 }}>
@@ -567,36 +576,6 @@ export function ClientServicesModal({
                         />
                       </FormControl>
                     </GridItem>
-                    {client?.tvAssignments && client.tvAssignments.length > 0 && (
-                      <GridItem colSpan={{ base: 1, md: 2 }}>
-                        <Box p={3} bg={additionalSlotsBg} borderRadius="md" borderWidth={1} borderColor={additionalSlotsBorder}>
-                          <Text fontWeight="semibold" mb={2} fontSize="sm">
-                            Acessos existentes: {client.tvAssignments.length}
-                          </Text>
-                          <FormControl>
-                            <FormLabel fontSize="sm">Adicionar mais acessos</FormLabel>
-                            <Input
-                              type="number"
-                              min={1}
-                              max={50}
-                              value={additionalSlots}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                if (value === "" || (parseInt(value) >= 0 && parseInt(value) <= 50)) {
-                                  setAdditionalSlots(value);
-                                }
-                              }}
-                              placeholder="0"
-                            />
-                            <Text fontSize="xs" color="gray.500" mt={1}>
-                              {additionalSlots && parseInt(additionalSlots) > 0
-                                ? `Serão adicionados ${additionalSlots} acessos com as mesmas configurações acima`
-                                : "Deixe em 0 para não adicionar novos acessos"}
-                            </Text>
-                          </FormControl>
-                        </Box>
-                      </GridItem>
-                    )}
                   </Grid>
                 </Box>
               )}
