@@ -127,6 +127,8 @@ export function ClientServicesModal({
   });
   const cardBg = useColorModeValue("rgba(255,255,255,0.78)", "rgba(15, 23, 42, 0.7)");
   const cardBorder = useColorModeValue("rgba(226,232,240,0.6)", "rgba(45,55,72,0.6)");
+  const additionalSlotsBg = useColorModeValue("blue.50", "blue.900");
+  const additionalSlotsBorder = useColorModeValue("blue.200", "blue.700");
 
   const vendorOptions = useMemo(() => {
     return vendors
@@ -148,6 +150,7 @@ export function ClientServicesModal({
   const [tvSetup, setTvSetup] = useState<TvSetupState>(buildInitialTvSetup());
   const [cloudSetups, setCloudSetups] = useState<Record<string, CloudSetupState>>({});
   const [customPrices, setCustomPrices] = useState<Record<string, string>>({});
+  const [additionalSlots, setAdditionalSlots] = useState<string>("0");
 
   // Carregar dados existentes
   useEffect(() => {
@@ -194,7 +197,10 @@ export function ClientServicesModal({
   }, [isOpen, client, currentServiceIds, reset]);
 
   const tvServices = useMemo(
-    () => serviceOptions.filter((service) => service.name.toLowerCase().includes("tv")),
+    () => serviceOptions.filter((service) => {
+      const name = service.name.toLowerCase();
+      return name.includes("tv essencial") || name.includes("tv premium");
+    }),
     [serviceOptions],
   );
 
@@ -233,6 +239,7 @@ export function ClientServicesModal({
     setTvSetup(buildInitialTvSetup());
     setCloudSetups({});
     setCustomPrices({});
+    setAdditionalSlots("0");
     onClose();
   };
 
@@ -276,10 +283,16 @@ export function ClientServicesModal({
 
         if (hasSoldBy && hasExpiresAt) {
           const parsedQuantity = tvSetup.quantity ? parseInt(tvSetup.quantity, 10) : NaN;
-          const quantity = Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? Math.min(50, parsedQuantity) : 1;
+          const baseQuantity = Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? Math.min(50, parsedQuantity) : 1;
+          
+          // Se já existem acessos e foi informada quantidade adicional, usar quantidade adicional
+          // Caso contrário, usar a quantidade base
+          const existingCount = client.tvAssignments?.length ?? 0;
+          const additionalCount = parseInt(additionalSlots) || 0;
+          const finalQuantity = existingCount > 0 && additionalCount > 0 ? additionalCount : baseQuantity;
 
           tvSetupPayload = {
-            quantity,
+            quantity: finalQuantity,
             planType: tvSetup.planType,
             soldBy: tvSetup.soldBy.trim(),
             soldAt: tvSetup.soldAt || undefined,
@@ -549,6 +562,36 @@ export function ClientServicesModal({
                         />
                       </FormControl>
                     </GridItem>
+                    {client.tvAssignments && client.tvAssignments.length > 0 && (
+                      <GridItem colSpan={{ base: 1, md: 2 }}>
+                        <Box p={3} bg={additionalSlotsBg} borderRadius="md" borderWidth={1} borderColor={additionalSlotsBorder}>
+                          <Text fontWeight="semibold" mb={2} fontSize="sm">
+                            Acessos existentes: {client.tvAssignments.length}
+                          </Text>
+                          <FormControl>
+                            <FormLabel fontSize="sm">Adicionar mais acessos</FormLabel>
+                            <Input
+                              type="number"
+                              min={1}
+                              max={50}
+                              value={additionalSlots}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (value === "" || (parseInt(value) >= 0 && parseInt(value) <= 50)) {
+                                  setAdditionalSlots(value);
+                                }
+                              }}
+                              placeholder="0"
+                            />
+                            <Text fontSize="xs" color="gray.500" mt={1}>
+                              {additionalSlots && parseInt(additionalSlots) > 0
+                                ? `Serão adicionados ${additionalSlots} acessos com as mesmas configurações acima`
+                                : "Deixe em 0 para não adicionar novos acessos"}
+                            </Text>
+                          </FormControl>
+                        </Box>
+                      </GridItem>
+                    )}
                   </Grid>
                 </Box>
               )}

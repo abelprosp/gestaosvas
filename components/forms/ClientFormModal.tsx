@@ -374,7 +374,10 @@ export function ClientFormModal({
   }, [selectedServiceIds, serviceOptions, initialCustomPrices]);
 
   const tvServices = useMemo(
-    () => serviceOptions.filter((service) => service.name.toLowerCase().includes("tv")),
+    () => serviceOptions.filter((service) => {
+      const name = service.name.toLowerCase();
+      return name.includes("tv essencial") || name.includes("tv premium");
+    }),
     [serviceOptions],
   );
 
