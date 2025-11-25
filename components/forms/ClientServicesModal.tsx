@@ -270,7 +270,52 @@ export function ClientServicesModal({
   const onSubmitInternal = async (values: ClientServicesFormValues) => {
     try {
       const serviceIds = values.serviceIds ?? [];
-      const serviceSelections = serviceIds.map((serviceId) => {
+      
+      // Verificar se há serviço TV genérico e preços diferentes para Essencial e Premium
+      const tvGenericService = serviceOptions.find((s) => {
+        const name = s.name.toLowerCase();
+        return name.includes("tv") && !name.includes("essencial") && !name.includes("premium");
+      });
+      
+      const hasTvGeneric = tvGenericService && serviceIds.includes(tvGenericService.id);
+      const priceEssencialStr = tvGenericService ? customPricesEssencial[tvGenericService.id] : null;
+      const pricePremiumStr = tvGenericService ? customPricesPremium[tvGenericService.id] : null;
+      
+      const priceEssencial = priceEssencialStr ? parseFloat(priceEssencialStr.replace(",", ".")) : null;
+      const pricePremium = pricePremiumStr ? parseFloat(pricePremiumStr.replace(",", ".")) : null;
+      
+      const hasDifferentPrices = hasTvGeneric && 
+        priceEssencial !== null && 
+        pricePremium !== null && 
+        priceEssencial !== pricePremium;
+      
+      // Se há preços diferentes, buscar ou criar serviços separados
+      let finalServiceIds = [...serviceIds];
+      if (hasDifferentPrices && tvGenericService) {
+        // Remover serviço TV genérico da lista
+        finalServiceIds = finalServiceIds.filter((id) => id !== tvGenericService.id);
+        
+        // Buscar serviços TV Essencial e TV Premium
+        const tvEssencialService = serviceOptions.find((s) => {
+          const name = s.name.toLowerCase();
+          return name.includes("tv") && name.includes("essencial");
+        });
+        
+        const tvPremiumService = serviceOptions.find((s) => {
+          const name = s.name.toLowerCase();
+          return name.includes("tv") && name.includes("premium");
+        });
+        
+        // Adicionar serviços separados se existirem
+        if (tvEssencialService && !finalServiceIds.includes(tvEssencialService.id)) {
+          finalServiceIds.push(tvEssencialService.id);
+        }
+        if (tvPremiumService && !finalServiceIds.includes(tvPremiumService.id)) {
+          finalServiceIds.push(tvPremiumService.id);
+        }
+      }
+      
+      const serviceSelections = finalServiceIds.map((serviceId) => {
         const service = serviceOptions.find((s) => s.id === serviceId);
         const isTvService = service?.name.toLowerCase().includes("tv");
         
@@ -282,13 +327,15 @@ export function ClientServicesModal({
           const isPremium = service?.name.toLowerCase().includes("premium");
           
           if (isEssencial) {
-            const priceStr = customPricesEssencial[serviceId];
+            // Se for TV Essencial, usar o preço do Essencial (mesmo que venha do genérico)
+            const priceStr = customPricesEssencial[serviceId] || (tvGenericService ? customPricesEssencial[tvGenericService.id] : null);
             customPrice = priceStr ? parseFloat(priceStr.replace(",", ".")) : null;
           } else if (isPremium) {
-            const priceStr = customPricesPremium[serviceId];
+            // Se for TV Premium, usar o preço do Premium (mesmo que venha do genérico)
+            const priceStr = customPricesPremium[serviceId] || (tvGenericService ? customPricesPremium[tvGenericService.id] : null);
             customPrice = priceStr ? parseFloat(priceStr.replace(",", ".")) : null;
           } else {
-            // Se for um serviço TV genérico, usar o preço do ESSENCIAL como padrão
+            // Se for um serviço TV genérico e não há preços diferentes, usar o preço do ESSENCIAL como padrão
             const priceStr = customPricesEssencial[serviceId] || customPricesPremium[serviceId];
             customPrice = priceStr ? parseFloat(priceStr.replace(",", ".")) : null;
           }
@@ -389,7 +436,7 @@ export function ClientServicesModal({
       }
 
       await onSubmit({
-        serviceIds,
+        serviceIds: finalServiceIds,
         serviceSelections,
         tvSetup: tvSetupPayload,
         cloudSetups: cloudSetupsPayload,

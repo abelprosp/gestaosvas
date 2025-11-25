@@ -36,6 +36,7 @@ import {
   FiChevronDown,
   FiChevronUp,
   FiDownload,
+  FiDollarSign,
   FiEdit,
   FiFilePlus,
   FiPlus,
@@ -47,6 +48,7 @@ import { api } from "@/lib/api/client";
 import { Client, ClientTVAssignment, PaginatedResponse, Service, StatsOverview } from "@/types";
 import { ClientFormModal, ClientFormValues } from "@/components/forms/ClientFormModal";
 import { ClientServicesModal, ClientServicesFormValues } from "@/components/forms/ClientServicesModal";
+import { ClientValuesModal } from "@/components/forms/ClientValuesModal";
 import { formatDate } from "@/lib/utils/format";
 import { exportToCsv, exportToPdf } from "@/lib/utils/exporters";
 import Papa from "papaparse";
@@ -103,6 +105,7 @@ export function ClientsPage() {
   const [expandedClientId, setExpandedClientId] = useState<string | null>(null);
   const formModal = useDisclosure();
   const servicesModal = useDisclosure();
+  const valuesModal = useDisclosure();
   const handleExportCsv = () => {
     if (!filteredClients.length) {
       toast({ title: "Nenhum cliente para exportar", status: "info" });
@@ -433,6 +436,11 @@ const getSortIcon = (key: string): ReactElement | undefined => {
     servicesModal.onOpen();
   };
 
+  const openValuesModal = (client: Client) => {
+    setSelectedClient(client);
+    valuesModal.onOpen();
+  };
+
   const updateClientServices = useMutation({
     mutationFn: async ({ id, values }: { id: string; values: ClientServicesFormValues }) => {
       await api.put(`/clients/${id}`, values);
@@ -736,6 +744,15 @@ const getSortIcon = (key: string): ReactElement | undefined => {
                           </Button>
                           <Button
                             size="sm"
+                            leftIcon={<FiDollarSign />}
+                            variant="ghost"
+                            onClick={() => openValuesModal(client)}
+                            title="Ver valores discriminados"
+                          >
+                            Valores
+                          </Button>
+                          <Button
+                            size="sm"
                             leftIcon={<FiFilePlus />}
                             variant="ghost"
                             onClick={() => openServicesModal(client)}
@@ -947,6 +964,13 @@ const getSortIcon = (key: string): ReactElement | undefined => {
           onSubmit={handleUpdateServices}
           client={selectedClient}
           serviceOptions={services}
+        />
+      )}
+      {selectedClient && (
+        <ClientValuesModal
+          isOpen={valuesModal.isOpen}
+          onClose={valuesModal.onClose}
+          client={selectedClient}
         />
       )}
     </VStack>

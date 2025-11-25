@@ -124,11 +124,14 @@ export async function ensureAvailableSlotExists() {
 
   for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt++) {
     // 1. Tenta achar slot livre - busca slots DISPONÍVEIS e que nunca foram usados (sem histórico de ASSIGNED)
+    // Ordena explicitamente por email (ascendente) e depois por slot_number (ascendente) para garantir ordem numérica correta
     const { data: allSlots, error: fetchError } = await supabase
       .from("tv_slots")
       .select("*, tv_accounts(*)")
       .eq("status", "AVAILABLE")
-      .is("client_id", null);
+      .is("client_id", null)
+      .order("email", { ascending: true, foreignTable: "tv_accounts" })
+      .order("slot_number", { ascending: true });
 
     if (fetchError && !isSchemaMissing(fetchError)) throw fetchError;
 
