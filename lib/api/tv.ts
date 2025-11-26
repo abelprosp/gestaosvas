@@ -45,6 +45,22 @@ export async function createTVAccount(email: string) {
   return response.data;
 }
 
+export async function updateTVAccountEmail(accountId: string, email: string) {
+  try {
+    const response = await api.patch<{ id: string; email: string; createdAt: string }>(
+      `/tv/accounts/${accountId}`,
+      { email }
+    );
+    return response.data;
+  } catch (error) {
+    const typedError = error as ApiError;
+    if (isSchemaUnavailable(typedError)) {
+      throw new Error("As tabelas de TV não estão configuradas. Execute o script supabase/schema.sql.");
+    }
+    throw typedError;
+  }
+}
+
 export async function fetchClientTVAssignments(clientId: string): Promise<ClientTVAssignment[]> {
   try {
     const response = await api.get<ClientTVAssignment[]>(`/tv/slots`, {

@@ -47,12 +47,11 @@ import {
   FiClock,
   FiEdit,
   FiKey,
-  FiPlus,
   FiSend,
   FiPhone,
   FiTrash2,
 } from "react-icons/fi";
-import { fetchTVOverview, regenerateTVSlotPassword, releaseTVSlot, updateTVSlot, createTVAccount } from "@/lib/api/tv";
+import { fetchTVOverview, regenerateTVSlotPassword, releaseTVSlot, updateTVSlot, updateTVAccountEmail } from "@/lib/api/tv";
 import { PaginatedResponse, TVOverviewRecord, TVSlotStatus } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { createRequest } from "@/lib/api/requests";
@@ -181,9 +180,11 @@ export function UsersPage() {
   const [notesBySlot, setNotesBySlot] = useState<Record<string, string>>({});
   const [pendingNoteId, setPendingNoteId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const createAccountModal = useDisclosure();
-  const [newEmail, setNewEmail] = useState("");
-  const [isCreatingAccount, setIsCreatingAccount] = useState(false);
+  const editEmailModal = useDisclosure();
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+  const [editingEmail, setEditingEmail] = useState("");
+  const [originalEmail, setOriginalEmail] = useState("");
+  const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
   const limit = 50;
   const hasSearch = searchTerm.trim().length > 0;
   const effectivePage = hasSearch ? 1 : page;
@@ -503,24 +504,40 @@ export function UsersPage() {
     toast({ title: "Exportação criada", status: "success" });
   };
 
-  const handleCreateAccount = async () => {
-    if (!newEmail.trim()) {
-      toast({ title: "Informe um e-mail", status: "warning" });
+  const handleEditEmail = (accountId: string, currentEmail: string) => {
+    if (!isAdmin) return;
+    setEditingAccountId(accountId);
+    setEditingEmail(currentEmail);
+    setOriginalEmail(currentEmail);
+    editEmailModal.onOpen();
+  };
+
+  const handleUpdateEmail = async () => {
+    if (!editingAccountId || !editingEmail.trim()) {
+      toast({ title: "Informe um e-mail válido", status: "warning" });
       return;
     }
 
-    setIsCreatingAccount(true);
+    if (editingEmail.trim() === originalEmail) {
+      toast({ title: "O e-mail não foi alterado", status: "info" });
+      editEmailModal.onClose();
+      return;
+    }
+
+    setIsUpdatingEmail(true);
     try {
-      await createTVAccount(newEmail.trim());
-      toast({ title: "Conta criada com sucesso", description: "8 usuários foram criados automaticamente", status: "success" });
+      await updateTVAccountEmail(editingAccountId, editingEmail.trim());
+      toast({ title: "E-mail atualizado com sucesso", status: "success" });
       queryClient.invalidateQueries({ queryKey: ["tvOverview"] });
-      createAccountModal.onClose();
-      setNewEmail("");
+      editEmailModal.onClose();
+      setEditingAccountId(null);
+      setEditingEmail("");
+      setOriginalEmail("");
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Erro ao criar conta";
-      toast({ title: "Erro ao criar conta", description: errorMessage, status: "error", duration: 5000 });
+      const errorMessage = error instanceof Error ? error.message : "Erro ao atualizar e-mail";
+      toast({ title: "Erro ao atualizar e-mail", description: errorMessage, status: "error", duration: 5000 });
     } finally {
-      setIsCreatingAccount(false);
+      setIsUpdatingEmail(false);
     }
   };
 
@@ -533,11 +550,6 @@ export function UsersPage() {
             Visualize a distribuição de e-mails, usuários e vencimentos dos acessos de TV. Os indicadores sinalizam a proximidade do vencimento.
           </Text>
         </Box>
-        {isAdmin && (
-          <Button leftIcon={<FiPlus />} onClick={createAccountModal.onOpen} colorScheme="blue">
-            Criar e-mail manual
-          </Button>
-        )}
       </Flex>
 
       <Stack direction={{ base: "column", md: "row" }} spacing={4}>
@@ -817,6 +829,17 @@ export function UsersPage() {
                       <Td>
                         <HStack spacing={2}>
                         <Text fontWeight="semibold">{record.email}</Text>
+                        {isAdmin && record.accountId && (
+                          <Tooltip label="Editar e-mail">
+                            <IconButton
+                              aria-label="Editar e-mail"
+                              icon={<FiEdit />}
+                              size="xs"
+                              variant="ghost"
+                              onClick={() => handleEditEmail(record.accountId!, record.email)}
+                            />
+                          </Tooltip>
+                        )}
                         {(record as any).hasTelephony && (
                           <Tooltip label="Cliente com telefonia">
                             <Box as={FiPhone} color="brand.500" />
@@ -1210,37 +1233,41 @@ export function UsersPage() {
         </HStack>
       </Stack>
 
-      {/* Modal para criar conta TV manual */}
-      <Modal isOpen={createAccountModal.isOpen} onClose={createAccountModal.onClose}>
+      {/* Modal para editar e-mail da conta TV */}
+      <Modal isOpen={editEmailModal.isOpen} onClose={editEmailModal.onClose}>
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>Criar conta TV manual</ModalHeader>
+          <ModalHeader>Editar e-mail de acesso</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
             <FormControl>
               <FormLabel>E-mail</FormLabel>
               <Input
                 type="email"
-                value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)}
-                placeholder="exemplo@dominio.com"
+                value={editingEmail}
+                onChange={(e) => setEditingEmail(e.target.value)}
+                placeholder="exemplo@nexusrs.com.br"
                 onKeyPress={(e) => {
-                  if (e.key === "Enter" && !isCreatingAccount) {
-                    handleCreateAccount();
+                  if (e.key === "Enter" && !isUpdatingEmail) {
+                    handleUpdateEmail();
                   }
                 }}
               />
               <Text fontSize="sm" color="gray.500" mt={2}>
-                8 usuários serão criados automaticamente para este e-mail
+                Este e-mail será atualizado para todos os slots desta conta
               </Text>
             </FormControl>
           </ModalBody>
           <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={createAccountModal.onClose} isDisabled={isCreatingAccount}>
+            <Button variant="ghost" mr={3} onClick={editEmailModal.onClose} isDisabled={isUpdatingEmail}>
               Cancelar
             </Button>
-            <Button colorScheme="blue" onClick={handleCreateAccount} isLoading={isCreatingAccount}>
-              Criar conta
+            <Button 
+              colorScheme="blue" 
+              onClick={handleUpdateEmail} 
+              isLoading={isUpdatingEmail}
+            >
+              Salvar e confirmar
             </Button>
           </ModalFooter>
         </ModalContent>

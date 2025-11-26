@@ -11,6 +11,8 @@ import { TVPlanType } from "@/types";
 type ServiceSelection = {
   serviceId: string;
   customPrice?: number | null;
+  customPriceEssencial?: number | null; // Preço específico para TV Essencial (fragmento do serviço TV)
+  customPricePremium?: number | null; // Preço específico para TV Premium (fragmento do serviço TV)
 };
 
 const costCenterSchema = z.enum(["LUXUS", "NEXUS"]);
@@ -32,6 +34,8 @@ const clientSchema = z.object({
 const serviceSelectionSchema = z.object({
   serviceId: z.string().uuid(),
   customPrice: z.number().min(0).nullable().optional(),
+  customPriceEssencial: z.number().min(0).nullable().optional(), // Preço específico para TV Essencial
+  customPricePremium: z.number().min(0).nullable().optional(), // Preço específico para TV Premium
   soldBy: z.string().optional(), // Vendedor específico para este serviço
 });
 
@@ -118,6 +122,8 @@ async function syncClientServices(clientId: string, selections: ServiceSelection
     client_id: clientId,
     service_id: selection.serviceId,
     custom_price: selection.customPrice ?? null,
+    custom_price_essencial: selection.customPriceEssencial ?? null,
+    custom_price_premium: selection.customPricePremium ?? null,
     // sold_by: selection.soldBy // TODO: Adicionar coluna no banco
   }));
 
@@ -461,7 +467,7 @@ async function fetchClientSummary(clientId: string) {
   const supabase = createServerClient();
   const { data, error } = await supabase
     .from("clients")
-    .select("*, client_services(*, service:services(*))")
+    .select("*, client_services(custom_price, custom_price_essencial, custom_price_premium, service:services(*))")
     .eq("id", clientId)
     .single();
 
@@ -491,7 +497,7 @@ export const GET = createApiHandler(async (req) => {
 
   let query = supabase
     .from("clients")
-    .select("*, client_services(*, service:services(*))", { count: "exact" })
+    .select("*, client_services(custom_price, custom_price_essencial, custom_price_premium, service:services(*))", { count: "exact" })
     .order("created_at", { ascending: false });
 
   if (search) {

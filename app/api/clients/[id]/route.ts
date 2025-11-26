@@ -11,6 +11,8 @@ import { TVPlanType } from "@/types";
 type ServiceSelection = {
   serviceId: string;
   customPrice?: number | null;
+  customPriceEssencial?: number | null; // Preço específico para TV Essencial (fragmento do serviço TV)
+  customPricePremium?: number | null; // Preço específico para TV Premium (fragmento do serviço TV)
 };
 
 const costCenterSchema = z.enum(["LUXUS", "NEXUS"]);
@@ -31,6 +33,8 @@ const clientSchema = z.object({
 const serviceSelectionSchema = z.object({
   serviceId: z.string().uuid(),
   customPrice: z.number().min(0).nullable().optional(),
+  customPriceEssencial: z.number().min(0).nullable().optional(), // Preço específico para TV Essencial
+  customPricePremium: z.number().min(0).nullable().optional(), // Preço específico para TV Premium
 });
 
 const tvPlanTypeSchema = z.enum(["ESSENCIAL", "PREMIUM"]);
@@ -107,6 +111,8 @@ async function syncClientServices(clientId: string, selections: ServiceSelection
     client_id: clientId,
     service_id: selection.serviceId,
     custom_price: selection.customPrice ?? null,
+    custom_price_essencial: selection.customPriceEssencial ?? null,
+    custom_price_premium: selection.customPricePremium ?? null,
   }));
 
   const { error: insertError } = await supabase.from("client_services").insert(rows);
@@ -514,7 +520,7 @@ async function syncCloudAccesses(
 async function fetchClientSummary(id: string) {
   const supabase = createServerClient();
   const baseSelection =
-    "*, client_services:client_services(custom_price, service:services(*)), cloud_accesses:cloud_accesses(id, client_id, service_id, expires_at, is_test, notes, created_at, updated_at, service:services(*))";
+    "*, client_services:client_services(custom_price, custom_price_essencial, custom_price_premium, service:services(*)), cloud_accesses:cloud_accesses(id, client_id, service_id, expires_at, is_test, notes, created_at, updated_at, service:services(*))";
   let { data, error } = await supabase.from("clients").select(baseSelection).eq("id", id).maybeSingle();
 
   if (error && isSchemaMissing(error)) {
@@ -544,7 +550,7 @@ export const GET = createApiHandler(async (req, { params }) => {
   const { data, error } = await supabase
     .from("clients")
     .select(
-      "*, contracts(*), client_services:client_services(custom_price, service:services(*)), cloud_accesses:cloud_accesses(id, client_id, service_id, expires_at, is_test, notes, created_at, updated_at, service:services(*))",
+      "*, contracts(*), client_services:client_services(custom_price, custom_price_essencial, custom_price_premium, service:services(*)), cloud_accesses:cloud_accesses(id, client_id, service_id, expires_at, is_test, notes, created_at, updated_at, service:services(*))",
     )
     .eq("id", params.id)
     .maybeSingle();

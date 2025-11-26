@@ -5,6 +5,9 @@ export interface Service {
   price: number;
   allowCustomPrice: boolean;
   customPrice?: number | null;
+  // Preços específicos para TV Essencial e Premium (fragmentos do serviço TV)
+  customPriceEssencial?: number | null;
+  customPricePremium?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -162,5 +165,42 @@ export interface CnpjLookupResult {
   phone?: string | null;
   postalCode?: string | null;
   openingDate?: string | null;
+}
+
+export type TVSlotStatus = "AVAILABLE" | "ASSIGNED" | "INACTIVE" | "SUSPENDED" | "USED";
+
+export interface TVOverviewRecord {
+  id: string;
+  slotNumber: number;
+  username: string;
+  email: string;
+  accountId?: string | null;
+  status: TVSlotStatus;
+  password: string;
+  soldBy?: string | null;
+  soldAt?: string | null;
+  startsAt?: string | null;
+  expiresAt?: string | null;
+  notes?: string | null;
+  planType?: TVPlanType | null;
+  hasTelephony?: boolean | null;
+  clientId?: string | null;
+  profileLabel?: string | null;
+  document?: string | null;
+  client?: {
+    id: string;
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    document?: string | null;
+  } | null;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
 }
 

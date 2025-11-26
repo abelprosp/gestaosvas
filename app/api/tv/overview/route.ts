@@ -93,6 +93,7 @@ export const GET = createApiHandler(async (req) => {
       slotNumber: mapped.slotNumber,
       username: mapped.username,
       email: mapped.account?.email ?? "",
+      accountId: mapped.tvAccountId ?? null,
       status: mapped.status,
       password: mapped.password,
       soldBy: mapped.soldBy,

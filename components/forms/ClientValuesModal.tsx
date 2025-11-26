@@ -63,67 +63,38 @@ export function ClientValuesModal({ isOpen, onClose, client }: ClientValuesModal
       .trim();
   };
 
-  // Encontrar serviços TV - busca mais flexível
-  // Primeiro tenta encontrar serviços específicos (TV Essencial, TV Premium)
-  let tvEssencialService = (client.services ?? []).find((service) => {
+  // Encontrar serviço TV único (TV Essencial e Premium são fragmentos deste serviço)
+  const tvService = (client.services ?? []).find((service) => {
     const normalized = normalizeServiceName(service.name);
-    return normalized.includes("tv") && normalized.includes("essencial");
+    // Encontra serviço que contém "tv" mas não contém "essencial" nem "premium"
+    return (
+      normalized.includes("tv") &&
+      !normalized.includes("essencial") &&
+      !normalized.includes("premium")
+    );
   });
-  
-  let tvPremiumService = (client.services ?? []).find((service) => {
-    const normalized = normalizeServiceName(service.name);
-    return normalized.includes("tv") && normalized.includes("premium");
-  });
-
-  // Se não encontrou serviços específicos, tenta usar serviço TV genérico
-  // (isso acontece quando o cliente tem apenas "TV" vinculado)
-  if (!tvEssencialService || !tvPremiumService) {
-    const tvGenericService = (client.services ?? []).find((service) => {
-      const normalized = normalizeServiceName(service.name);
-      // Encontra serviço que contém "tv" mas não contém "essencial" nem "premium"
-      return (
-        normalized.includes("tv") &&
-        !normalized.includes("essencial") &&
-        !normalized.includes("premium")
-      );
-    });
-
-    // Se encontrou serviço TV genérico, usa ele para ambos
-    if (tvGenericService) {
-      if (!tvEssencialService) {
-        tvEssencialService = tvGenericService;
-      }
-      if (!tvPremiumService) {
-        tvPremiumService = tvGenericService;
-      }
-    }
-  }
 
   // Calcular valores TV
-  // Prioridade: customPrice > price > 0
+  // TV Essencial e Premium são fragmentos do serviço TV único
+  // Prioridade: customPriceEssencial/customPricePremium > customPrice > price > 0
   const tvEssencialPricePerAccess =
-    tvEssencialService?.customPrice !== null && tvEssencialService?.customPrice !== undefined
-      ? tvEssencialService.customPrice
-      : tvEssencialService?.price ?? 0;
+    tvService?.customPriceEssencial !== null && tvService?.customPriceEssencial !== undefined
+      ? tvService.customPriceEssencial
+      : tvService?.customPrice !== null && tvService?.customPrice !== undefined
+      ? tvService.customPrice
+      : tvService?.price ?? 0;
   const tvEssencialTotal = tvEssencialPricePerAccess * tvEssencialAssignments.length;
 
   const tvPremiumPricePerAccess =
-    tvPremiumService?.customPrice !== null && tvPremiumService?.customPrice !== undefined
-      ? tvPremiumService.customPrice
-      : tvPremiumService?.price ?? 0;
+    tvService?.customPricePremium !== null && tvService?.customPricePremium !== undefined
+      ? tvService.customPricePremium
+      : tvService?.customPrice !== null && tvService?.customPrice !== undefined
+      ? tvService.customPrice
+      : tvService?.price ?? 0;
   const tvPremiumTotal = tvPremiumPricePerAccess * tvPremiumAssignments.length;
 
   // Debug: log dos serviços encontrados (depois de calcular os preços)
   if (isOpen) {
-    const tvGenericService = (client.services ?? []).find((service) => {
-      const normalized = normalizeServiceName(service.name);
-      return (
-        normalized.includes("tv") &&
-        !normalized.includes("essencial") &&
-        !normalized.includes("premium")
-      );
-    });
-
     console.log("🔍 Debug ClientValuesModal:", {
       clientName: client.name,
       allServices: (client.services ?? []).map((s) => ({
@@ -131,27 +102,17 @@ export function ClientValuesModal({ isOpen, onClose, client }: ClientValuesModal
         name: s.name,
         price: s.price,
         customPrice: s.customPrice,
+        customPriceEssencial: s.customPriceEssencial,
+        customPricePremium: s.customPricePremium,
         allowCustomPrice: s.allowCustomPrice,
       })),
-      tvGenericService: tvGenericService
+      tvService: tvService
         ? {
-            name: tvGenericService.name,
-            price: tvGenericService.price,
-            customPrice: tvGenericService.customPrice,
-          }
-        : null,
-      tvEssencialService: tvEssencialService
-        ? {
-            name: tvEssencialService.name,
-            price: tvEssencialService.price,
-            customPrice: tvEssencialService.customPrice,
-          }
-        : null,
-      tvPremiumService: tvPremiumService
-        ? {
-            name: tvPremiumService.name,
-            price: tvPremiumService.price,
-            customPrice: tvPremiumService.customPrice,
+            name: tvService.name,
+            price: tvService.price,
+            customPrice: tvService.customPrice,
+            customPriceEssencial: tvService.customPriceEssencial,
+            customPricePremium: tvService.customPricePremium,
           }
         : null,
       tvEssencialAssignments: tvEssencialAssignments.length,
@@ -198,34 +159,6 @@ export function ClientValuesModal({ isOpen, onClose, client }: ClientValuesModal
         <ModalCloseButton />
         <ModalBody>
           <VStack align="stretch" spacing={4}>
-            {/* Debug: Listar todos os serviços do cliente */}
-            {(tvEssencialAssignments.length > 0 || tvPremiumAssignments.length > 0) &&
-              (!tvEssencialService || !tvPremiumService) && (
-                <Box borderWidth={1} borderRadius="lg" p={3} bg="orange.50" borderColor="orange.200" _dark={{ bg: "orange.900", borderColor: "orange.700" }}>
-                  <Text fontSize="sm" fontWeight="semibold" mb={2} color="orange.700" _dark={{ color: "orange.300" }}>
-                    ⚠️ Informações de Debug
-                  </Text>
-                  <VStack align="stretch" spacing={1}>
-                    <Text fontSize="xs" color="orange.600" _dark={{ color: "orange.400" }}>
-                      Serviços vinculados ao cliente:
-                    </Text>
-                    {(client.services ?? []).map((service) => (
-                      <Text key={service.id} fontSize="xs" color="orange.600" _dark={{ color: "orange.400" }}>
-                        • {service.name} - Preço: {currencyFormatter.format(service.price)} | Custom:{" "}
-                        {service.customPrice !== null && service.customPrice !== undefined
-                          ? currencyFormatter.format(service.customPrice)
-                          : "não definido"}
-                      </Text>
-                    ))}
-                    {(!client.services || client.services.length === 0) && (
-                      <Text fontSize="xs" color="orange.600" _dark={{ color: "orange.400" }}>
-                        Nenhum serviço vinculado
-                      </Text>
-                    )}
-                  </VStack>
-                </Box>
-              )}
-
             {/* TV Essencial */}
             {tvEssencialAssignments.length > 0 && (
               <Box borderWidth={1} borderRadius="lg" p={4} bg={cardBg} borderColor={cardBorder}>
@@ -233,42 +166,18 @@ export function ClientValuesModal({ isOpen, onClose, client }: ClientValuesModal
                   <Text fontWeight="semibold">TV Essencial</Text>
                   <Badge colorScheme="teal">{tvEssencialAssignments.length} acesso(s)</Badge>
                 </HStack>
-                {tvEssencialService && tvEssencialPricePerAccess === 0 && (
+                {tvService && tvEssencialPricePerAccess === 0 && (
                   <Text fontSize="xs" color="orange.500" mb={2}>
                     ⚠️ Valor do serviço está zerado. Verifique o preço no cadastro do serviço.
                   </Text>
                 )}
-                {tvEssencialService && 
-                 normalizeServiceName(tvEssencialService.name).includes("tv") &&
-                 !normalizeServiceName(tvEssencialService.name).includes("essencial") &&
-                 !normalizeServiceName(tvEssencialService.name).includes("premium") && (
-                  <Text fontSize="xs" color="blue.500" mb={2}>
-                    ℹ️ Usando serviço genérico "TV" (preço pode ser compartilhado entre Essencial e Premium)
-                  </Text>
-                )}
                 <VStack align="stretch" spacing={1} mt={2}>
-                  <HStack justify="space-between">
-                    <Text fontSize="sm" color={mutedText}>
-                      Serviço:
-                    </Text>
-                    <Text fontSize="sm" fontWeight="medium">
-                      {tvEssencialService?.name ?? "Não encontrado"}
-                    </Text>
-                  </HStack>
                   <HStack justify="space-between">
                     <Text fontSize="sm" color={mutedText}>
                       Valor por acesso:
                     </Text>
                     <Text fontSize="sm" fontWeight="medium">
                       {currencyFormatter.format(tvEssencialPricePerAccess)}
-                      {tvEssencialService && (
-                        <Text as="span" fontSize="xs" color={mutedText} ml={2}>
-                          ({tvEssencialService.customPrice !== null && tvEssencialService.customPrice !== undefined
-                            ? `custom: ${currencyFormatter.format(tvEssencialService.customPrice)}`
-                            : `padrão: ${currencyFormatter.format(tvEssencialService.price)}`}
-                          )
-                        </Text>
-                      )}
                     </Text>
                   </HStack>
                   <HStack justify="space-between">
@@ -295,42 +204,18 @@ export function ClientValuesModal({ isOpen, onClose, client }: ClientValuesModal
                   <Text fontWeight="semibold">TV Premium</Text>
                   <Badge colorScheme="pink">{tvPremiumAssignments.length} acesso(s)</Badge>
                 </HStack>
-                {tvPremiumService && tvPremiumPricePerAccess === 0 && (
+                {tvService && tvPremiumPricePerAccess === 0 && (
                   <Text fontSize="xs" color="orange.500" mb={2}>
                     ⚠️ Valor do serviço está zerado. Verifique o preço no cadastro do serviço.
                   </Text>
                 )}
-                {tvPremiumService && 
-                 normalizeServiceName(tvPremiumService.name).includes("tv") &&
-                 !normalizeServiceName(tvPremiumService.name).includes("essencial") &&
-                 !normalizeServiceName(tvPremiumService.name).includes("premium") && (
-                  <Text fontSize="xs" color="blue.500" mb={2}>
-                    ℹ️ Usando serviço genérico "TV" (preço pode ser compartilhado entre Essencial e Premium)
-                  </Text>
-                )}
                 <VStack align="stretch" spacing={1} mt={2}>
-                  <HStack justify="space-between">
-                    <Text fontSize="sm" color={mutedText}>
-                      Serviço:
-                    </Text>
-                    <Text fontSize="sm" fontWeight="medium">
-                      {tvPremiumService?.name ?? "Não encontrado"}
-                    </Text>
-                  </HStack>
                   <HStack justify="space-between">
                     <Text fontSize="sm" color={mutedText}>
                       Valor por acesso:
                     </Text>
                     <Text fontSize="sm" fontWeight="medium">
                       {currencyFormatter.format(tvPremiumPricePerAccess)}
-                      {tvPremiumService && (
-                        <Text as="span" fontSize="xs" color={mutedText} ml={2}>
-                          ({tvPremiumService.customPrice !== null && tvPremiumService.customPrice !== undefined
-                            ? `custom: ${currencyFormatter.format(tvPremiumService.customPrice)}`
-                            : `padrão: ${currencyFormatter.format(tvPremiumService.price)}`}
-                          )
-                        </Text>
-                      )}
                     </Text>
                   </HStack>
                   <HStack justify="space-between">

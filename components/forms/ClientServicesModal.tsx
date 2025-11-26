@@ -153,25 +153,42 @@ export function ClientServicesModal({
   const [customPrices, setCustomPrices] = useState<Record<string, string>>({});
   const [customPricesEssencial, setCustomPricesEssencial] = useState<Record<string, string>>({});
   const [customPricesPremium, setCustomPricesPremium] = useState<Record<string, string>>({});
+  const [pricesInitialized, setPricesInitialized] = useState(false);
   const [additionalEssencial, setAdditionalEssencial] = useState<string>("0");
   const [additionalPremium, setAdditionalPremium] = useState<string>("0");
 
-  // Carregar dados existentes
+  // Carregar dados existentes - apenas UMA VEZ quando o modal abre
   useEffect(() => {
-    if (!isOpen || !client) return;
+    if (!isOpen || !client || pricesInitialized) {
+      return;
+    }
 
-    // Carregar preços personalizados
+    // Carregar preços personalizados apenas na primeira vez que o modal abre
     const prices: Record<string, string> = {};
     const pricesEssencial: Record<string, string> = {};
     const pricesPremium: Record<string, string> = {};
     (client.services ?? []).forEach((service) => {
-      if (service.customPrice !== undefined && service.customPrice !== null) {
-        // Se for serviço TV, verificar se há preços separados (por enquanto usar o mesmo para ambos)
-        if (service.name.toLowerCase().includes("tv")) {
-          // Por enquanto, usar o mesmo preço para ambos (pode ser ajustado depois se houver estrutura no backend)
-          pricesEssencial[service.id] = service.customPrice.toFixed(2).replace(".", ",");
-          pricesPremium[service.id] = service.customPrice.toFixed(2).replace(".", ",");
-        } else {
+      const serviceName = service.name.toLowerCase();
+      const isTvService = serviceName.includes("tv") && 
+                          !serviceName.includes("essencial") && 
+                          !serviceName.includes("premium");
+      
+      if (isTvService) {
+        // TV Essencial e Premium são fragmentos do serviço TV único
+        // IMPORTANTE: Ler APENAS os preços específicos, SEM fallback para customPrice
+        // Isso garante que os campos sejam completamente independentes
+        if (service.customPriceEssencial !== undefined && service.customPriceEssencial !== null) {
+          pricesEssencial[service.id] = service.customPriceEssencial.toFixed(2).replace(".", ",");
+        }
+        // Se não tiver customPriceEssencial, deixa vazio (não usa fallback)
+        
+        if (service.customPricePremium !== undefined && service.customPricePremium !== null) {
+          pricesPremium[service.id] = service.customPricePremium.toFixed(2).replace(".", ",");
+        }
+        // Se não tiver customPricePremium, deixa vazio (não usa fallback)
+      } else {
+        // Para outros serviços, usar customPrice normal
+        if (service.customPrice !== undefined && service.customPrice !== null) {
           prices[service.id] = service.customPrice.toFixed(2).replace(".", ",");
         }
       }
@@ -179,6 +196,7 @@ export function ClientServicesModal({
     setCustomPrices(prices);
     setCustomPricesEssencial(pricesEssencial);
     setCustomPricesPremium(pricesPremium);
+    setPricesInitialized(true);
 
     // Carregar configurações Cloud
     const cloudMap: Record<string, CloudSetupState> = {};
@@ -217,7 +235,9 @@ export function ClientServicesModal({
     }
 
     reset({ serviceIds: currentServiceIds });
-  }, [isOpen, client, currentServiceIds, reset]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, client?.id, pricesInitialized]); // Apenas executar quando o modal abre ou o cliente muda
+
 
   const tvServices = useMemo(
     () =>
@@ -262,6 +282,7 @@ export function ClientServicesModal({
     setCustomPrices({});
     setCustomPricesEssencial({});
     setCustomPricesPremium({});
+    setPricesInitialized(false);
     setAdditionalEssencial("0");
     setAdditionalPremium("0");
     onClose();
@@ -271,83 +292,51 @@ export function ClientServicesModal({
     try {
       const serviceIds = values.serviceIds ?? [];
       
-      // Verificar se há serviço TV genérico e preços diferentes para Essencial e Premium
-      const tvGenericService = serviceOptions.find((s) => {
+      // Encontrar serviço TV (genérico, não Essencial nem Premium)
+      const tvService = serviceOptions.find((s) => {
         const name = s.name.toLowerCase();
         return name.includes("tv") && !name.includes("essencial") && !name.includes("premium");
       });
       
-      const hasTvGeneric = tvGenericService && serviceIds.includes(tvGenericService.id);
-      const priceEssencialStr = tvGenericService ? customPricesEssencial[tvGenericService.id] : null;
-      const pricePremiumStr = tvGenericService ? customPricesPremium[tvGenericService.id] : null;
+      const hasTvService = tvService && serviceIds.includes(tvService.id);
+      
+      // Obter preços Essencial e Premium do serviço TV genérico
+      const priceEssencialStr = tvService ? customPricesEssencial[tvService.id] : null;
+      const pricePremiumStr = tvService ? customPricesPremium[tvService.id] : null;
       
       const priceEssencial = priceEssencialStr ? parseFloat(priceEssencialStr.replace(",", ".")) : null;
       const pricePremium = pricePremiumStr ? parseFloat(pricePremiumStr.replace(",", ".")) : null;
       
-      const hasDifferentPrices = hasTvGeneric && 
-        priceEssencial !== null && 
-        pricePremium !== null && 
-        priceEssencial !== pricePremium;
-      
-      // Se há preços diferentes, buscar ou criar serviços separados
-      let finalServiceIds = [...serviceIds];
-      if (hasDifferentPrices && tvGenericService) {
-        // Remover serviço TV genérico da lista
-        finalServiceIds = finalServiceIds.filter((id) => id !== tvGenericService.id);
-        
-        // Buscar serviços TV Essencial e TV Premium
-        const tvEssencialService = serviceOptions.find((s) => {
-          const name = s.name.toLowerCase();
-          return name.includes("tv") && name.includes("essencial");
-        });
-        
-        const tvPremiumService = serviceOptions.find((s) => {
-          const name = s.name.toLowerCase();
-          return name.includes("tv") && name.includes("premium");
-        });
-        
-        // Adicionar serviços separados se existirem
-        if (tvEssencialService && !finalServiceIds.includes(tvEssencialService.id)) {
-          finalServiceIds.push(tvEssencialService.id);
-        }
-        if (tvPremiumService && !finalServiceIds.includes(tvPremiumService.id)) {
-          finalServiceIds.push(tvPremiumService.id);
-        }
-      }
-      
-      const serviceSelections = finalServiceIds.map((serviceId) => {
+      // Criar seleções de serviços
+      // TV Essencial e Premium são fragmentos do serviço TV único, não serviços separados
+      const serviceSelections = serviceIds.map((serviceId) => {
         const service = serviceOptions.find((s) => s.id === serviceId);
-        const isTvService = service?.name.toLowerCase().includes("tv");
+        const isTvService = service?.name.toLowerCase().includes("tv") && 
+                           !service?.name.toLowerCase().includes("essencial") && 
+                           !service?.name.toLowerCase().includes("premium");
         
         let customPrice: number | null = null;
+        let customPriceEssencial: number | null = null;
+        let customPricePremium: number | null = null;
         
-        if (isTvService) {
-          // Para serviços TV, verificar se é ESSENCIAL ou PREMIUM
-          const isEssencial = service?.name.toLowerCase().includes("essencial");
-          const isPremium = service?.name.toLowerCase().includes("premium");
-          
-          if (isEssencial) {
-            // Se for TV Essencial, usar o preço do Essencial (mesmo que venha do genérico)
-            const priceStr = customPricesEssencial[serviceId] || (tvGenericService ? customPricesEssencial[tvGenericService.id] : null);
-            customPrice = priceStr ? parseFloat(priceStr.replace(",", ".")) : null;
-          } else if (isPremium) {
-            // Se for TV Premium, usar o preço do Premium (mesmo que venha do genérico)
-            const priceStr = customPricesPremium[serviceId] || (tvGenericService ? customPricesPremium[tvGenericService.id] : null);
-            customPrice = priceStr ? parseFloat(priceStr.replace(",", ".")) : null;
-          } else {
-            // Se for um serviço TV genérico e não há preços diferentes, usar o preço do ESSENCIAL como padrão
-            const priceStr = customPricesEssencial[serviceId] || customPricesPremium[serviceId];
-            customPrice = priceStr ? parseFloat(priceStr.replace(",", ".")) : null;
-          }
+        if (isTvService && hasTvService && serviceId === tvService.id) {
+          // Para o serviço TV único, salvar preços Essencial e Premium como campos separados
+          customPriceEssencial = isNaN(priceEssencial ?? NaN) ? null : priceEssencial;
+          customPricePremium = isNaN(pricePremium ?? NaN) ? null : pricePremium;
+          // customPrice pode ser usado como fallback ou null
+          customPrice = customPriceEssencial ?? customPricePremium ?? null;
         } else {
           // Para outros serviços, usar o preço normal
           const priceStr = customPrices[serviceId];
           customPrice = priceStr ? parseFloat(priceStr.replace(",", ".")) : null;
+          customPrice = isNaN(customPrice ?? NaN) ? null : customPrice;
         }
         
         return {
           serviceId,
-          customPrice: isNaN(customPrice ?? NaN) ? null : customPrice,
+          customPrice,
+          customPriceEssencial,
+          customPricePremium,
         };
       });
 
@@ -436,7 +425,7 @@ export function ClientServicesModal({
       }
 
       await onSubmit({
-        serviceIds: finalServiceIds,
+        serviceIds,
         serviceSelections,
         tvSetup: tvSetupPayload,
         cloudSetups: cloudSetupsPayload,
@@ -529,11 +518,18 @@ export function ClientServicesModal({
                             <FormControl>
                               <FormLabel>Preço personalizado - {service!.name} ESSENCIAL</FormLabel>
                               <Input
+                                id={`tv-essencial-${service!.id}`}
                                 placeholder="0,00"
-                                value={customPricesEssencial[service!.id] ?? ""}
+                                value={customPricesEssencial[service!.id] || ""}
                                 onChange={(e) => {
                                   const value = e.target.value.replace(/[^\d,]/g, "");
-                                  setCustomPricesEssencial((prev) => ({ ...prev, [service!.id]: value }));
+                                  const serviceId = service!.id;
+                                  // Atualizar APENAS o estado Essencial, sem tocar no Premium
+                                  setCustomPricesEssencial((prev) => {
+                                    const newState = { ...prev };
+                                    newState[serviceId] = value;
+                                    return newState;
+                                  });
                                 }}
                               />
                             </FormControl>
@@ -542,11 +538,18 @@ export function ClientServicesModal({
                             <FormControl>
                               <FormLabel>Preço personalizado - {service!.name} PREMIUM</FormLabel>
                               <Input
+                                id={`tv-premium-${service!.id}`}
                                 placeholder="0,00"
-                                value={customPricesPremium[service!.id] ?? ""}
+                                value={customPricesPremium[service!.id] || ""}
                                 onChange={(e) => {
                                   const value = e.target.value.replace(/[^\d,]/g, "");
-                                  setCustomPricesPremium((prev) => ({ ...prev, [service!.id]: value }));
+                                  const serviceId = service!.id;
+                                  // Atualizar APENAS o estado Premium, sem tocar no Essencial
+                                  setCustomPricesPremium((prev) => {
+                                    const newState = { ...prev };
+                                    newState[serviceId] = value;
+                                    return newState;
+                                  });
                                 }}
                               />
                             </FormControl>

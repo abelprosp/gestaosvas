@@ -31,6 +31,8 @@ type ClientRow = {
     | Array<{
         service: ServiceRow | null;
         custom_price: string | number | null;
+        custom_price_essencial: string | number | null;
+        custom_price_premium: string | number | null;
       } | null>
     | null;
   cloud_accesses?:
@@ -175,6 +177,17 @@ export function mapClientRow(row: ClientRow): Client {
           mapped.customPrice = typeof relation.custom_price === "number" ? relation.custom_price : Number(relation.custom_price);
         } else {
           mapped.customPrice = null;
+        }
+        // Preços específicos para TV Essencial e Premium (fragmentos do serviço TV)
+        if (relation.custom_price_essencial !== undefined && relation.custom_price_essencial !== null) {
+          mapped.customPriceEssencial = typeof relation.custom_price_essencial === "number" ? relation.custom_price_essencial : Number(relation.custom_price_essencial);
+        } else {
+          mapped.customPriceEssencial = null;
+        }
+        if (relation.custom_price_premium !== undefined && relation.custom_price_premium !== null) {
+          mapped.customPricePremium = typeof relation.custom_price_premium === "number" ? relation.custom_price_premium : Number(relation.custom_price_premium);
+        } else {
+          mapped.customPricePremium = null;
         }
         return mapped;
       })
