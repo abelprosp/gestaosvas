@@ -240,22 +240,49 @@ export function DashboardPage() {
   }, [salesData.services, allServices]);
 
   const activeServices = useMemo<SalesTimeseries["services"]>(() => {
-    // Filtrar serviços TV individuais (essencial e premium) do gráfico
-    const nonTvServices = availableServices.filter((service) => service.group !== "TV");
-    if (!selectedServiceNames.length) {
-      return nonTvServices;
+    const services: SalesTimeseries["services"] = [];
+    
+    // Adicionar serviço TV agregado (Essencial + Premium)
+    const tvEssencial = salesData.services.find((s) => s.key === "tv-essencial");
+    const tvPremium = salesData.services.find((s) => s.key === "tv-premium");
+    if (tvEssencial || tvPremium) {
+      services.push({
+        key: "tv-total",
+        name: "TV (Essencial + Premium)",
+        group: "TV" as const,
+      });
     }
-    return nonTvServices.filter((service) => selectedServiceNames.includes(service.name));
-  }, [availableServices, selectedServiceNames]);
+    
+    // Adicionar outros serviços não-TV
+    const nonTvServices = availableServices.filter((service) => service.group !== "TV");
+    
+    if (!selectedServiceNames.length) {
+      services.push(...nonTvServices);
+    } else {
+      const filtered = nonTvServices.filter((service) => selectedServiceNames.includes(service.name));
+      services.push(...filtered);
+    }
+    
+    return services;
+  }, [availableServices, selectedServiceNames, salesData.services]);
 
   const lineChartData = useMemo(() => {
     return salesData.points.map((point) => {
       const entry: Record<string, number | string> = {
         month: point.label,
       };
+      
       activeServices.forEach((service) => {
-        entry[service.key] = point.totals[service.key] ?? 0;
+        if (service.key === "tv-total") {
+          // Somar tv-essencial e tv-premium para a TV agregada
+          const tvEssencialTotal = point.totals["tv-essencial"] ?? 0;
+          const tvPremiumTotal = point.totals["tv-premium"] ?? 0;
+          entry[service.key] = tvEssencialTotal + tvPremiumTotal;
+        } else {
+          entry[service.key] = point.totals[service.key] ?? 0;
+        }
       });
+      
       return entry;
     });
   }, [salesData.points, activeServices]);
