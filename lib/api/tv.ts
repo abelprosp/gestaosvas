@@ -249,6 +249,28 @@ export async function releaseTVSlot(slotId: string) {
   }
 }
 
+export async function deleteTVSlot(slotId: string) {
+  try {
+    const response = await api.delete<{
+      message: string;
+      deletedSlot: {
+        id: string;
+        slotNumber: number;
+        email?: string;
+      };
+    }>(`/tv/slots/${slotId}`);
+    return response.data;
+  } catch (error) {
+    const typedError = error as ApiError;
+    if (isSchemaUnavailable(typedError)) {
+      throw new Error(
+        "As tabelas de TV ainda não estão disponíveis. Rode as migrações no Supabase para utilizar essa funcionalidade.",
+      );
+    }
+    throw typedError;
+  }
+}
+
 export async function regenerateTVSlotPassword(slotId: string) {
   try {
     const response = await api.post(`/tv/slots/${slotId}/regenerate-password`);

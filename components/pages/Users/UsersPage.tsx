@@ -51,7 +51,7 @@ import {
   FiPhone,
   FiTrash2,
 } from "react-icons/fi";
-import { fetchTVOverview, regenerateTVSlotPassword, releaseTVSlot, updateTVSlot, updateTVAccountEmail, deleteTVAccount, getNextEmailInfo, listTVAccounts, TVAccountInfo, getTVAccountSlots, TVAccountSlot, fetchTVAccountUsage } from "@/lib/api/tv";
+import { fetchTVOverview, regenerateTVSlotPassword, releaseTVSlot, updateTVSlot, updateTVAccountEmail, deleteTVAccount, getNextEmailInfo, listTVAccounts, TVAccountInfo, getTVAccountSlots, TVAccountSlot, fetchTVAccountUsage, deleteTVSlot } from "@/lib/api/tv";
 import { PaginatedResponse, TVOverviewRecord, TVSlotStatus } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { createRequest } from "@/lib/api/requests";
@@ -231,6 +231,13 @@ export function UsersPage() {
     queryFn: getNextEmailInfo,
     staleTime: 30 * 1000,
     refetchInterval: 60 * 1000, // Atualizar a cada minuto
+  });
+
+  // Buscar lista de contas para popular o select de emails padrão
+  const { data: accountsListForSelect } = useQuery({
+    queryKey: ["tvAccounts"],
+    queryFn: listTVAccounts,
+    staleTime: 30 * 1000,
   });
 
   const records = useMemo<TVOverviewRecord[]>(() => overview?.data ?? [], [overview]);
@@ -569,6 +576,8 @@ export function UsersPage() {
       await updateTVAccountEmail(editingAccountId, editingEmail.trim());
       toast({ title: "E-mail atualizado com sucesso", status: "success" });
       queryClient.invalidateQueries({ queryKey: ["tvOverview"] });
+      queryClient.invalidateQueries({ queryKey: ["tvNextEmail"] });
+      queryClient.invalidateQueries({ queryKey: ["tvAccounts"] });
       editEmailModal.onClose();
       setEditingAccountId(null);
       setEditingEmail("");
@@ -627,6 +636,8 @@ export function UsersPage() {
         isClosable: true
       });
       queryClient.invalidateQueries({ queryKey: ["tvOverview"] });
+      queryClient.invalidateQueries({ queryKey: ["tvNextEmail"] });
+      queryClient.invalidateQueries({ queryKey: ["tvAccounts"] });
       editEmailModal.onClose();
       setEditingAccountId(null);
       setEditingEmail("");
@@ -669,27 +680,47 @@ export function UsersPage() {
       </Flex>
 
       {isAdmin && nextEmailInfo && (
-        <HStack spacing={3}>
+        <HStack spacing={3} flexWrap="wrap">
           <Box p={3} bg={tableBg} borderRadius="md" borderWidth={1} borderColor={borderColor} minW="250px">
             <HStack justify="space-between" mb={2}>
               <Text fontSize="sm" color="gray.500">Próximo email:</Text>
+            </HStack>
+            <Text fontWeight="semibold" color="brand.500">{nextEmailInfo.nextEmail}</Text>
+            <Text fontSize="xs" color="gray.500" mt={1}>
+              {nextEmailInfo.availableSlots} acesso(s) livre(s)
+            </Text>
+          </Box>
+          <Box p={3} bg={tableBg} borderRadius="md" borderWidth={1} borderColor={borderColor} minW="280px">
+            <HStack justify="space-between" mb={2}>
+              <Text fontSize="sm" color="gray.500">Editar email padrão:</Text>
               <Button
                 size="xs"
                 variant="ghost"
                 leftIcon={<FiEdit />}
                 onClick={async () => {
                   try {
-                    // Buscar o ID da conta do próximo email
+                    const selectedEmail = (document.getElementById("email-select") as HTMLSelectElement)?.value;
+                    if (!selectedEmail) {
+                      toast({
+                        title: "Selecione um email",
+                        description: "Por favor, selecione um email padrão para editar",
+                        status: "warning",
+                        duration: 3000,
+                      });
+                      return;
+                    }
+
+                    // Buscar o ID da conta do email selecionado
                     let accounts = await listTVAccounts();
-                    let nextAccount = accounts.find(a => a.email === nextEmailInfo.nextEmail);
+                    let selectedAccount = accounts.find(a => a.email === selectedEmail);
                     
                     // Se a conta não existir, criar ela automaticamente
-                    if (!nextAccount) {
+                    if (!selectedAccount) {
                       try {
                         const response = await fetch("/api/tv/accounts", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ email: nextEmailInfo.nextEmail }),
+                          body: JSON.stringify({ email: selectedEmail }),
                         });
                         
                         if (!response.ok) {
@@ -700,9 +731,9 @@ export function UsersPage() {
                         const data = await response.json();
                         // Recarregar lista de contas
                         accounts = await listTVAccounts();
-                        nextAccount = accounts.find(a => a.email === nextEmailInfo.nextEmail);
+                        selectedAccount = accounts.find(a => a.email === selectedEmail);
                         
-                        if (!nextAccount) {
+                        if (!selectedAccount) {
                           throw new Error("Conta criada mas não encontrada na lista");
                         }
                       } catch (createError: any) {
@@ -716,13 +747,13 @@ export function UsersPage() {
                       }
                     }
                     
-                    if (nextAccount) {
-                      setEditingAccountId(nextAccount.id);
-                      setEditingEmail(nextAccount.email);
-                      setOriginalEmail(nextAccount.email);
+                    if (selectedAccount) {
+                      setEditingAccountId(selectedAccount.id);
+                      setEditingEmail(selectedAccount.email);
+                      setOriginalEmail(selectedAccount.email);
                       // Buscar informações de uso
                       try {
-                        const usage = await fetchTVAccountUsage(nextAccount.id);
+                        const usage = await fetchTVAccountUsage(selectedAccount.id);
                         setAccountUsageInfo(usage);
                       } catch (error) {
                         console.error("Erro ao buscar uso da conta:", error);
@@ -743,10 +774,48 @@ export function UsersPage() {
                 Editar
               </Button>
             </HStack>
-            <Text fontWeight="semibold" color="brand.500">{nextEmailInfo.nextEmail}</Text>
-            <Text fontSize="xs" color="gray.500" mt={1}>
-              {nextEmailInfo.availableSlots} acesso(s) livre(s)
-            </Text>
+            <Select
+              id="email-select"
+              size="sm"
+              defaultValue={nextEmailInfo.nextEmail}
+              placeholder="Selecione um email padrão"
+            >
+              {(() => {
+                // Gerar lista de emails padrão (1a8, 9a16, 17a24, etc.)
+                const emails: Array<{ email: string; exists: boolean; availableSlots: number }> = [];
+                
+                // Determinar até onde gerar emails (até o próximo disponível + alguns extras)
+                let maxIndex = 10; // Mínimo de 10 emails
+                if (nextEmailInfo) {
+                  const match = nextEmailInfo.nextEmail.match(/^(\d+)a\d+@nexusrs\.com\.br$/);
+                  if (match) {
+                    const nextStart = parseInt(match[1]);
+                    maxIndex = Math.max(maxIndex, Math.ceil(nextStart / 8) + 3); // Adicionar 3 extras além do próximo
+                  }
+                }
+                
+                // Gerar emails padrão
+                for (let i = 0; i < maxIndex; i++) {
+                  const start = i * 8 + 1;
+                  const end = start + 7;
+                  const email = `${start}a${end}@nexusrs.com.br`;
+                  
+                  // Verificar se a conta existe e quantos slots tem disponíveis
+                  const account = accountsListForSelect?.find(acc => acc.email === email);
+                  emails.push({
+                    email,
+                    exists: !!account,
+                    availableSlots: account?.availableSlots ?? 0,
+                  });
+                }
+                
+                return emails.map(({ email, exists, availableSlots }) => (
+                  <option key={email} value={email}>
+                    {email} {exists ? `(${availableSlots} livres)` : "(não existe)"}
+                  </option>
+                ));
+              })()}
+            </Select>
           </Box>
         </HStack>
       )}
@@ -1673,47 +1742,91 @@ export function UsersPage() {
                                                     )}
                                                   </Td>
                                                   <Td>
-                                                    {slot.status === "ASSIGNED" && slot.clientId ? (
-                                                      <Button
-                                                        size="xs"
-                                                        colorScheme="red"
-                                                        variant="outline"
-                                                        onClick={async (e) => {
-                                                          e.stopPropagation();
-                                                          const confirmed = window.confirm(
-                                                            `Liberar slot #${slot.slotNumber} do cliente ${slot.client?.name || "desconhecido"}?`
-                                                          );
-                                                          if (!confirmed) return;
-                                                          
-                                                          try {
-                                                            await releaseTVSlot(slot.id);
-                                                            toast({
-                                                              title: "Slot liberado com sucesso",
-                                                              status: "success",
-                                                              duration: 3000,
-                                                            });
-                                                            // Recarregar slots
-                                                            const slotsData = await getTVAccountSlots(account.id);
-                                                            setAccountSlots(prev => ({ ...prev, [account.id]: slotsData }));
-                                                            // Atualizar lista de contas
-                                                            const accounts = await listTVAccounts();
-                                                            setAccountsList(accounts);
-                                                            queryClient.invalidateQueries({ queryKey: ["tvOverview"] });
-                                                            queryClient.invalidateQueries({ queryKey: ["tvNextEmail"] });
-                                                          } catch (error) {
-                                                            toast({
-                                                              title: "Erro ao liberar slot",
-                                                              status: "error",
-                                                              duration: 3000,
-                                                            });
-                                                          }
-                                                        }}
-                                                      >
-                                                        Liberar
-                                                      </Button>
-                                                    ) : (
-                                                      <Text fontSize="xs" color="gray.500">-</Text>
-                                                    )}
+                                                    <HStack spacing={2}>
+                                                      {slot.status === "ASSIGNED" && slot.clientId ? (
+                                                        <Button
+                                                          size="xs"
+                                                          colorScheme="orange"
+                                                          variant="outline"
+                                                          onClick={async (e) => {
+                                                            e.stopPropagation();
+                                                            const confirmed = window.confirm(
+                                                              `Liberar slot #${slot.slotNumber} do cliente ${slot.client?.name || "desconhecido"}?`
+                                                            );
+                                                            if (!confirmed) return;
+                                                            
+                                                            try {
+                                                              await releaseTVSlot(slot.id);
+                                                              toast({
+                                                                title: "Slot liberado com sucesso",
+                                                                status: "success",
+                                                                duration: 3000,
+                                                              });
+                                                              // Recarregar slots
+                                                              const slotsData = await getTVAccountSlots(account.id);
+                                                              setAccountSlots(prev => ({ ...prev, [account.id]: slotsData }));
+                                                              // Atualizar lista de contas
+                                                              const accounts = await listTVAccounts();
+                                                              setAccountsList(accounts);
+                                                              queryClient.invalidateQueries({ queryKey: ["tvOverview"] });
+                                                              queryClient.invalidateQueries({ queryKey: ["tvNextEmail"] });
+                                                              queryClient.invalidateQueries({ queryKey: ["tvAccounts"] });
+                                                            } catch (error: any) {
+                                                              toast({
+                                                                title: "Erro ao liberar slot",
+                                                                description: error?.response?.data?.message || error?.message || "Erro desconhecido",
+                                                                status: "error",
+                                                                duration: 5000,
+                                                              });
+                                                            }
+                                                          }}
+                                                        >
+                                                          Liberar
+                                                        </Button>
+                                                      ) : slot.status === "AVAILABLE" ? (
+                                                        <Button
+                                                          size="xs"
+                                                          colorScheme="red"
+                                                          variant="outline"
+                                                          onClick={async (e) => {
+                                                            e.stopPropagation();
+                                                            const confirmed = window.confirm(
+                                                              `Tem certeza que deseja remover permanentemente o slot #${slot.slotNumber}?\n\nEsta ação não pode ser desfeita.`
+                                                            );
+                                                            if (!confirmed) return;
+                                                            
+                                                            try {
+                                                              await deleteTVSlot(slot.id);
+                                                              toast({
+                                                                title: "Slot removido com sucesso",
+                                                                status: "success",
+                                                                duration: 3000,
+                                                              });
+                                                              // Recarregar slots
+                                                              const slotsData = await getTVAccountSlots(account.id);
+                                                              setAccountSlots(prev => ({ ...prev, [account.id]: slotsData }));
+                                                              // Atualizar lista de contas
+                                                              const accounts = await listTVAccounts();
+                                                              setAccountsList(accounts);
+                                                              queryClient.invalidateQueries({ queryKey: ["tvOverview"] });
+                                                              queryClient.invalidateQueries({ queryKey: ["tvNextEmail"] });
+                                                              queryClient.invalidateQueries({ queryKey: ["tvAccounts"] });
+                                                            } catch (error: any) {
+                                                              toast({
+                                                                title: "Erro ao remover slot",
+                                                                description: error?.response?.data?.message || error?.message || "Erro desconhecido",
+                                                                status: "error",
+                                                                duration: 5000,
+                                                              });
+                                                            }
+                                                          }}
+                                                        >
+                                                          Remover
+                                                        </Button>
+                                                      ) : (
+                                                        <Text fontSize="xs" color="gray.500">-</Text>
+                                                      )}
+                                                    </HStack>
                                                   </Td>
                                                 </Tr>
                                               ))}

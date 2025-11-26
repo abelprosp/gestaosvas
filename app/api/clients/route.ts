@@ -535,19 +535,18 @@ export const GET = createApiHandler(async (req) => {
 
   // Se houver filtro de telefonia, aplicamos aqui (menos eficiente, mas funcional)
   let filteredClients = clients;
+  const clientIds = clients.map(c => c.id);
+  const assignmentsMap = await fetchTvAssignmentsForClients(clientIds);
+  
   if (hasTelephonyFilter === "WITH_TELEPHONY") {
       // Precisamos buscar os slots para saber quem tem telefonia
-      const clientIds = clients.map(c => c.id);
-      const assignmentsMap = await fetchTvAssignmentsForClients(clientIds);
-      
       filteredClients = clients.filter(client => {
           const assignments = assignmentsMap.get(client.id) ?? [];
-          return assignments.some(a => a.hasTelephony);
+          // Verifica se algum assignment tem telefonia habilitada (true)
+          return assignments.some(a => a.hasTelephony === true);
       });
   } else {
       // Popula assignments para todos (opcional, mas bom para a lista)
-      const clientIds = clients.map(c => c.id);
-      const assignmentsMap = await fetchTvAssignmentsForClients(clientIds);
       filteredClients.forEach(client => {
           client.tvAssignments = assignmentsMap.get(client.id) ?? [];
       });

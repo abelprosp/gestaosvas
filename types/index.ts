@@ -224,5 +224,6 @@ export interface ServiceReportRow {
   clientVendorName?: string | null; // Nome do vendor que cadastrou o cliente (opened_by)
   serviceVendorName?: string | null; // Nome do vendor que cadastrou o serviço (sold_by)
   serviceValue?: number | null; // Valor do serviço (custom_price)
+  hasTelephony?: boolean | null; // Se tem telefonia (apenas para TV)
 }
 

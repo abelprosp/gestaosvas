@@ -155,6 +155,7 @@ export function ServiceReportsPage() {
         "Vendor do Cliente": row.clientVendorName ?? "",
         "Vendor do Serviço": row.serviceVendorName ?? "",
         "Valor do Serviço": serviceValue > 0 ? `R$ ${serviceValue.toFixed(2)}` : "",
+        Telefonia: row.hasTelephony === true ? "Sim" : row.hasTelephony === false ? "Não" : "",
         Documento: row.clientDocument,
         Email: row.clientEmail ?? "",
         Categoria: CATEGORY_LABELS[row.category],

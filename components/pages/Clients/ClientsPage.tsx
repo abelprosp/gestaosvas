@@ -247,7 +247,7 @@ export function ClientsPage() {
     isLoading,
     isFetching,
   } = useQuery<PaginatedResponse<Client>>({
-    queryKey: ["clients", { page, search: searchTerm, documentType: documentTypeFilter }],
+    queryKey: ["clients", { page, search: searchTerm, documentType: documentTypeFilter, hasTelephony: telephonyFilter }],
     queryFn: async () => {
       const response = await api.get<PaginatedResponse<Client>>("/clients", {
         params: {
@@ -255,6 +255,7 @@ export function ClientsPage() {
           limit,
           ...(searchTerm ? { search: searchTerm } : {}),
           ...(documentTypeFilter !== "ALL" ? { documentType: documentTypeFilter } : {}),
+          ...(telephonyFilter ? { hasTelephony: "WITH_TELEPHONY" } : {}),
         },
       });
       return response.data;
@@ -281,10 +282,17 @@ export function ClientsPage() {
     const term = searchTerm.toLowerCase();
     let scopedClients: Client[] = clients;
     
-    // Filtro de telefonia
+    // Filtro de telefonia (aplicado como fallback caso o backend não tenha filtrado)
     if (telephonyFilter) {
       scopedClients = scopedClients.filter((client: Client) => {
-        return (client.tvAssignments ?? []).some((assignment: ClientTVAssignment) => assignment.hasTelephony === true);
+        const assignments = client.tvAssignments ?? [];
+        // Se não temos assignments ainda, não podemos filtrar aqui
+        // O backend deve ter filtrado, então assumimos que se chegou aqui, tem telefonia
+        if (assignments.length === 0) {
+          // Se não temos assignments, confiamos que o backend já filtrou corretamente
+          return true;
+        }
+        return assignments.some((assignment: ClientTVAssignment) => assignment.hasTelephony === true);
       });
     }
     

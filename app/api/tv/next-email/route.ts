@@ -65,7 +65,7 @@ export const GET = createApiHandler(async (req) => {
     let availableSlots = 0;
     let exists = false;
 
-    // Verificar cada email padrão em sequência até encontrar um com slots disponíveis
+    // Primeiro, tentar encontrar uma conta existente com slots disponíveis
     for (let index = 0; index < 100; index++) { // Limite de segurança
       const email = buildEmail(index);
       const account = standardAccounts.find(acc => acc.email === email);
@@ -92,12 +92,23 @@ export const GET = createApiHandler(async (req) => {
           break;
         }
         // Se não tem slots disponíveis, continua para o próximo
-      } else {
-        // Conta não existe, este será o próximo email a ser criado
-        nextEmail = email;
-        availableSlots = 0;
-        exists = false;
-        break;
+      }
+    }
+
+    // Se não encontrou nenhuma conta com slots disponíveis, 
+    // retornar o primeiro email que não existe na sequência
+    if (!exists) {
+      for (let index = 0; index < 100; index++) {
+        const email = buildEmail(index);
+        const account = standardAccounts.find(acc => acc.email === email);
+        
+        if (!account) {
+          // Conta não existe, este será o próximo email a ser criado
+          nextEmail = email;
+          availableSlots = 0;
+          exists = false;
+          break;
+        }
       }
     }
 

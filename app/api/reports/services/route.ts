@@ -29,6 +29,7 @@ type ReportRow = {
   clientVendorName?: string | null; // Nome do vendor que cadastrou o cliente (opened_by)
   serviceVendorName?: string | null; // Nome do vendor que cadastrou o serviço (sold_by)
   serviceValue?: number | null; // Valor do serviço (custom_price)
+  hasTelephony?: boolean | null; // Se tem telefonia (apenas para TV)
 };
 
 type TvSlotRow = {
@@ -43,6 +44,7 @@ type TvSlotRow = {
   expires_at?: string | null;
   notes?: string | null;
   plan_type?: string | null;
+  has_telephony?: boolean | null;
   tv_accounts?: { email?: string | null } | null;
 };
 
@@ -124,7 +126,7 @@ export const GET = createApiHandler(async (req) => {
       const { data: tvSlots, error: tvError } = await supabase
         .from("tv_slots")
         .select(
-          "id, client_id, slot_number, username, status, sold_by, sold_at, starts_at, expires_at, notes, plan_type, tv_accounts(email)",
+          "id, client_id, slot_number, username, status, sold_by, sold_at, starts_at, expires_at, notes, plan_type, has_telephony, tv_accounts(email)",
         )
         .in("client_id", clientIds);
 
@@ -158,6 +160,7 @@ export const GET = createApiHandler(async (req) => {
           clientVendorName: client.opened_by ? vendorsMap.get(client.opened_by) ?? null : null,
           serviceVendorName: slot.sold_by ? vendorsMap.get(slot.sold_by) ?? null : null,
           serviceValue: null, // TV não tem custom_price direto
+          hasTelephony: slot.has_telephony ?? null,
         });
       });
     } catch (error) {
@@ -201,6 +204,7 @@ export const GET = createApiHandler(async (req) => {
           clientVendorName: client.opened_by ? vendorsMap.get(client.opened_by) ?? null : null,
           serviceVendorName: (access as any).sold_by ? vendorsMap.get((access as any).sold_by) ?? null : null,
           serviceValue: null, // Cloud não tem custom_price direto
+          hasTelephony: null, // Cloud não tem telefonia
         });
       });
     } catch (error) {
@@ -265,6 +269,7 @@ export const GET = createApiHandler(async (req) => {
           clientVendorName: client.opened_by ? vendorsMap.get(client.opened_by) ?? null : null,
           serviceVendorName: relation.sold_by ? vendorsMap.get(relation.sold_by) ?? null : null,
           serviceValue: relation.custom_price ?? null,
+          hasTelephony: null, // Serviços gerais não têm telefonia
         });
       });
     } catch (error) {
