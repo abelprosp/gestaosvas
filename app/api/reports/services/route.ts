@@ -25,6 +25,10 @@ type ReportRow = {
   startsAt?: string | null;
   expiresAt?: string | null;
   notes?: string | null;
+  // Novos campos
+  clientVendorName?: string | null; // Nome do vendor que cadastrou o cliente (opened_by)
+  serviceVendorName?: string | null; // Nome do vendor que cadastrou o serviço (sold_by)
+  serviceValue?: number | null; // Valor do serviço (custom_price)
 };
 
 type TvSlotRow = {
@@ -49,6 +53,7 @@ type CloudAccessRow = {
   expires_at: string;
   is_test: boolean;
   notes?: string | null;
+  sold_by?: string | null;
   service?: { id?: string; name?: string } | null;
 };
 
@@ -68,9 +73,23 @@ export const GET = createApiHandler(async (req) => {
   const safeLimit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 10000) : 2000;
 
   try {
+    // Buscar todos os vendors para mapear IDs para nomes
+    const { data: vendorsData, error: vendorsError } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    const vendorsMap = new Map<string, string>();
+    if (!vendorsError && vendorsData?.users) {
+      vendorsData.users.forEach((user) => {
+        const name = (user.user_metadata as { name?: string } | undefined)?.name;
+        if (name) {
+          vendorsMap.set(user.id, name);
+        } else if (user.email) {
+          vendorsMap.set(user.id, user.email);
+        }
+      });
+    }
+
     let clientQuery = supabase
       .from("clients")
-      .select("id, name, document, email, cost_center, company_name")
+      .select("id, name, document, email, cost_center, company_name, opened_by")
       .order("name", { ascending: true });
 
     if (document) {
@@ -136,6 +155,9 @@ export const GET = createApiHandler(async (req) => {
           startsAt: slot.starts_at ?? null,
           expiresAt: slot.expires_at ?? null,
           notes: slot.notes ?? null,
+          clientVendorName: client.opened_by ? vendorsMap.get(client.opened_by) ?? null : null,
+          serviceVendorName: slot.sold_by ? vendorsMap.get(slot.sold_by) ?? null : null,
+          serviceValue: null, // TV não tem custom_price direto
         });
       });
     } catch (error) {
@@ -146,7 +168,7 @@ export const GET = createApiHandler(async (req) => {
     try {
       const { data: cloudData, error: cloudError } = await supabase
         .from("cloud_accesses")
-        .select("id, client_id, service_id, expires_at, is_test, notes, service:services(id, name)")
+        .select("id, client_id, service_id, expires_at, is_test, notes, sold_by, service:services(id, name)")
         .in("client_id", clientIds);
 
       if (cloudError && !isSchemaMissing(cloudError)) {
@@ -176,6 +198,9 @@ export const GET = createApiHandler(async (req) => {
           startsAt: null,
           expiresAt: access.expires_at,
           notes: access.notes ?? null,
+          clientVendorName: client.opened_by ? vendorsMap.get(client.opened_by) ?? null : null,
+          serviceVendorName: (access as any).sold_by ? vendorsMap.get((access as any).sold_by) ?? null : null,
+          serviceValue: null, // Cloud não tem custom_price direto
         });
       });
     } catch (error) {
@@ -186,7 +211,7 @@ export const GET = createApiHandler(async (req) => {
     try {
       const { data: serviceData, error: serviceError } = await supabase
         .from("client_services")
-        .select("client_id, service:services(id, name)")
+        .select("client_id, custom_price, sold_by, service:services(id, name)")
         .in("client_id", clientIds);
 
       if (serviceError && !isSchemaMissing(serviceError)) {
@@ -198,7 +223,7 @@ export const GET = createApiHandler(async (req) => {
         tvData?.map((slot) => slot.client_id).filter(Boolean) ?? [],
       );
 
-      (serviceData as ClientServiceRow[] | null | undefined)?.forEach((relation) => {
+      (serviceData as (ClientServiceRow & { custom_price?: number | null; sold_by?: string | null })[] | null | undefined)?.forEach((relation) => {
         const client = clients.find((item) => item.id === relation.client_id);
         if (!client || !relation.service) {
           return;
@@ -237,6 +262,9 @@ export const GET = createApiHandler(async (req) => {
           startsAt: null,
           expiresAt: null,
           notes: null,
+          clientVendorName: client.opened_by ? vendorsMap.get(client.opened_by) ?? null : null,
+          serviceVendorName: relation.sold_by ? vendorsMap.get(relation.sold_by) ?? null : null,
+          serviceValue: relation.custom_price ?? null,
         });
       });
     } catch (error) {
@@ -250,7 +278,13 @@ export const GET = createApiHandler(async (req) => {
     }
 
     if (serviceQuery) {
-      filteredRows = filteredRows.filter((row) => row.serviceName.toLowerCase().includes(serviceQuery));
+      // Suporta múltiplos serviços separados por vírgula
+      const serviceQueries = serviceQuery.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+      if (serviceQueries.length > 0) {
+        filteredRows = filteredRows.filter((row) => 
+          serviceQueries.some(query => row.serviceName.toLowerCase().includes(query))
+        );
+      }
     }
 
     if (document) {

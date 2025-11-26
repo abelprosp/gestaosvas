@@ -204,3 +204,25 @@ export interface PaginatedResponse<T> {
   totalPages: number;
 }
 
+export interface ServiceReportRow {
+  id: string;
+  category: "TV" | "CLOUD" | "HUB" | "TELE" | "SERVICE";
+  clientId: string;
+  clientName: string;
+  clientDocument: string;
+  clientEmail?: string | null;
+  serviceId?: string | null;
+  serviceName: string;
+  identifier: string;
+  planType?: string | null;
+  responsible?: string | null;
+  status?: string | null;
+  startsAt?: string | null;
+  expiresAt?: string | null;
+  notes?: string | null;
+  // Novos campos
+  clientVendorName?: string | null; // Nome do vendor que cadastrou o cliente (opened_by)
+  serviceVendorName?: string | null; // Nome do vendor que cadastrou o serviço (sold_by)
+  serviceValue?: number | null; // Valor do serviço (custom_price)
+}
+

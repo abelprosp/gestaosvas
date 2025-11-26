@@ -75,6 +75,7 @@ interface ClientServicesModalProps {
 type TvSetupState = {
   quantityEssencial: string;
   quantityPremium: string;
+  customEmail: string; // Email personalizado (cria conta com 1 slot exclusivo)
   soldBy: string;
   soldAt: string;
   startsAt: string;
@@ -94,6 +95,7 @@ function buildInitialTvSetup(): TvSetupState {
   return {
     quantityEssencial: "0",
     quantityPremium: "0",
+    customEmail: "",
     soldBy: "",
     soldAt: today,
     startsAt: today,
@@ -154,8 +156,6 @@ export function ClientServicesModal({
   const [customPricesEssencial, setCustomPricesEssencial] = useState<Record<string, string>>({});
   const [customPricesPremium, setCustomPricesPremium] = useState<Record<string, string>>({});
   const [pricesInitialized, setPricesInitialized] = useState(false);
-  const [additionalEssencial, setAdditionalEssencial] = useState<string>("0");
-  const [additionalPremium, setAdditionalPremium] = useState<string>("0");
 
   // Carregar dados existentes - apenas UMA VEZ quando o modal abre
   useEffect(() => {
@@ -215,9 +215,14 @@ export function ClientServicesModal({
     if (client.tvAssignments && client.tvAssignments.length > 0) {
       const firstAssignment = client.tvAssignments[0];
       
+      // Contar acessos existentes por tipo
+      const existingEssencial = client.tvAssignments.filter((a) => (a.planType ?? "ESSENCIAL") === "ESSENCIAL").length;
+      const existingPremium = client.tvAssignments.filter((a) => a.planType === "PREMIUM").length;
+      
       setTvSetup({
-        quantityEssencial: "0", // Não usar total, usar campos de adicionar
-        quantityPremium: "0",
+        quantityEssencial: String(existingEssencial), // Usar total atual
+        quantityPremium: String(existingPremium), // Usar total atual
+        customEmail: "", // Não carregar email personalizado ao editar
         soldBy: firstAssignment.soldBy ?? "",
         soldAt: firstAssignment.soldAt ? firstAssignment.soldAt.slice(0, 10) : new Date().toISOString().slice(0, 10),
         startsAt: firstAssignment.startsAt ? firstAssignment.startsAt.slice(0, 10) : new Date().toISOString().slice(0, 10),
@@ -225,13 +230,6 @@ export function ClientServicesModal({
         notes: firstAssignment.notes ?? "",
         hasTelephony: firstAssignment.hasTelephony ?? false,
       });
-      // Resetar campos de adicionar
-      setAdditionalEssencial("0");
-      setAdditionalPremium("0");
-    } else {
-      // Se não há acessos, resetar campos de adicionar
-      setAdditionalEssencial("0");
-      setAdditionalPremium("0");
     }
 
     reset({ serviceIds: currentServiceIds });
@@ -283,8 +281,6 @@ export function ClientServicesModal({
     setCustomPricesEssencial({});
     setCustomPricesPremium({});
     setPricesInitialized(false);
-    setAdditionalEssencial("0");
-    setAdditionalPremium("0");
     onClose();
   };
 
@@ -367,35 +363,18 @@ export function ClientServicesModal({
         }
 
         if (hasSoldBy && hasExpiresAt) {
-          // Se há acessos existentes, usar campos de "adicionar", senão usar campos principais
-          const hasExistingAccesses = client?.tvAssignments && client.tvAssignments.length > 0;
-          
-          let quantityEssencial = 0;
-          let quantityPremium = 0;
-          
-          if (hasExistingAccesses) {
-            // Somar aos existentes
-            const existingEssencial = client.tvAssignments.filter((a) => (a.planType ?? "ESSENCIAL") === "ESSENCIAL").length;
-            const existingPremium = client.tvAssignments.filter((a) => a.planType === "PREMIUM").length;
-            
-            const addEssencial = parseInt(additionalEssencial || "0", 10);
-            const addPremium = parseInt(additionalPremium || "0", 10);
-            
-            quantityEssencial = existingEssencial + (Number.isFinite(addEssencial) && addEssencial >= 0 ? Math.min(50, addEssencial) : 0);
-            quantityPremium = existingPremium + (Number.isFinite(addPremium) && addPremium >= 0 ? Math.min(50, addPremium) : 0);
-          } else {
-            // Usar campos principais (criação inicial)
-            const parsedEssencial = parseInt(tvSetup.quantityEssencial || "0", 10);
-            const parsedPremium = parseInt(tvSetup.quantityPremium || "0", 10);
-            quantityEssencial = Number.isFinite(parsedEssencial) && parsedEssencial >= 0 ? Math.min(50, parsedEssencial) : 0;
-            quantityPremium = Number.isFinite(parsedPremium) && parsedPremium >= 0 ? Math.min(50, parsedPremium) : 0;
-          }
+          // Sempre usar campos principais (total desejado)
+          const parsedEssencial = parseInt(tvSetup.quantityEssencial || "0", 10);
+          const parsedPremium = parseInt(tvSetup.quantityPremium || "0", 10);
+          const quantityEssencial = Number.isFinite(parsedEssencial) && parsedEssencial >= 0 ? Math.min(50, parsedEssencial) : 0;
+          const quantityPremium = Number.isFinite(parsedPremium) && parsedPremium >= 0 ? Math.min(50, parsedPremium) : 0;
 
           // Se pelo menos uma quantidade for maior que 0, criar payload
           if (quantityEssencial > 0 || quantityPremium > 0) {
             tvSetupPayload = {
               quantityEssencial,
               quantityPremium,
+              customEmail: tvSetup.customEmail?.trim() || undefined, // Email personalizado (apenas se fornecido)
               soldBy: tvSetup.soldBy.trim(),
               soldAt: tvSetup.soldAt || undefined,
               startsAt: tvSetup.startsAt || undefined,
@@ -578,78 +557,55 @@ export function ClientServicesModal({
                   <Text fontWeight="semibold" mb={4}>
                     ⚡ Configuração de TV (Acessos serão gerados automaticamente)
                   </Text>
-                  {client?.tvAssignments && client.tvAssignments.length > 0 ? (
-                    <>
-                      <Text fontSize="sm" color="gray.500" mb={3}>
-                        Acessos existentes: {client.tvAssignments.length} (Essencial: {client.tvAssignments.filter((a) => (a.planType ?? "ESSENCIAL") === "ESSENCIAL").length}, Premium: {client.tvAssignments.filter((a) => a.planType === "PREMIUM").length})
-                      </Text>
-                      <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={4} mb={4}>
-                        <GridItem>
-                          <FormControl>
-                            <FormLabel>Adicionar mais acessos ESSENCIAL</FormLabel>
-                            <Input
-                              type="number"
-                              min={0}
-                              max={50}
-                              value={additionalEssencial}
-                              onChange={(e) => setAdditionalEssencial(e.target.value)}
-                            />
-                            <Text fontSize="xs" color="gray.500" mt={1}>
-                              Serão adicionados {additionalEssencial || "0"} acessos Essencial. Total: {client.tvAssignments.filter((a) => (a.planType ?? "ESSENCIAL") === "ESSENCIAL").length + parseInt(additionalEssencial || "0", 10)}
-                            </Text>
-                          </FormControl>
-                        </GridItem>
-                        <GridItem>
-                          <FormControl>
-                            <FormLabel>Adicionar mais acessos PREMIUM</FormLabel>
-                            <Input
-                              type="number"
-                              min={0}
-                              max={50}
-                              value={additionalPremium}
-                              onChange={(e) => setAdditionalPremium(e.target.value)}
-                            />
-                            <Text fontSize="xs" color="gray.500" mt={1}>
-                              Serão adicionados {additionalPremium || "0"} acessos Premium. Total: {client.tvAssignments.filter((a) => a.planType === "PREMIUM").length + parseInt(additionalPremium || "0", 10)}
-                            </Text>
-                          </FormControl>
-                        </GridItem>
-                      </Grid>
-                    </>
-                  ) : (
-                    <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={4} mb={4}>
-                      <GridItem>
-                        <FormControl>
-                          <FormLabel>Quantidade TV ESSENCIAL</FormLabel>
-                          <Input
-                            type="number"
-                            min={0}
-                            max={50}
-                            value={tvSetup.quantityEssencial}
-                            onChange={(e) => setTvSetup((prev) => ({ ...prev, quantityEssencial: e.target.value }))}
-                          />
-                          <Text fontSize="xs" color="gray.500" mt={1}>
-                            Total de acessos Essencial que o cliente terá
-                          </Text>
-                        </FormControl>
-                      </GridItem>
-                      <GridItem>
-                        <FormControl>
-                          <FormLabel>Quantidade TV PREMIUM</FormLabel>
-                          <Input
-                            type="number"
-                            min={0}
-                            max={50}
-                            value={tvSetup.quantityPremium}
-                            onChange={(e) => setTvSetup((prev) => ({ ...prev, quantityPremium: e.target.value }))}
-                          />
-                          <Text fontSize="xs" color="gray.500" mt={1}>
-                            Total de acessos Premium que o cliente terá
-                          </Text>
-                        </FormControl>
-                      </GridItem>
-                    </Grid>
+                  {client?.tvAssignments && client.tvAssignments.length > 0 && (
+                    <Text fontSize="sm" color="gray.500" mb={3}>
+                      Acessos existentes: {client.tvAssignments.length} (Essencial: {client.tvAssignments.filter((a) => (a.planType ?? "ESSENCIAL") === "ESSENCIAL").length}, Premium: {client.tvAssignments.filter((a) => a.planType === "PREMIUM").length})
+                    </Text>
                   )}
+                  <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={4} mb={4}>
+                    <GridItem>
+                      <FormControl>
+                        <FormLabel>Quantidade TV ESSENCIAL</FormLabel>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={50}
+                          value={tvSetup.quantityEssencial}
+                          onChange={(e) => setTvSetup((prev) => ({ ...prev, quantityEssencial: e.target.value }))}
+                        />
+                        <Text fontSize="xs" color="gray.500" mt={1}>
+                          Total de acessos Essencial que o cliente terá
+                        </Text>
+                      </FormControl>
+                    </GridItem>
+                    <GridItem>
+                      <FormControl>
+                        <FormLabel>Quantidade TV PREMIUM</FormLabel>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={50}
+                          value={tvSetup.quantityPremium}
+                          onChange={(e) => setTvSetup((prev) => ({ ...prev, quantityPremium: e.target.value }))}
+                        />
+                        <Text fontSize="xs" color="gray.500" mt={1}>
+                          Total de acessos Premium que o cliente terá
+                        </Text>
+                      </FormControl>
+                    </GridItem>
+                  </Grid>
+                  <FormControl>
+                    <FormLabel>E-mail personalizado (opcional)</FormLabel>
+                    <Input
+                      type="email"
+                      value={tvSetup.customEmail}
+                      onChange={(e) => setTvSetup((prev) => ({ ...prev, customEmail: e.target.value }))}
+                      placeholder="exemplo@empresa.com.br"
+                    />
+                    <Text fontSize="xs" color="gray.500" mt={1}>
+                      Se informado, será criada uma conta exclusiva com 1 slot para este email. Deixe vazio para usar emails padrão (1a8, 2a9, etc).
+                    </Text>
+                  </FormControl>
                   <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={4}>
                     <GridItem colSpan={{ base: 1, md: 2 }}>
                       <FormControl>

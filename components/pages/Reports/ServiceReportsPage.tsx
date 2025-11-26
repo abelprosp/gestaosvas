@@ -3,6 +3,8 @@ import {
   Badge,
   Box,
   Button,
+  Checkbox,
+  CheckboxGroup,
   Heading,
   HStack,
   Input,
@@ -17,13 +19,15 @@ import {
   Tr,
   useColorModeValue,
   useToast,
+  VStack,
 } from "@chakra-ui/react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { fetchServiceReport } from "@/lib/api/reports";
-import { ServiceReportRow } from "@/types";
+import { ServiceReportRow, Service } from "@/types";
 import { ServiceReportCategory } from "./types";
 import { exportToCsv } from "@/lib/utils/exporters";
+import { api } from "@/lib/api/client";
 
 const CATEGORY_LABELS: Record<ServiceReportRow["category"], string> = {
   TV: "TV",
@@ -62,8 +66,7 @@ function formatDate(value?: string | null) {
 
 export function ServiceReportsPage() {
   const [documentFilter, setDocumentFilter] = useState("");
-  const [serviceFilter, setServiceFilter] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<"ALL" | ServiceReportCategory>("ALL");
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [searchFilter, setSearchFilter] = useState("");
   const [appliedFilters, setAppliedFilters] = useState({
     document: "",
@@ -74,6 +77,22 @@ export function ServiceReportsPage() {
   const toast = useToast();
   const cardBg = useColorModeValue("rgba(255,255,255,0.78)", "rgba(15, 23, 42, 0.7)");
   const borderColor = useColorModeValue("rgba(226,232,240,0.6)", "rgba(45,55,72,0.6)");
+
+  // Buscar lista de serviços para seleção múltipla
+  const { data: servicesData, isLoading: isLoadingServices, error: servicesError } = useQuery<Service[]>({
+    queryKey: ["services"],
+    queryFn: async () => {
+      try {
+        const response = await api.get<Service[]>("/services");
+        return Array.isArray(response.data) ? response.data : [];
+      } catch (error) {
+        console.error("Erro ao buscar serviços:", error);
+        throw error;
+      }
+    },
+    retry: 2,
+    staleTime: 5 * 60 * 1000, // Cache por 5 minutos
+  });
 
   const { data, isFetching } = useQuery({
     queryKey: ["serviceReport", appliedFilters],
@@ -89,10 +108,18 @@ export function ServiceReportsPage() {
   const rows = useMemo<ServiceReportRow[]>(() => data?.data ?? [], [data]);
 
   const handleApplyFilters = () => {
+    // Converter serviços selecionados em string separada por vírgula para o backend
+    const serviceFilterString = selectedServices.length > 0 
+      ? selectedServices.map(id => {
+          const service = servicesData?.find(s => s.id === id);
+          return service?.name ?? "";
+        }).filter(Boolean).join(", ")
+      : "";
+    
     setAppliedFilters({
       document: documentFilter.replace(/\D/g, ""),
-      service: serviceFilter.trim(),
-      category: categoryFilter,
+      service: serviceFilterString,
+      category: "ALL", // Sempre "ALL" já que removemos o filtro de categoria
       search: searchFilter.trim(),
     });
   };
@@ -102,14 +129,35 @@ export function ServiceReportsPage() {
       toast({ title: "Nenhum dado para exportar", status: "info" });
       return;
     }
-    exportToCsv(
-      "relatorio_servicos.csv",
-      rows.map((row) => ({
+
+    // Criar uma linha por serviço/acesso (sem agrupar)
+    const csvData = rows.map((row) => {
+      // Buscar valor do serviço: usar custom_price se existir, senão usar valor padrão
+      let serviceValue = row.serviceValue;
+      if (serviceValue === null || serviceValue === undefined || serviceValue === 0) {
+        // Buscar valor padrão do serviço
+        // Para TV, buscar pelo nome "TV" genérico
+        const serviceNameToSearch = row.serviceName.includes("TV") 
+          ? "TV" 
+          : row.serviceName;
+        const service = servicesData?.find(s => {
+          if (s.id === row.serviceId) return true;
+          const sName = s.name.toLowerCase();
+          const rName = serviceNameToSearch.toLowerCase();
+          return sName === rName || sName.includes(rName) || rName.includes(sName);
+        });
+        serviceValue = service?.price ?? 0;
+      }
+
+      return {
         Cliente: row.clientName,
+        Servico: row.serviceName,
+        "Vendor do Cliente": row.clientVendorName ?? "",
+        "Vendor do Serviço": row.serviceVendorName ?? "",
+        "Valor do Serviço": serviceValue > 0 ? `R$ ${serviceValue.toFixed(2)}` : "",
         Documento: row.clientDocument,
         Email: row.clientEmail ?? "",
         Categoria: CATEGORY_LABELS[row.category],
-        Servico: row.serviceName,
         Identificador: row.identifier,
         Responsavel: row.responsible ?? "",
         Plano: row.planType ?? "",
@@ -117,8 +165,10 @@ export function ServiceReportsPage() {
         Inicio: formatDate(row.startsAt),
         Vencimento: formatDate(row.expiresAt),
         Notas: row.notes ?? "",
-      })),
-    );
+      };
+    });
+
+    exportToCsv("relatorio_servicos.csv", csvData);
     toast({ title: "Relatório exportado", status: "success" });
   };
 
@@ -132,81 +182,73 @@ export function ServiceReportsPage() {
         </Text>
       </Box>
 
-      <Stack direction={{ base: "column", lg: "row" }} spacing={4} flexWrap="wrap">
+      <Stack direction={{ base: "column", lg: "row" }} spacing={4} align={{ base: "stretch", lg: "flex-start" }}>
         <Input
           placeholder="CPF ou CNPJ do cliente"
           value={documentFilter}
           onChange={(event) => setDocumentFilter(event.target.value)}
           maxW={{ lg: "240px" }}
+          h="40px"
         />
-        <Input
-          placeholder="Nome do serviço (ex.: AFBNDES, TV)"
-          value={serviceFilter}
-          onChange={(event) => setServiceFilter(event.target.value)}
-          flex="1"
-          minW="220px"
-        />
-        <Select
-          maxW={{ lg: "220px" }}
-          value={categoryFilter}
-          onChange={(event) => setCategoryFilter(event.target.value as typeof categoryFilter)}
-        >
-          <option value="ALL">Todas as categorias</option>
-          <option value="TV">TV</option>
-          <option value="CLOUD">Cloud</option>
-          <option value="HUB">Hub</option>
-          <option value="TELE">Tele</option>
-          <option value="SERVICE">Serviços gerais</option>
-        </Select>
+        <Box flex="1" minW="220px" maxW={{ lg: "300px" }}>
+          <Text fontSize="sm" mb={2} color="gray.600" fontWeight="medium">
+            Selecionar serviços:
+          </Text>
+          {isLoadingServices ? (
+            <Box p={3} borderWidth={1} borderRadius="md" borderColor={borderColor} bg={cardBg} h="120px" display="flex" alignItems="center" justifyContent="center">
+              <Text fontSize="sm" color="gray.500">Carregando serviços...</Text>
+            </Box>
+          ) : servicesError ? (
+            <Box p={3} borderWidth={1} borderRadius="md" borderColor="red.300" bg={cardBg} h="120px" display="flex" alignItems="center" justifyContent="center">
+              <Text fontSize="sm" color="red.500">Erro ao carregar serviços</Text>
+            </Box>
+          ) : servicesData && servicesData.length > 0 ? (
+            <>
+              <CheckboxGroup value={selectedServices} onChange={(values) => setSelectedServices(values as string[])}>
+                <VStack align="start" spacing={2} maxH="120px" overflowY="auto" p={3} borderWidth={1} borderRadius="md" borderColor={borderColor} bg={cardBg}>
+                  {servicesData.map((service) => (
+                    <Checkbox key={service.id} value={service.id} size="sm">
+                      <Text fontSize="sm">{service.name}</Text>
+                    </Checkbox>
+                  ))}
+                </VStack>
+              </CheckboxGroup>
+              {selectedServices.length > 0 && (
+                <Text fontSize="xs" color="gray.500" mt={2}>
+                  {selectedServices.length} serviço(s) selecionado(s)
+                </Text>
+              )}
+            </>
+          ) : (
+            <Box p={3} borderWidth={1} borderRadius="md" borderColor={borderColor} bg={cardBg} h="120px" display="flex" alignItems="center" justifyContent="center">
+              <Text fontSize="sm" color="gray.500">Nenhum serviço disponível</Text>
+            </Box>
+          )}
+        </Box>
         <Input
           placeholder="Buscar por nome ou e-mail"
           value={searchFilter}
           onChange={(event) => setSearchFilter(event.target.value)}
           flex="1"
           minW="220px"
+          h="40px"
         />
-        <HStack spacing={3}>
-          <Button colorScheme="brand" onClick={handleApplyFilters} isLoading={isFetching}>
+        <HStack spacing={3} align="flex-start" h="40px">
+          <Button colorScheme="brand" onClick={handleApplyFilters} isLoading={isFetching} h="40px">
             Aplicar filtros
           </Button>
-          <Button variant="outline" onClick={handleExport} isDisabled={!rows.length}>
+          <Button variant="outline" onClick={handleExport} isDisabled={!rows.length} h="40px">
             Exportar CSV
           </Button>
         </HStack>
       </Stack>
 
-      <HStack spacing={3} flexWrap="wrap">
-        {QUICK_FILTERS.map((filter) => {
-          const isActive =
-            serviceFilter.toLowerCase() === filter.service.toLowerCase() &&
-            (filter.category === "ALL" || categoryFilter === filter.category);
-          return (
-            <Button
-              key={filter.label}
-              size="sm"
-              variant={isActive ? "solid" : "outline"}
-              colorScheme="brand"
-              onClick={() => {
-                setServiceFilter(filter.service);
-                setCategoryFilter(filter.category === "ALL" ? "ALL" : filter.category);
-                setAppliedFilters({
-                  document: documentFilter.replace(/\D/g, ""),
-                  service: filter.service,
-                  category: filter.category,
-                  search: searchFilter.trim(),
-                });
-              }}
-            >
-              {filter.label}
-            </Button>
-          );
-        })}
+      <HStack spacing={3} justify="flex-start">
         <Button
           size="sm"
-          variant={serviceFilter === "" ? "solid" : "ghost"}
+          variant={selectedServices.length === 0 ? "solid" : "ghost"}
           onClick={() => {
-            setServiceFilter("");
-            setCategoryFilter("ALL");
+            setSelectedServices([]);
             setAppliedFilters({
               document: documentFilter.replace(/\D/g, ""),
               service: "",
@@ -215,7 +257,7 @@ export function ServiceReportsPage() {
             });
           }}
         >
-          Limpar filtro rápido
+          Limpar seleção
         </Button>
       </HStack>
 

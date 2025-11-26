@@ -13,6 +13,7 @@ type ServiceSelection = {
   customPrice?: number | null;
   customPriceEssencial?: number | null; // Preço específico para TV Essencial (fragmento do serviço TV)
   customPricePremium?: number | null; // Preço específico para TV Premium (fragmento do serviço TV)
+  soldBy?: string | null; // Vendedor que cadastrou o serviço
 };
 
 const costCenterSchema = z.enum(["LUXUS", "NEXUS"]);
@@ -35,6 +36,7 @@ const serviceSelectionSchema = z.object({
   customPrice: z.number().min(0).nullable().optional(),
   customPriceEssencial: z.number().min(0).nullable().optional(), // Preço específico para TV Essencial
   customPricePremium: z.number().min(0).nullable().optional(), // Preço específico para TV Premium
+  soldBy: z.string().min(1).nullable().optional(), // Vendedor que cadastrou o serviço
 });
 
 const tvPlanTypeSchema = z.enum(["ESSENCIAL", "PREMIUM"]);
@@ -45,6 +47,7 @@ const tvSetupSchema = z
     planType: tvPlanTypeSchema.optional(), // Mantido para compatibilidade
     quantityEssencial: z.number().int().min(0).max(50).optional(),
     quantityPremium: z.number().int().min(0).max(50).optional(),
+    customEmail: z.string().email().optional(), // Email personalizado (cria conta com 1 slot exclusivo)
     soldBy: z.string().min(1).optional(),
     soldAt: z.string().optional(),
     startsAt: z.string().optional(),
@@ -113,6 +116,7 @@ async function syncClientServices(clientId: string, selections: ServiceSelection
     custom_price: selection.customPrice ?? null,
     custom_price_essencial: selection.customPriceEssencial ?? null,
     custom_price_premium: selection.customPricePremium ?? null,
+    sold_by: selection.soldBy ?? null,
   }));
 
   const { error: insertError } = await supabase.from("client_services").insert(rows);
@@ -294,17 +298,69 @@ async function handleTvServiceForClient(
         if (desiredEssencial > currentEssencial) {
           // Adicionar mais acessos ESSENCIAL
           const toAdd = desiredEssencial - currentEssencial;
-          await assignMultipleSlotsToClient({
-            clientId,
-            soldBy,
-            soldAt,
-            startsAt: tvSetup?.startsAt ?? undefined,
-            expiresAt: tvSetup.expiresAt,
-            notes: tvSetup?.notes?.trim() || undefined,
-            planType: "ESSENCIAL",
-            hasTelephony: tvSetup?.hasTelephony ?? undefined,
-            quantity: toAdd,
-          });
+          
+          // Se customEmail foi fornecido, usar apenas para o primeiro acesso
+          if (tvSetup?.customEmail && toAdd === 1 && currentEssencial === 0) {
+            // Primeiro acesso com email personalizado
+            await assignSlotToClient({
+              clientId,
+              soldBy,
+              soldAt,
+              startsAt: tvSetup?.startsAt ?? undefined,
+              expiresAt: tvSetup.expiresAt,
+              notes: tvSetup?.notes?.trim() || undefined,
+              planType: "ESSENCIAL",
+              hasTelephony: tvSetup?.hasTelephony ?? undefined,
+              customEmail: tvSetup.customEmail,
+            });
+          } else if (toAdd === 1) {
+            // Apenas 1 acesso - usar assignSlotToClient diretamente
+            await assignSlotToClient({
+              clientId,
+              soldBy,
+              soldAt,
+              startsAt: tvSetup?.startsAt ?? undefined,
+              expiresAt: tvSetup.expiresAt,
+              notes: tvSetup?.notes?.trim() || undefined,
+              planType: "ESSENCIAL",
+              hasTelephony: tvSetup?.hasTelephony ?? undefined,
+            });
+          } else if (toAdd === 2) {
+            // 2 acessos - criar sequencialmente
+            await assignSlotToClient({
+              clientId,
+              soldBy,
+              soldAt,
+              startsAt: tvSetup?.startsAt ?? undefined,
+              expiresAt: tvSetup.expiresAt,
+              notes: tvSetup?.notes?.trim() || undefined,
+              planType: "ESSENCIAL",
+              hasTelephony: tvSetup?.hasTelephony ?? undefined,
+            });
+            await assignSlotToClient({
+              clientId,
+              soldBy,
+              soldAt,
+              startsAt: tvSetup?.startsAt ?? undefined,
+              expiresAt: tvSetup.expiresAt,
+              notes: tvSetup?.notes?.trim() || undefined,
+              planType: "ESSENCIAL",
+              hasTelephony: tvSetup?.hasTelephony ?? undefined,
+            });
+          } else {
+            // Múltiplos acessos (3 ou mais)
+            await assignMultipleSlotsToClient({
+              clientId,
+              soldBy,
+              soldAt,
+              startsAt: tvSetup?.startsAt ?? undefined,
+              expiresAt: tvSetup.expiresAt,
+              notes: tvSetup?.notes?.trim() || undefined,
+              planType: "ESSENCIAL",
+              hasTelephony: tvSetup?.hasTelephony ?? undefined,
+              quantity: toAdd,
+            });
+          }
         } else {
           // Remover acessos ESSENCIAL extras
           const toRemove = currentEssencial - desiredEssencial;
@@ -345,17 +401,69 @@ async function handleTvServiceForClient(
         if (desiredPremium > currentPremium) {
           // Adicionar mais acessos PREMIUM
           const toAdd = desiredPremium - currentPremium;
-          await assignMultipleSlotsToClient({
-            clientId,
-            soldBy,
-            soldAt,
-            startsAt: tvSetup?.startsAt ?? undefined,
-            expiresAt: tvSetup.expiresAt,
-            notes: tvSetup?.notes?.trim() || undefined,
-            planType: "PREMIUM",
-            hasTelephony: tvSetup?.hasTelephony ?? undefined,
-            quantity: toAdd,
-          });
+          
+          // Se customEmail foi fornecido, usar apenas para o primeiro acesso
+          if (tvSetup?.customEmail && toAdd === 1 && currentPremium === 0) {
+            // Primeiro acesso com email personalizado
+            await assignSlotToClient({
+              clientId,
+              soldBy,
+              soldAt,
+              startsAt: tvSetup?.startsAt ?? undefined,
+              expiresAt: tvSetup.expiresAt,
+              notes: tvSetup?.notes?.trim() || undefined,
+              planType: "PREMIUM",
+              hasTelephony: tvSetup?.hasTelephony ?? undefined,
+              customEmail: tvSetup.customEmail,
+            });
+          } else if (toAdd === 1) {
+            // Apenas 1 acesso - usar assignSlotToClient diretamente
+            await assignSlotToClient({
+              clientId,
+              soldBy,
+              soldAt,
+              startsAt: tvSetup?.startsAt ?? undefined,
+              expiresAt: tvSetup.expiresAt,
+              notes: tvSetup?.notes?.trim() || undefined,
+              planType: "PREMIUM",
+              hasTelephony: tvSetup?.hasTelephony ?? undefined,
+            });
+          } else if (toAdd === 2) {
+            // 2 acessos - criar sequencialmente
+            await assignSlotToClient({
+              clientId,
+              soldBy,
+              soldAt,
+              startsAt: tvSetup?.startsAt ?? undefined,
+              expiresAt: tvSetup.expiresAt,
+              notes: tvSetup?.notes?.trim() || undefined,
+              planType: "PREMIUM",
+              hasTelephony: tvSetup?.hasTelephony ?? undefined,
+            });
+            await assignSlotToClient({
+              clientId,
+              soldBy,
+              soldAt,
+              startsAt: tvSetup?.startsAt ?? undefined,
+              expiresAt: tvSetup.expiresAt,
+              notes: tvSetup?.notes?.trim() || undefined,
+              planType: "PREMIUM",
+              hasTelephony: tvSetup?.hasTelephony ?? undefined,
+            });
+          } else {
+            // Múltiplos acessos (3 ou mais)
+            await assignMultipleSlotsToClient({
+              clientId,
+              soldBy,
+              soldAt,
+              startsAt: tvSetup?.startsAt ?? undefined,
+              expiresAt: tvSetup.expiresAt,
+              notes: tvSetup?.notes?.trim() || undefined,
+              planType: "PREMIUM",
+              hasTelephony: tvSetup?.hasTelephony ?? undefined,
+              quantity: toAdd,
+            });
+          }
         } else {
           // Remover acessos PREMIUM extras
           const toRemove = currentPremium - desiredPremium;

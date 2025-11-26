@@ -47,6 +47,7 @@ const tvSetupSchema = z
     planType: tvPlanTypeSchema.optional(), // Mantido para compatibilidade
     quantityEssencial: z.number().int().min(0).max(50).optional(),
     quantityPremium: z.number().int().min(0).max(50).optional(),
+    customEmail: z.string().email().optional(), // Email personalizado (cria conta com 1 slot exclusivo)
     soldBy: z.string().min(1).optional(),
     soldAt: z.string().optional(),
     startsAt: z.string().optional(),
@@ -124,7 +125,7 @@ async function syncClientServices(clientId: string, selections: ServiceSelection
     custom_price: selection.customPrice ?? null,
     custom_price_essencial: selection.customPriceEssencial ?? null,
     custom_price_premium: selection.customPricePremium ?? null,
-    // sold_by: selection.soldBy // TODO: Adicionar coluna no banco
+    sold_by: selection.soldBy ?? null,
   }));
 
   console.log(`[syncClientServices] Inserindo ${rows.length} linhas:`, JSON.stringify(rows));
@@ -347,21 +348,28 @@ async function handleTvServiceForClient(
         }
       }
       
-      // Criar acessos ESSENCIAL
-      if (quantityEssencial > 0) {
-        if (quantityEssencial > 1) {
-          await assignMultipleSlotsToClient({ ...baseParams, planType: "ESSENCIAL", quantity: quantityEssencial });
-        } else {
-          await assignSlotToClient({ ...baseParams, planType: "ESSENCIAL" });
+      // Se customEmail foi fornecido, criar apenas 1 acesso exclusivo com esse email
+      if (tvSetup?.customEmail && (quantityEssencial > 0 || quantityPremium > 0)) {
+        // Usar o primeiro tipo que tiver quantidade > 0
+        const planTypeForCustom = quantityEssencial > 0 ? "ESSENCIAL" : "PREMIUM";
+        await assignSlotToClient({ ...baseParams, planType: planTypeForCustom, customEmail: tvSetup.customEmail });
+      } else {
+        // Criar acessos ESSENCIAL (sem email personalizado)
+        if (quantityEssencial > 0) {
+          if (quantityEssencial > 1) {
+            await assignMultipleSlotsToClient({ ...baseParams, planType: "ESSENCIAL", quantity: quantityEssencial });
+          } else {
+            await assignSlotToClient({ ...baseParams, planType: "ESSENCIAL" });
+          }
         }
-      }
-      
-      // Criar acessos PREMIUM
-      if (quantityPremium > 0) {
-        if (quantityPremium > 1) {
-          await assignMultipleSlotsToClient({ ...baseParams, planType: "PREMIUM", quantity: quantityPremium });
-        } else {
-          await assignSlotToClient({ ...baseParams, planType: "PREMIUM" });
+        
+        // Criar acessos PREMIUM (sem email personalizado)
+        if (quantityPremium > 0) {
+          if (quantityPremium > 1) {
+            await assignMultipleSlotsToClient({ ...baseParams, planType: "PREMIUM", quantity: quantityPremium });
+          } else {
+            await assignSlotToClient({ ...baseParams, planType: "PREMIUM" });
+          }
         }
       }
       
@@ -589,10 +597,10 @@ export const POST = createApiHandler(async (req) => {
     document,
   });
   
-  // Adiciona opened_by se disponível (remova se a coluna não existir no banco ainda)
-  // if (data.openedBy) {
-  //     (payload as any).opened_by = data.openedBy;
-  // }
+  // Adiciona opened_by se disponível
+  if (data.openedBy) {
+    (payload as any).opened_by = data.openedBy;
+  }
 
   // 1. Cria Cliente
   const { data: newClient, error: createError } = await supabase

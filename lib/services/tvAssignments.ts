@@ -22,6 +22,7 @@ export interface AssignSlotParams {
   startsAt?: string | null;
   planType?: TVPlanType | null;
   hasTelephony?: boolean | null;
+  customEmail?: string | null; // Email personalizado (cria conta com 1 slot exclusivo)
 }
 
 export interface AssignMultipleSlotParams extends AssignSlotParams {
@@ -58,20 +59,33 @@ function buildEmail(index: number) {
   };
 }
 
+// Verifica se um email é padrão (formato XaY@nexusrs.com.br)
+function isStandardEmail(email: string): boolean {
+  return /^\d+a\d+@nexusrs\.com\.br$/.test(email);
+}
+
 function sortSlotsByEmail(slots: any[]) {
   return [...slots].sort((a, b) => {
     const emailA = a.tv_accounts?.email ?? "";
     const emailB = b.tv_accounts?.email ?? "";
     const indexA = parseEmailIndex(emailA);
     const indexB = parseEmailIndex(emailB);
+    const isStandardA = isStandardEmail(emailA);
+    const isStandardB = isStandardEmail(emailB);
 
-    // Primeiro: ordena por índice do email (menor primeiro)
-    if (indexA === null && indexB === null) return emailA.localeCompare(emailB);
-    if (indexA === null) return 1; // Sem índice vai para o final
-    if (indexB === null) return -1; // Sem índice vai para o final
-    if (indexA !== indexB) return indexA - indexB; // Menor índice primeiro
+    // PRIORIDADE 1: Emails padrão sempre vêm antes de emails personalizados
+    if (isStandardA && !isStandardB) return -1;
+    if (!isStandardA && isStandardB) return 1;
 
-    // Segundo: se mesmo email, ordena por slot_number (menor primeiro)
+    // PRIORIDADE 2: Entre emails padrão, ordena por índice (menor primeiro)
+    if (isStandardA && isStandardB) {
+      if (indexA === null && indexB === null) return emailA.localeCompare(emailB);
+      if (indexA === null) return 1;
+      if (indexB === null) return -1;
+      if (indexA !== indexB) return indexA - indexB; // Menor índice primeiro
+    }
+
+    // PRIORIDADE 3: Se mesmo email, ordena por slot_number (menor primeiro)
     const slotA = a.slot_number ?? 0;
     const slotB = b.slot_number ?? 0;
     return slotA - slotB; // Menor slot primeiro
@@ -84,6 +98,12 @@ async function fetchExistingEmails(supabase: any): Promise<string[]> {
   const { data, error } = await supabase.from("tv_accounts").select("email");
   if (error && !isSchemaMissing(error)) throw error;
   return (data ?? []).map((account: any) => account.email);
+}
+
+// Busca apenas emails padrão (ignora personalizados)
+async function fetchStandardEmails(supabase: any): Promise<string[]> {
+  const emails = await fetchExistingEmails(supabase);
+  return emails.filter(email => isStandardEmail(email));
 }
 
 async function createAccountBatch(supabase: any, index: number): Promise<boolean> {
@@ -119,6 +139,104 @@ async function createAccountBatch(supabase: any, index: number): Promise<boolean
   return true;
 }
 
+// Cria conta com email personalizado (1 slot exclusivo)
+async function createCustomEmailAccount(supabase: any, customEmail: string): Promise<any> {
+  const email = customEmail.toLowerCase().trim();
+  
+  // 1. Verificar se a conta já existe
+  const { data: existingAccount, error: checkError } = await supabase
+    .from("tv_accounts")
+    .select("id, email, tv_slots(id, status, client_id)")
+    .eq("email", email)
+    .maybeSingle();
+
+  if (checkError && !isSchemaMissing(checkError)) {
+    throw checkError;
+  }
+
+  // 2. Se existe, verificar se tem slot disponível
+  if (existingAccount) {
+    const { data: slots } = await supabase
+      .from("tv_slots")
+      .select("id, status, client_id")
+      .eq("tv_account_id", existingAccount.id)
+      .eq("status", "AVAILABLE")
+      .is("client_id", null)
+      .limit(1);
+
+    if (slots && slots.length > 0) {
+      // Buscar slot completo
+      const { data: fullSlot } = await supabase
+        .from("tv_slots")
+        .select("*, tv_accounts(*)")
+        .eq("id", slots[0].id)
+        .single();
+      
+      return fullSlot;
+    }
+    
+    // Se não tem slot disponível, a conta já está em uso
+    throw new HttpError(409, `A conta com email ${email} já está em uso (todos os slots atribuídos)`);
+  }
+
+  // 3. Criar nova conta com 1 slot exclusivo
+  const { data: insertedAccount, error: insertAccountError } = await supabase
+    .from("tv_accounts")
+    .insert({ email })
+    .select("id")
+    .single();
+
+  if (insertAccountError) {
+    if (insertAccountError.code === "23505") {
+      // Race condition: outro processo criou a conta, buscar novamente
+      const { data: account } = await supabase
+        .from("tv_accounts")
+        .select("id")
+        .eq("email", email)
+        .single();
+      
+      if (account) {
+        const { data: slot } = await supabase
+          .from("tv_slots")
+          .select("*, tv_accounts(*)")
+          .eq("tv_account_id", account.id)
+          .eq("status", "AVAILABLE")
+          .is("client_id", null)
+          .limit(1)
+          .single();
+        
+        if (slot) return slot;
+      }
+    }
+    throw insertAccountError;
+  }
+
+  if (!insertedAccount) {
+    throw new HttpError(500, "Falha ao criar conta com email personalizado");
+  }
+
+  // 4. Criar 1 slot exclusivo
+  const { data: insertedSlot, error: slotInsertError } = await supabase
+    .from("tv_slots")
+    .insert({
+      tv_account_id: insertedAccount.id,
+      slot_number: 1,
+      username: "#1",
+      status: "AVAILABLE",
+      password: generateNumericPassword(),
+    })
+    .select("*, tv_accounts(*)")
+    .single();
+
+  if (slotInsertError) {
+    // Se falhar ao criar slot, remover a conta criada
+    await supabase.from("tv_accounts").delete().eq("id", insertedAccount.id);
+    throw slotInsertError;
+  }
+
+  return insertedSlot;
+}
+
 export async function ensureAvailableSlotExists() {
   const supabase = createSupabaseClient(true); // SERVICE ROLE KEY
 
@@ -136,44 +254,44 @@ export async function ensureAvailableSlotExists() {
     if (fetchError && !isSchemaMissing(fetchError)) throw fetchError;
 
     if (allSlots && allSlots.length > 0) {
-      // Ordena todos os slots disponíveis por email e slot_number (garante ordem consistente)
-      // Isso garante que sempre pegue o primeiro disponível na ordem numérica (1a8 primeiro)
-      const sorted = sortSlotsByEmail(allSlots);
+      // FILTRAR: Apenas slots de emails padrão (ignorar emails personalizados)
+      const standardSlots = allSlots.filter((slot) => 
+        isStandardEmail(slot.tv_accounts?.email ?? "")
+      );
       
-      // PRIORIDADE: Sempre tentar usar slots do primeiro email (1a8) primeiro
-      const firstEmail = buildEmail(0).email; // 1a8@nexusrs.com.br
-      const firstEmailSlot = sorted.find((slot) => slot.tv_accounts?.email === firstEmail);
-      
-      if (firstEmailSlot) {
-        console.log(`[ensureAvailableSlotExists] ✅ Slot encontrado no primeiro email (prioridade): ${firstEmailSlot.tv_accounts?.email} #${firstEmailSlot.slot_number}`);
-        return firstEmailSlot;
+      if (standardSlots.length > 0) {
+        // Ordena slots padrão por email e slot_number (garante ordem consistente)
+        const sorted = sortSlotsByEmail(standardSlots);
+        
+        // PRIORIDADE: Sempre tentar usar slots do primeiro email padrão (1a8) primeiro
+        const firstEmail = buildEmail(0).email; // 1a8@nexusrs.com.br
+        const firstEmailSlot = sorted.find((slot) => slot.tv_accounts?.email === firstEmail);
+        
+        if (firstEmailSlot) {
+          console.log(`[ensureAvailableSlotExists] ✅ Slot encontrado no primeiro email padrão (prioridade): ${firstEmailSlot.tv_accounts?.email} #${firstEmailSlot.slot_number}`);
+          return firstEmailSlot;
+        }
+        
+        // Se não há slots no primeiro email, usa o primeiro disponível ordenado (sempre padrão)
+        const firstAvailable = sorted[0];
+        console.log(`[ensureAvailableSlotExists] ✅ Slot selecionado (padrão): ${firstAvailable.tv_accounts?.email} #${firstAvailable.slot_number}`);
+        return firstAvailable;
       }
-      
-      // Se não há slots no primeiro email, usa o primeiro disponível ordenado
-      // Log para debug: mostra os primeiros 5 slots ordenados
-      console.log(`[ensureAvailableSlotExists] Total de slots disponíveis: ${sorted.length}`);
-      console.log(`[ensureAvailableSlotExists] Primeiros 5 slots ordenados:`);
-      sorted.slice(0, 5).forEach((slot, idx) => {
-        console.log(`  [${idx}] ${slot.tv_accounts?.email} #${slot.slot_number} (index: ${parseEmailIndex(slot.tv_accounts?.email ?? "")})`);
-      });
-      
-      const firstAvailable = sorted[0];
-      console.log(`[ensureAvailableSlotExists] ✅ Slot selecionado: ${firstAvailable.tv_accounts?.email} #${firstAvailable.slot_number}`);
-      return firstAvailable;
+      // Se não há slots padrão disponíveis, continua para criar novo email padrão
     }
 
-    // 2. Se não tem slots disponíveis, verifica se existe o primeiro email (1a8)
-    // Se não existir, cria começando do índice 0 (1a8)
-    const emails = await fetchExistingEmails(supabase);
+    // 2. Se não tem slots disponíveis, verifica emails padrão existentes e cria o próximo na sequência
+    // IMPORTANTE: Ignora emails personalizados, apenas trabalha com sequência padrão
+    const standardEmails = await fetchStandardEmails(supabase);
     
-    // Verifica se o primeiro email (1a8) existe
+    // Verifica se o primeiro email padrão (1a8) existe
     const firstEmail = buildEmail(0).email; // 1a8@nexusrs.com.br
-    const hasFirstEmail = emails.includes(firstEmail);
+    const hasFirstEmail = standardEmails.includes(firstEmail);
     
     let nextIndex = 0; // Sempre começa do 0 (1a8) se não existir
     if (!hasFirstEmail) {
-      // Se não existe o primeiro email, cria ele
-      console.log(`[ensureAvailableSlotExists] Primeiro email (${firstEmail}) não existe. Criando...`);
+      // Se não existe o primeiro email padrão, cria ele
+      console.log(`[ensureAvailableSlotExists] Primeiro email padrão (${firstEmail}) não existe. Criando...`);
       const created = await createAccountBatch(supabase, 0);
       if (created) {
         // Após criar, busca novamente os slots disponíveis
@@ -201,15 +319,19 @@ export async function ensureAvailableSlotExists() {
         
         if (!firstEmailError && firstEmailSlots && firstEmailSlots.length > 0) {
           // Se há slots disponíveis no primeiro email, usa ele
-          console.log(`[ensureAvailableSlotExists] ✅ Slot encontrado no primeiro email: ${firstEmailSlots[0].tv_accounts?.email} #${firstEmailSlots[0].slot_number}`);
+          console.log(`[ensureAvailableSlotExists] ✅ Slot encontrado no primeiro email padrão: ${firstEmailSlots[0].tv_accounts?.email} #${firstEmailSlots[0].slot_number}`);
           return firstEmailSlots[0];
         }
       }
       
-      // Se não há slots no primeiro email, procura o próximo índice disponível
-      const indices = emails.map(parseEmailIndex).filter(i => i !== null) as number[];
+      // Se não há slots no primeiro email, procura o próximo índice padrão disponível
+      // Extrai apenas índices de emails padrão (ignora personalizados)
+      const indices = standardEmails
+        .map(parseEmailIndex)
+        .filter(i => i !== null) as number[];
+      
       if (indices.length > 0) {
-        // Encontra o menor índice que não tem todos os slots ocupados
+        // Encontra o menor índice padrão que não tem todos os slots ocupados
         const sortedIndices = [...new Set(indices)].sort((a, b) => a - b);
         
         for (const idx of sortedIndices) {
@@ -230,14 +352,15 @@ export async function ensureAvailableSlotExists() {
               .limit(1);
             
             if (!emailError && emailSlots && emailSlots.length > 0) {
-              console.log(`[ensureAvailableSlotExists] ✅ Slot encontrado em email existente: ${emailSlots[0].tv_accounts?.email} #${emailSlots[0].slot_number}`);
+              console.log(`[ensureAvailableSlotExists] ✅ Slot encontrado em email padrão existente: ${emailSlots[0].tv_accounts?.email} #${emailSlots[0].slot_number}`);
               return emailSlots[0];
             }
           }
         }
         
-        // Se todos os emails existentes estão cheios, cria o próximo
+        // Se todos os emails padrão existentes estão cheios, cria o próximo na sequência
         nextIndex = Math.max(...sortedIndices) + 1;
+        console.log(`[ensureAvailableSlotExists] Todos os emails padrão existentes estão cheios. Próximo índice: ${nextIndex} (${buildEmail(nextIndex).email})`);
       }
     }
     
@@ -257,6 +380,69 @@ export async function assignSlotToClient(params: AssignSlotParams) {
   console.log(`[assignSlotToClient] Iniciando atribuição para cliente ${params.clientId}`);
   const supabase = createSupabaseClient(true); // SERVICE ROLE KEY
 
+  // Se customEmail foi fornecido, criar conta com email personalizado (1 slot exclusivo)
+  if (params.customEmail) {
+    console.log(`[assignSlotToClient] Email personalizado fornecido: ${params.customEmail}`);
+    let slot;
+    try {
+      slot = await createCustomEmailAccount(supabase, params.customEmail);
+      if (!slot) {
+        throw new HttpError(500, "Não foi possível criar conta com email personalizado");
+      }
+      console.log(`[assignSlotToClient] Conta personalizada criada/encontrada: ${slot.tv_accounts?.email} #${slot.slot_number}`);
+    } catch (error) {
+      console.error(`[assignSlotToClient] Erro ao criar/buscar conta personalizada:`, error);
+      throw error;
+    }
+    
+    // Atribuir o slot ao cliente
+    const soldAt = params.soldAt ?? new Date().toISOString();
+    const startsAt = params.startsAt && params.startsAt.trim() ? params.startsAt : new Date().toISOString().slice(0, 10);
+    const password = generateNumericPassword();
+
+    console.log(`[assignSlotToClient] Tentando atualizar slot ${slot.id} para cliente ${params.clientId}`);
+    
+    const { data: updatedSlot, error: updateError } = await supabase
+      .from("tv_slots")
+      .update({
+        status: "ASSIGNED",
+        client_id: params.clientId,
+        password,
+        sold_by: params.soldBy ?? null,
+        sold_at: soldAt,
+        starts_at: startsAt,
+        expires_at: params.expiresAt ?? null,
+        notes: params.notes ?? null,
+        plan_type: params.planType ?? null,
+        has_telephony: params.hasTelephony ?? null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", slot.id)
+      .eq("status", "AVAILABLE")
+      .is("client_id", null)
+      .select("*, tv_accounts(*)")
+      .maybeSingle();
+
+    if (updateError) {
+      console.error(`[assignSlotToClient] Erro ao atualizar slot:`, updateError);
+      throw updateError;
+    }
+
+    if (!updatedSlot) {
+      throw new HttpError(409, "Slot já foi atribuído por outro processo");
+    }
+
+    // Registrar histórico
+    await supabase.from("tv_slot_history").insert({
+      tv_slot_id: updatedSlot.id,
+      action: "ASSIGNED",
+      metadata: { clientId: params.clientId, customEmail: params.customEmail },
+    });
+
+    return mapTVSlotRow(updatedSlot);
+  }
+
+  // Lógica padrão: buscar slot dos emails padrão
   for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt++) {
     console.log(`[assignSlotToClient] Tentativa ${attempt + 1}/${MAX_RETRY_ATTEMPTS}`);
     

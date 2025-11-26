@@ -51,7 +51,7 @@ import {
   FiPhone,
   FiTrash2,
 } from "react-icons/fi";
-import { fetchTVOverview, regenerateTVSlotPassword, releaseTVSlot, updateTVSlot, updateTVAccountEmail, deleteTVAccount } from "@/lib/api/tv";
+import { fetchTVOverview, regenerateTVSlotPassword, releaseTVSlot, updateTVSlot, updateTVAccountEmail, deleteTVAccount, getNextEmailInfo, listTVAccounts, TVAccountInfo, getTVAccountSlots, TVAccountSlot, fetchTVAccountUsage } from "@/lib/api/tv";
 import { PaginatedResponse, TVOverviewRecord, TVSlotStatus } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { createRequest } from "@/lib/api/requests";
@@ -186,6 +186,13 @@ export function UsersPage() {
   const [originalEmail, setOriginalEmail] = useState("");
   const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [accountUsageInfo, setAccountUsageInfo] = useState<{ assignedSlots: number; totalSlots: number } | null>(null);
+  const emailsModal = useDisclosure();
+  const [accountsList, setAccountsList] = useState<TVAccountInfo[]>([]);
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
+  const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
+  const [accountSlots, setAccountSlots] = useState<Record<string, any[]>>({});
+  const [loadingSlots, setLoadingSlots] = useState<Record<string, boolean>>({});
   const limit = 50;
   const hasSearch = searchTerm.trim().length > 0;
   const effectivePage = hasSearch ? 1 : page;
@@ -217,6 +224,13 @@ export function UsersPage() {
     queryKey: ["tvOverview", { search: apiSearch ?? "", page: effectivePage, limit: effectiveLimit }],
     queryFn: () => fetchTVOverview({ search: apiSearch, page: effectivePage, limit: effectiveLimit }),
     staleTime: 60 * 1000,
+  });
+
+  const { data: nextEmailInfo } = useQuery({
+    queryKey: ["tvNextEmail"],
+    queryFn: getNextEmailInfo,
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000, // Atualizar a cada minuto
   });
 
   const records = useMemo<TVOverviewRecord[]>(() => overview?.data ?? [], [overview]);
@@ -505,11 +519,36 @@ export function UsersPage() {
     toast({ title: "Exportação criada", status: "success" });
   };
 
-  const handleEditEmail = (accountId: string, currentEmail: string) => {
+  const handleEditEmail = async (accountId: string, currentEmail: string) => {
     if (!isAdmin) return;
     setEditingAccountId(accountId);
     setEditingEmail(currentEmail);
     setOriginalEmail(currentEmail);
+    
+    // Buscar informações sobre uso da conta
+    try {
+      const response = await fetch(`/api/tv/accounts`);
+      if (response.ok) {
+        const accounts = await response.json();
+        const accountData = accounts.find((acc: any) => acc.account.id === accountId);
+        if (accountData) {
+          const slots = accountData.slots || [];
+          const assignedSlots = slots.filter((s: any) => s.status === "ASSIGNED" && s.clientId).length;
+          const totalSlots = slots.length;
+          setAccountUsageInfo({ assignedSlots, totalSlots });
+        } else {
+          // Fallback: contar dos registros atuais
+          const assignedSlots = records.filter(r => r.accountId === accountId && r.status === "ASSIGNED").length;
+          setAccountUsageInfo({ assignedSlots, totalSlots: 8 });
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao buscar informações da conta:", error);
+      // Fallback: contar dos registros atuais
+      const assignedSlots = records.filter(r => r.accountId === accountId && r.status === "ASSIGNED").length;
+      setAccountUsageInfo({ assignedSlots, totalSlots: 8 });
+    }
+    
     editEmailModal.onOpen();
   };
 
@@ -534,6 +573,7 @@ export function UsersPage() {
       setEditingAccountId(null);
       setEditingEmail("");
       setOriginalEmail("");
+      setAccountUsageInfo(null);
     } catch (error) {
       // Extrair mensagem de erro mais detalhada
       let errorMessage = "Erro ao atualizar e-mail";
@@ -562,8 +602,15 @@ export function UsersPage() {
   const handleDeleteAccount = async () => {
     if (!editingAccountId) return;
 
+    const assignedSlotsCount = accountUsageInfo?.assignedSlots ?? 0;
+    const hasAssignedSlots = assignedSlotsCount > 0;
+    
+    const warningMessage = hasAssignedSlots
+      ? `⚠️ ATENÇÃO: Esta conta possui ${assignedSlotsCount} slot(s) atribuído(s) a cliente(s).\n\nAo remover esta conta, todos os ${assignedSlotsCount} slot(s) atribuído(s) serão removidos e os clientes perderão acesso.\n\n`
+      : "";
+
     const confirmed = window.confirm(
-      `Tem certeza que deseja remover a conta de TV "${originalEmail}"?\n\n` +
+      `${warningMessage}Tem certeza que deseja remover a conta de TV "${originalEmail}"?\n\n` +
       "Esta ação não pode ser desfeita. Todos os slots desta conta serão removidos automaticamente."
     );
 
@@ -584,6 +631,7 @@ export function UsersPage() {
       setEditingAccountId(null);
       setEditingEmail("");
       setOriginalEmail("");
+      setAccountUsageInfo(null);
     } catch (error) {
       // Extrair mensagem de erro mais detalhada
       let errorMessage = "Erro ao remover conta";
@@ -620,7 +668,113 @@ export function UsersPage() {
         </Box>
       </Flex>
 
+      {isAdmin && nextEmailInfo && (
+        <HStack spacing={3}>
+          <Box p={3} bg={tableBg} borderRadius="md" borderWidth={1} borderColor={borderColor} minW="250px">
+            <HStack justify="space-between" mb={2}>
+              <Text fontSize="sm" color="gray.500">Próximo email:</Text>
+              <Button
+                size="xs"
+                variant="ghost"
+                leftIcon={<FiEdit />}
+                onClick={async () => {
+                  try {
+                    // Buscar o ID da conta do próximo email
+                    let accounts = await listTVAccounts();
+                    let nextAccount = accounts.find(a => a.email === nextEmailInfo.nextEmail);
+                    
+                    // Se a conta não existir, criar ela automaticamente
+                    if (!nextAccount) {
+                      try {
+                        const response = await fetch("/api/tv/accounts", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ email: nextEmailInfo.nextEmail }),
+                        });
+                        
+                        if (!response.ok) {
+                          const error = await response.json();
+                          throw new Error(error.message || "Erro ao criar conta");
+                        }
+                        
+                        const data = await response.json();
+                        // Recarregar lista de contas
+                        accounts = await listTVAccounts();
+                        nextAccount = accounts.find(a => a.email === nextEmailInfo.nextEmail);
+                        
+                        if (!nextAccount) {
+                          throw new Error("Conta criada mas não encontrada na lista");
+                        }
+                      } catch (createError: any) {
+                        toast({
+                          title: "Erro ao criar conta",
+                          description: createError.message || "Não foi possível criar a conta para editar",
+                          status: "error",
+                          duration: 5000,
+                        });
+                        return;
+                      }
+                    }
+                    
+                    if (nextAccount) {
+                      setEditingAccountId(nextAccount.id);
+                      setEditingEmail(nextAccount.email);
+                      setOriginalEmail(nextAccount.email);
+                      // Buscar informações de uso
+                      try {
+                        const usage = await fetchTVAccountUsage(nextAccount.id);
+                        setAccountUsageInfo(usage);
+                      } catch (error) {
+                        console.error("Erro ao buscar uso da conta:", error);
+                        setAccountUsageInfo({ totalSlots: 0, assignedSlots: 0 });
+                      }
+                      editEmailModal.onOpen();
+                    }
+                  } catch (error: any) {
+                    toast({
+                      title: "Erro",
+                      description: error.message || "Não foi possível abrir o editor",
+                      status: "error",
+                      duration: 5000,
+                    });
+                  }
+                }}
+              >
+                Editar
+              </Button>
+            </HStack>
+            <Text fontWeight="semibold" color="brand.500">{nextEmailInfo.nextEmail}</Text>
+            <Text fontSize="xs" color="gray.500" mt={1}>
+              {nextEmailInfo.availableSlots} acesso(s) livre(s)
+            </Text>
+          </Box>
+        </HStack>
+      )}
+
       <Stack direction={{ base: "column", md: "row" }} spacing={4}>
+        <Button
+          colorScheme="blue"
+          variant="outline"
+          size="sm"
+          onClick={async () => {
+            emailsModal.onOpen();
+            setIsLoadingAccounts(true);
+            try {
+              const accounts = await listTVAccounts();
+              setAccountsList(accounts);
+            } catch (error) {
+              toast({
+                title: "Erro ao carregar emails",
+                status: "error",
+                duration: 3000,
+              });
+            } finally {
+              setIsLoadingAccounts(false);
+            }
+          }}
+        >
+          Ver emails de acesso
+        </Button>
         <Input
           placeholder="Buscar por cliente, e-mail, CPF/CNPJ ou anotação"
           value={searchTerm}
@@ -794,17 +948,8 @@ export function UsersPage() {
                   (renewMutation.variables as RenewVariables | undefined)?.slotId === record.id;
                 const isExpanded = expandedId === record.id;
                 
-                // Debug: verificar condições para exibir botão excluir
+                // Verificar condições para exibir botão excluir
                 const shouldShowDelete = isAdmin && record.status === "ASSIGNED" && (record.clientId || record.client);
-                if (record.status === "ASSIGNED" && (record.clientId || record.client)) {
-                  console.log("[UsersPage] Debug excluir:", {
-                    isAdmin,
-                    status: record.status,
-                    clientId: record.clientId,
-                    hasClient: !!record.client,
-                    shouldShowDelete,
-                  });
-                }
 
                 const handleContact = () => {
                   if (record.client?.email) {
@@ -1324,6 +1469,19 @@ export function UsersPage() {
               <Text fontSize="sm" color="gray.500" mt={2}>
                 Este e-mail será atualizado para todos os slots desta conta
               </Text>
+              {accountUsageInfo && (
+                <Box mt={4} p={3} bg="gray.50" borderRadius="md" _dark={{ bg: "gray.700" }}>
+                  <Text fontSize="sm" fontWeight="semibold" mb={2}>Informações de uso:</Text>
+                  <Text fontSize="sm" color={accountUsageInfo.assignedSlots > 0 ? "orange.500" : "green.500"}>
+                    {accountUsageInfo.assignedSlots > 0 
+                      ? `⚠️ ${accountUsageInfo.assignedSlots} slot(s) atribuído(s) a cliente(s)`
+                      : "✓ Nenhum slot atribuído"}
+                  </Text>
+                  <Text fontSize="xs" color="gray.500" mt={1}>
+                    Total de slots na conta: {accountUsageInfo.totalSlots}
+                  </Text>
+                </Box>
+              )}
             </FormControl>
           </ModalBody>
           <ModalFooter>
@@ -1348,6 +1506,239 @@ export function UsersPage() {
               isDisabled={isDeletingAccount}
             >
               Salvar e confirmar
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Modal de Lista de Emails */}
+      <Modal isOpen={emailsModal.isOpen} onClose={emailsModal.onClose} size="4xl" scrollBehavior="inside">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Emails de Acesso de TV</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            {isLoadingAccounts ? (
+              <Flex justify="center" align="center" py={8}>
+                <Spinner size="lg" />
+              </Flex>
+            ) : accountsList.length === 0 ? (
+              <Text color="gray.500" textAlign="center" py={8}>
+                Nenhum email cadastrado
+              </Text>
+            ) : (
+              <Stack spacing={4}>
+                <Text fontSize="sm" color="gray.500">
+                  Total: {accountsList.length} email(s) cadastrado(s)
+                </Text>
+                <Box overflowX="auto">
+                  <Table variant="simple" size="sm" minW="100%">
+                  <Thead>
+                    <Tr>
+                      <Th>Email</Th>
+                      <Th isNumeric>Total Slots</Th>
+                      <Th isNumeric>Disponíveis</Th>
+                      <Th isNumeric>Em Uso</Th>
+                      <Th>Status</Th>
+                    </Tr>
+                  </Thead>
+                  <Tbody>
+                    {accountsList.map((account) => {
+                      const isStandard = /^\d+a\d+@nexusrs\.com\.br$/.test(account.email);
+                      const isNextEmail = account.email === nextEmailInfo?.nextEmail;
+                      const isFull = account.availableSlots === 0 && account.assignedSlots > 0;
+                      const isExpanded = expandedAccountId === account.id;
+                      const slots = accountSlots[account.id] ?? [];
+                      const isLoading = loadingSlots[account.id] ?? false;
+                      
+                      return (
+                        <Fragment key={account.id}>
+                          <Tr 
+                            cursor="pointer" 
+                            onClick={async () => {
+                              if (isExpanded) {
+                                setExpandedAccountId(null);
+                              } else {
+                                setExpandedAccountId(account.id);
+                                if (!accountSlots[account.id]) {
+                                  setLoadingSlots(prev => ({ ...prev, [account.id]: true }));
+                                  try {
+                                    const slotsData = await getTVAccountSlots(account.id);
+                                    setAccountSlots(prev => ({ ...prev, [account.id]: slotsData }));
+                                  } catch (error) {
+                                    toast({
+                                      title: "Erro ao carregar slots",
+                                      status: "error",
+                                      duration: 3000,
+                                    });
+                                  } finally {
+                                    setLoadingSlots(prev => ({ ...prev, [account.id]: false }));
+                                  }
+                                }
+                              }
+                            }}
+                            _hover={{ bg: "gray.50", _dark: { bg: "gray.700" } }}
+                          >
+                            <Td>
+                              <HStack spacing={2}>
+                                {isExpanded ? (
+                                  <Icon as={FiChevronUp} />
+                                ) : (
+                                  <Icon as={FiChevronDown} />
+                                )}
+                                <Text fontWeight={isNextEmail ? "bold" : "normal"} color={isNextEmail ? "brand.500" : undefined}>
+                                  {account.email}
+                                </Text>
+                                {isNextEmail && (
+                                  <Badge colorScheme="green" size="sm">Próximo</Badge>
+                                )}
+                                {!isStandard && (
+                                  <Badge colorScheme="purple" size="sm">Personalizado</Badge>
+                                )}
+                              </HStack>
+                            </Td>
+                            <Td isNumeric>{account.totalSlots}</Td>
+                            <Td isNumeric>
+                              <Text color={account.availableSlots > 0 ? "green.500" : "gray.500"}>
+                                {account.availableSlots}
+                              </Text>
+                            </Td>
+                            <Td isNumeric>
+                              <Text color={account.assignedSlots > 0 ? "orange.500" : "gray.500"}>
+                                {account.assignedSlots}
+                              </Text>
+                            </Td>
+                            <Td>
+                              {isFull ? (
+                                <Badge colorScheme="red">Completo</Badge>
+                              ) : account.availableSlots > 0 ? (
+                                <Badge colorScheme="green">Disponível</Badge>
+                              ) : (
+                                <Badge colorScheme="gray">Vazio</Badge>
+                              )}
+                            </Td>
+                          </Tr>
+                          {isExpanded && (
+                            <Tr>
+                              <Td colSpan={5} p={0} bg="gray.50" _dark={{ bg: "gray.800" }}>
+                                <Collapse in={isExpanded} animateOpacity>
+                                  <Box p={4}>
+                                    {isLoading ? (
+                                      <Flex justify="center" py={4}>
+                                        <Spinner size="sm" />
+                                      </Flex>
+                                    ) : slots.length === 0 ? (
+                                      <Text color="gray.500" textAlign="center" py={4}>
+                                        Nenhum slot encontrado
+                                      </Text>
+                                    ) : (
+                                      <Stack spacing={3}>
+                                        <Text fontSize="sm" fontWeight="semibold">
+                                          Slots desta conta:
+                                        </Text>
+                                        <Box overflowX="auto">
+                                          <Table variant="simple" size="sm" minW="100%">
+                                            <Thead>
+                                              <Tr>
+                                                <Th>Slot</Th>
+                                                <Th>Status</Th>
+                                                <Th>Cliente</Th>
+                                                <Th>Plano</Th>
+                                                <Th>Ações</Th>
+                                              </Tr>
+                                            </Thead>
+                                            <Tbody>
+                                              {slots.map((slot) => (
+                                                <Tr key={slot.id}>
+                                                  <Td>#{slot.slotNumber} ({slot.username})</Td>
+                                                  <Td>
+                                                    <Badge colorScheme={slot.status === "ASSIGNED" ? "green" : "gray"}>
+                                                      {slot.status === "ASSIGNED" ? "Em Uso" : "Disponível"}
+                                                    </Badge>
+                                                  </Td>
+                                                  <Td>
+                                                    {slot.client ? (
+                                                      <Text fontSize="sm">{slot.client.name}</Text>
+                                                    ) : (
+                                                      <Text fontSize="sm" color="gray.500">-</Text>
+                                                    )}
+                                                  </Td>
+                                                  <Td>
+                                                    {slot.planType ? (
+                                                      <Badge colorScheme={slot.planType === "PREMIUM" ? "purple" : "blue"}>
+                                                        {slot.planType}
+                                                      </Badge>
+                                                    ) : (
+                                                      <Text fontSize="sm" color="gray.500">-</Text>
+                                                    )}
+                                                  </Td>
+                                                  <Td>
+                                                    {slot.status === "ASSIGNED" && slot.clientId ? (
+                                                      <Button
+                                                        size="xs"
+                                                        colorScheme="red"
+                                                        variant="outline"
+                                                        onClick={async (e) => {
+                                                          e.stopPropagation();
+                                                          const confirmed = window.confirm(
+                                                            `Liberar slot #${slot.slotNumber} do cliente ${slot.client?.name || "desconhecido"}?`
+                                                          );
+                                                          if (!confirmed) return;
+                                                          
+                                                          try {
+                                                            await releaseTVSlot(slot.id);
+                                                            toast({
+                                                              title: "Slot liberado com sucesso",
+                                                              status: "success",
+                                                              duration: 3000,
+                                                            });
+                                                            // Recarregar slots
+                                                            const slotsData = await getTVAccountSlots(account.id);
+                                                            setAccountSlots(prev => ({ ...prev, [account.id]: slotsData }));
+                                                            // Atualizar lista de contas
+                                                            const accounts = await listTVAccounts();
+                                                            setAccountsList(accounts);
+                                                            queryClient.invalidateQueries({ queryKey: ["tvOverview"] });
+                                                            queryClient.invalidateQueries({ queryKey: ["tvNextEmail"] });
+                                                          } catch (error) {
+                                                            toast({
+                                                              title: "Erro ao liberar slot",
+                                                              status: "error",
+                                                              duration: 3000,
+                                                            });
+                                                          }
+                                                        }}
+                                                      >
+                                                        Liberar
+                                                      </Button>
+                                                    ) : (
+                                                      <Text fontSize="xs" color="gray.500">-</Text>
+                                                    )}
+                                                  </Td>
+                                                </Tr>
+                                              ))}
+                                            </Tbody>
+                                          </Table>
+                                        </Box>
+                                      </Stack>
+                                    )}
+                                  </Box>
+                                </Collapse>
+                              </Td>
+                            </Tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                  </Tbody>
+                </Table>
+                </Box>
+              </Stack>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" onClick={emailsModal.onClose}>
+              Fechar
             </Button>
           </ModalFooter>
         </ModalContent>

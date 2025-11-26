@@ -78,6 +78,111 @@ export async function deleteTVAccount(accountId: string) {
   }
 }
 
+export async function fetchTVAccountUsage(accountId: string): Promise<{ totalSlots: number; assignedSlots: number }> {
+  try {
+    const response = await api.get<{ totalSlots: number; assignedSlots: number }>(
+      `/tv/accounts/${accountId}/usage`
+    );
+    return response.data;
+  } catch (error) {
+    const typedError = error as ApiError;
+    if (isSchemaUnavailable(typedError)) {
+      return { totalSlots: 0, assignedSlots: 0 };
+    }
+    throw typedError;
+  }
+}
+
+export interface NextEmailInfo {
+  nextEmail: string;
+  availableSlots: number;
+  exists: boolean;
+}
+
+export async function getNextEmailInfo(): Promise<NextEmailInfo> {
+  try {
+    const response = await api.get<NextEmailInfo>("/tv/next-email");
+    return response.data;
+  } catch (error) {
+    const typedError = error as ApiError;
+    if (isSchemaUnavailable(typedError)) {
+      return {
+        nextEmail: "1a8@nexusrs.com.br",
+        availableSlots: 0,
+        exists: false,
+      };
+    }
+    throw typedError;
+  }
+}
+
+export async function resetTVAccounts() {
+  try {
+    const response = await api.post<{
+      message: string;
+      nextEmail: string;
+      availableSlots: number;
+    }>("/tv/accounts/reset");
+    return response.data;
+  } catch (error) {
+    const typedError = error as ApiError;
+    if (isSchemaUnavailable(typedError)) {
+      throw new Error("As tabelas de TV não estão configuradas. Execute o script supabase/schema.sql.");
+    }
+    throw typedError;
+  }
+}
+
+export interface TVAccountInfo {
+  id: string;
+  email: string;
+  totalSlots: number;
+  availableSlots: number;
+  assignedSlots: number;
+  createdAt: string;
+}
+
+export async function listTVAccounts(): Promise<TVAccountInfo[]> {
+  try {
+    const response = await api.get<TVAccountInfo[]>("/tv/accounts/list");
+    return response.data;
+  } catch (error) {
+    const typedError = error as ApiError;
+    if (isSchemaUnavailable(typedError)) {
+      return [];
+    }
+    throw typedError;
+  }
+}
+
+export interface TVAccountSlot {
+  id: string;
+  slotNumber: number;
+  username: string;
+  status: string;
+  clientId: string | null;
+  client: { id: string; name: string; email: string; document: string } | null;
+  planType: string | null;
+  soldBy: string | null;
+  soldAt: string | null;
+  expiresAt: string | null;
+  notes: string | null;
+  hasTelephony: boolean | null;
+}
+
+export async function getTVAccountSlots(accountId: string): Promise<TVAccountSlot[]> {
+  try {
+    const response = await api.get<TVAccountSlot[]>(`/tv/accounts/${accountId}/slots`);
+    return response.data;
+  } catch (error) {
+    const typedError = error as ApiError;
+    if (isSchemaUnavailable(typedError)) {
+      return [];
+    }
+    throw typedError;
+  }
+}
+
 export async function fetchClientTVAssignments(clientId: string): Promise<ClientTVAssignment[]> {
   try {
     const response = await api.get<ClientTVAssignment[]>(`/tv/slots`, {
