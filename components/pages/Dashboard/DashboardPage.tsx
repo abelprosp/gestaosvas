@@ -184,7 +184,60 @@ export function DashboardPage() {
   const loadingSales = salesQuery.isLoading;
   const fetchingSales = salesQuery.isFetching;
 
-  const availableServices = salesData.services;
+  // Buscar todos os serviços cadastrados para mostrar no resumo
+  const { data: allServices = [], isLoading: isLoadingAllServices } = useQuery({
+    queryKey: ["services", "dashboard"],
+    queryFn: async () => {
+      try {
+        const response = await api.get<Array<{ id: string; name: string }>>("/services");
+        return response.data ?? [];
+      } catch (error) {
+        console.error("Erro ao buscar serviços:", error);
+        return [];
+      }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutos - dados considerados "frescos"
+    enabled: true,
+    retry: 2,
+    refetchOnMount: true,
+  });
+
+  // Combinar serviços de vendas com todos os serviços cadastrados
+  const availableServices = useMemo(() => {
+    const servicesMap = new Map<string, { key: string; name: string; group: "TV" | "SERVICO" }>();
+    
+    // Adicionar TODOS os serviços cadastrados
+    if (allServices && Array.isArray(allServices)) {
+      allServices.forEach((service: any) => {
+        const serviceId = service.id || service.service_id;
+        const serviceName = service.name || service.service_name;
+        
+        if (!serviceId || !serviceName) return;
+        
+        const serviceNameLower = String(serviceName).toLowerCase().trim();
+        if (serviceNameLower === "tv" || serviceNameLower === "tv essencial" || serviceNameLower === "tv premium") {
+          return;
+        }
+        
+        servicesMap.set(serviceName, {
+          key: `svc-${serviceId}`,
+          name: serviceName,
+          group: "SERVICO" as const,
+        });
+      });
+    }
+    
+    // Atualizar com dados de vendas se existirem
+    if (salesData.services && Array.isArray(salesData.services)) {
+      salesData.services.forEach(s => {
+        if (s.group !== "TV") {
+          servicesMap.set(s.name, s);
+        }
+      });
+    }
+    
+    return Array.from(servicesMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [salesData.services, allServices]);
 
   const activeServices = useMemo<SalesTimeseries["services"]>(() => {
     // Filtrar serviços TV individuais (essencial e premium) do gráfico
@@ -370,28 +423,14 @@ export function DashboardPage() {
         </Text>
 
         <SimpleGrid columns={{ base: 1, md: 3, xl: 4 }} spacing={4} mt={6}>
-          {availableServices
-            .filter((service) => service.group !== "TV")
-            .map((service) => {
-              const salesTotals = salesData.points.reduce((acc, point) => acc + (point.totals[service.key] ?? 0), 0);
-              return (
-                <Box key={service.key} borderWidth={1} borderColor={cardBorder} bg={listBg} p={4} borderRadius="xl">
-                  <HStack justify="space-between" mb={2}>
-                    <Text fontWeight="semibold">{service.name}</Text>
-                    <Badge colorScheme="blue" borderRadius="full">
-                      Serviço
-                    </Badge>
-                  </HStack>
-                  <Text fontSize="sm" color={mutedText}>
-                    Clientes referenciados
-                  </Text>
-                  <Text fontSize="2xl" fontWeight="bold" color="brand.600">
-                    {salesTotals}
-                  </Text>
-                </Box>
-              );
-            })}
-          <Box borderWidth={1} borderColor={cardBorder} bg={listBg} p={4} borderRadius="xl">
+          {loadingSales || isLoadingAllServices ? (
+            <Text color={mutedText} gridColumn="1 / -1" textAlign="center" py={4}>
+              Carregando serviços...
+            </Text>
+          ) : (
+            <>
+              {/* Card de TV */}
+              <Box borderWidth={1} borderColor={cardBorder} bg={listBg} p={4} borderRadius="xl">
             <HStack justify="space-between" mb={2}>
               <Text fontWeight="semibold">TV (Essencial + Premium)</Text>
               <Badge colorScheme="teal" borderRadius="full">
@@ -424,7 +463,32 @@ export function DashboardPage() {
                 ))}
               </VStack>
             </Collapse>
-          </Box>
+              </Box>
+
+              {/* Outros serviços */}
+              {availableServices
+                .filter((service) => service.group !== "TV")
+                .map((service) => {
+                  const salesTotals = salesData.points.reduce((acc, point) => acc + (point.totals[service.key] ?? 0), 0);
+                  return (
+                    <Box key={service.key} borderWidth={1} borderColor={cardBorder} bg={listBg} p={4} borderRadius="xl">
+                      <HStack justify="space-between" mb={2}>
+                        <Text fontWeight="semibold">{service.name}</Text>
+                        <Badge colorScheme="blue" borderRadius="full">
+                          Serviço
+                        </Badge>
+                      </HStack>
+                      <Text fontSize="sm" color={mutedText}>
+                        Clientes referenciados
+                      </Text>
+                      <Text fontSize="2xl" fontWeight="bold" color="brand.600">
+                        {salesTotals}
+                      </Text>
+                    </Box>
+                  );
+                })}
+            </>
+          )}
         </SimpleGrid>
           </Box>
 

@@ -72,6 +72,9 @@ function StatCard({ label, value }: { label: string; value: number }) {
 }
 
 export function DashboardPage() {
+  console.log('🚀 Dashboard renderizado');
+  console.log('[Dashboard] 🚀 Componente DashboardPage renderizado');
+  
   const defaultRange = useMemo(() => {
     const end = new Date();
     const start = new Date(end);
@@ -184,7 +187,102 @@ export function DashboardPage() {
   const loadingSales = salesQuery.isLoading;
   const fetchingSales = salesQuery.isFetching;
 
-  const availableServices = salesData.services;
+  // Buscar todos os serviços cadastrados para mostrar no resumo
+  console.log('🔍 Iniciando query de serviços');
+  const { data: allServices = [], isLoading: isLoadingAllServices, error: servicesError } = useQuery({
+    queryKey: ["services", "dashboard"], // Query key diferente para não compartilhar cache
+    queryFn: async () => {
+      console.log('📞 Executando queryFn de serviços');
+      try {
+        const response = await api.get<Array<{ id: string; name: string }>>("/services");
+        const services = response.data ?? [];
+        console.log('✅ Serviços recebidos:', services.length);
+        console.log('📋 Serviços:', services.map(s => s.name).join(', '));
+        return services;
+      } catch (error) {
+        console.error('❌ ERRO ao buscar serviços:', error);
+        if (error instanceof Error) {
+          console.error('❌ Mensagem:', error.message);
+        }
+        return [];
+      }
+    },
+    staleTime: 0, // Sempre buscar dados frescos
+    enabled: true,
+    retry: 2,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+  });
+  
+  console.log('📊 Query estado:', {
+    isLoading: isLoadingAllServices,
+    hasError: !!servicesError,
+    count: allServices.length,
+    services: allServices.map(s => s.name)
+  });
+  
+  if (servicesError) {
+    console.error('❌ Erro na query:', servicesError);
+  }
+
+  // Combinar serviços de vendas com todos os serviços cadastrados
+  const availableServices = useMemo(() => {
+    console.log('[Dashboard] 🔄 Combinando serviços...');
+    console.log('[Dashboard] - allServices:', allServices);
+    console.log('[Dashboard] - salesData.services:', salesData.services);
+    
+    const servicesMap = new Map<string, { key: string; name: string; group: "TV" | "SERVICO" }>();
+    
+    // PRIMEIRO: Adicionar TODOS os serviços cadastrados, SEM FILTROS (exceto TV)
+    if (allServices && Array.isArray(allServices)) {
+      console.log('[Dashboard] 📋 Adicionando', allServices.length, 'serviços cadastrados');
+      allServices.forEach((service: any) => {
+        // Verificar se é um objeto válido
+        const serviceId = service.id || service.service_id;
+        const serviceName = service.name || service.service_name;
+        
+        if (!serviceId || !serviceName) {
+          console.warn('[Dashboard] ⚠️ Serviço inválido ignorado:', service);
+          return;
+        }
+        
+        const serviceNameLower = String(serviceName).toLowerCase().trim();
+        
+        // Apenas ignorar se for explicitamente "TV" ou variantes de TV
+        if (serviceNameLower === "tv" || serviceNameLower === "tv essencial" || serviceNameLower === "tv premium") {
+          console.log('[Dashboard] ⏭️ Ignorando TV:', serviceName);
+          return;
+        }
+        
+        // Adicionar TODOS os outros serviços (Cloud, Tele, Hub, etc.)
+        console.log('[Dashboard] ✅ Adicionando serviço:', serviceName);
+        servicesMap.set(serviceName, {
+          key: `svc-${serviceId}`,
+          name: serviceName,
+          group: "SERVICO" as const,
+        });
+      });
+    }
+    
+    // SEGUNDO: Atualizar com dados de vendas se existirem (para preservar keys corretas)
+    if (salesData.services && Array.isArray(salesData.services)) {
+      console.log('[Dashboard] 📊 Atualizando com', salesData.services.length, 'serviços de vendas');
+      salesData.services.forEach(s => {
+        if (servicesMap.has(s.name)) {
+          // Atualizar key se necessário
+          servicesMap.set(s.name, s);
+        } else if (s.group !== "TV") {
+          // Adicionar serviço que tem vendas mas não está cadastrado (caso raro)
+          servicesMap.set(s.name, s);
+        }
+      });
+    }
+    
+    const result = Array.from(servicesMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+    console.log('[Dashboard] ✅ RESULTADO FINAL:', result.length, 'serviços');
+    console.log('[Dashboard] 📋 Serviços:', result.map(s => s.name));
+    return result;
+  }, [salesData.services, allServices]);
 
   const activeServices = useMemo<SalesTimeseries["services"]>(() => {
     if (!selectedServiceNames.length) {
@@ -365,62 +463,135 @@ export function DashboardPage() {
           Veja quantos clientes estão vinculados a cada oferta ativa.
         </Text>
 
+        {/* Debug info - sempre visível temporariamente */}
+        <Box 
+          mb={4} 
+          p={4} 
+          bg={useColorModeValue("yellow.50", "yellow.900")}
+          borderRadius="md" 
+          fontSize="sm" 
+          fontFamily="mono" 
+          borderWidth={2} 
+          borderColor={useColorModeValue("yellow.300", "yellow.600")}
+        >
+          <Text fontWeight="bold" mb={3} fontSize="md" color={useColorModeValue("yellow.900", "yellow.100")}>
+            🔍 DEBUG INFO - TEMPORÁRIO
+          </Text>
+          <VStack align="stretch" spacing={2}>
+            <Text>
+              <strong>allServices.length:</strong> {allServices.length}
+            </Text>
+            <Text>
+              <strong>isLoadingAllServices:</strong> {isLoadingAllServices ? 'SIM' : 'NÃO'}
+            </Text>
+            <Text>
+              <strong>servicesError:</strong> {servicesError ? String(servicesError) : 'nenhum'}
+            </Text>
+            <Text>
+              <strong>allServices names:</strong> {allServices.length > 0 ? allServices.map((s: any) => s.name || s.service_name || 'sem nome').join(', ') : 'VAZIO ❌'}
+            </Text>
+            <Text>
+              <strong>availableServices (non-TV):</strong> {availableServices.filter(s => s.group !== 'TV').length}
+            </Text>
+            <Text>
+              <strong>availableServices names:</strong> {availableServices.filter(s => s.group !== 'TV').map(s => s.name).join(', ') || 'nenhum ❌'}
+            </Text>
+          </VStack>
+        </Box>
+        
         <SimpleGrid columns={{ base: 1, md: 3, xl: 4 }} spacing={4} mt={6}>
-          {availableServices
-            .filter((service) => service.group !== "TV")
-            .map((service) => {
-              const salesTotals = salesData.points.reduce((acc, point) => acc + (point.totals[service.key] ?? 0), 0);
-              return (
-                <Box key={service.key} borderWidth={1} borderColor={cardBorder} bg={listBg} p={4} borderRadius="xl">
-                  <HStack justify="space-between" mb={2}>
-                    <Text fontWeight="semibold">{service.name}</Text>
-                    <Badge colorScheme="blue" borderRadius="full">
-                      Serviço
-                    </Badge>
-                  </HStack>
-                  <Text fontSize="sm" color={mutedText}>
-                    Clientes referenciados
-                  </Text>
-                  <Text fontSize="2xl" fontWeight="bold" color="brand.600">
-                    {salesTotals}
-                  </Text>
-                </Box>
-              );
-            })}
-          <Box borderWidth={1} borderColor={cardBorder} bg={listBg} p={4} borderRadius="xl">
-            <HStack justify="space-between" mb={2}>
-              <Text fontWeight="semibold">TV (Essencial + Premium)</Text>
-              <Badge colorScheme="teal" borderRadius="full">
-                TV
-              </Badge>
-            </HStack>
-            <Text fontSize="sm" color={mutedText}>
-              Clientes referenciados
+          {loadingSales || isLoadingAllServices ? (
+            <Text color={mutedText} gridColumn="1 / -1" textAlign="center" py={4}>
+              Carregando serviços...
             </Text>
-            <Text fontSize="2xl" fontWeight="bold" color="brand.600">
-              {data.planSummary.reduce((acc, item) => acc + item.clients, 0)}
-            </Text>
+          ) : servicesError ? (
+            <Box gridColumn="1 / -1" p={4} bg="red.50" borderRadius="md" borderWidth={1} borderColor="red.200">
+              <Text color="red.600" fontWeight="semibold">Erro ao carregar serviços</Text>
+              <Text color="red.500" fontSize="sm" mt={1}>
+                {servicesError instanceof Error ? servicesError.message : "Erro desconhecido"}
+              </Text>
+            </Box>
+          ) : (
+            <>
+              {/* Card de TV */}
+              <Box borderWidth={1} borderColor={cardBorder} bg={listBg} p={4} borderRadius="xl">
+                <HStack justify="space-between" mb={2}>
+                  <Text fontWeight="semibold">TV (Essencial + Premium)</Text>
+                  <Badge colorScheme="teal" borderRadius="full">
+                    TV
+                  </Badge>
+                </HStack>
+                <Text fontSize="sm" color={mutedText}>
+                  Clientes referenciados
+                </Text>
+                <Text fontSize="2xl" fontWeight="bold" color="brand.600">
+                  {data.planSummary.reduce((acc, item) => acc + item.clients, 0)}
+                </Text>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  mt={4}
+                  onClick={() => setIsTvBreakdownOpen((prev) => !prev)}
+                  colorScheme="brand"
+                >
+                  {isTvBreakdownOpen ? "Ocultar detalhes" : "Ver detalhes"}
+                </Button>
+                <Collapse in={isTvBreakdownOpen} animateOpacity>
+                  <VStack align="stretch" spacing={2} mt={4}>
+                    {data.planSummary.map((item) => (
+                      <HStack key={item.plan} justify="space-between" fontSize="sm">
+                        <Text color={mutedText}>{item.plan === "ESSENCIAL" ? "TV Essencial" : "TV Premium"}</Text>
+                        <Text fontWeight="semibold">{item.clients}</Text>
+                      </HStack>
+                    ))}
+                  </VStack>
+                </Collapse>
+              </Box>
 
-            <Button
-              size="sm"
-              variant="ghost"
-              mt={4}
-              onClick={() => setIsTvBreakdownOpen((prev) => !prev)}
-              colorScheme="brand"
-            >
-              {isTvBreakdownOpen ? "Ocultar detalhes" : "Ver detalhes"}
-            </Button>
-            <Collapse in={isTvBreakdownOpen} animateOpacity>
-              <VStack align="stretch" spacing={2} mt={4}>
-                {data.planSummary.map((item) => (
-                  <HStack key={item.plan} justify="space-between" fontSize="sm">
-                    <Text color={mutedText}>{item.plan === "ESSENCIAL" ? "TV Essencial" : "TV Premium"}</Text>
-                    <Text fontWeight="semibold">{item.clients}</Text>
-                  </HStack>
-                ))}
-              </VStack>
-            </Collapse>
-          </Box>
+              {/* Outros serviços */}
+              {(() => {
+                const nonTvServices = availableServices.filter((service) => service.group !== "TV");
+                if (nonTvServices.length === 0) {
+                  return (
+                    <Box key="debug" gridColumn="2 / -1" p={4} bg="yellow.50" borderRadius="md" borderWidth={1} borderColor="yellow.200">
+                      <Text color="yellow.800" fontWeight="semibold">Nenhum serviço não-TV encontrado</Text>
+                      <Text color="yellow.700" fontSize="sm" mt={1}>
+                        Total de serviços cadastrados: {allServices.length}
+                      </Text>
+                      <Text color="yellow.700" fontSize="sm">
+                        Serviços disponíveis: {availableServices.length} (incluindo TV)
+                      </Text>
+                      <Text color="yellow.600" fontSize="xs" mt={2} fontFamily="mono">
+                        Debug: allServices = {JSON.stringify(allServices.map(s => s.name))}
+                      </Text>
+                    </Box>
+                  );
+                }
+                return nonTvServices.map((service) => {
+                  // Calcular total de vendas/clientes referenciados para este serviço
+                  // Se o serviço não tem vendas no período, mostrará 0
+                  const salesTotals = salesData.points.reduce((acc, point) => acc + (point.totals[service.key] ?? 0), 0);
+                  
+                  return (
+                    <Box key={service.key} borderWidth={1} borderColor={cardBorder} bg={listBg} p={4} borderRadius="xl">
+                      <HStack justify="space-between" mb={2}>
+                        <Text fontWeight="semibold">{service.name}</Text>
+                        <Badge colorScheme="blue" borderRadius="full">
+                          Serviço
+                        </Badge>
+                      </HStack>
+                      <Text fontSize="sm" color={mutedText}>
+                        Clientes referenciados
+                      </Text>
+                      <Text fontSize="2xl" fontWeight="bold" color="brand.600">
+                        {salesTotals}
+                      </Text>
+                    </Box>
+                  );
+                });
+              })()}
+            </>
+          )}
         </SimpleGrid>
           </Box>
 

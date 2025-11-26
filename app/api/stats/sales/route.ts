@@ -16,6 +16,12 @@ type ClientServiceSaleRow = {
   service: { id: string; name: string } | null;
 };
 
+type CloudAccessSaleRow = {
+  created_at: string | null;
+  service_id: string | null;
+  service: { id: string; name: string } | null;
+};
+
 function isSchemaMissing(error: PostgrestError | null | undefined) {
   return Boolean(error?.code && SCHEMA_MISSING_CODES.has(error.code));
 }
@@ -94,26 +100,37 @@ export const GET = createApiHandler(async (req) => {
 
   const months = enumerateMonths(startDate, endDate);
 
-  const [{ data: clientServices, error: clientServicesError }, { data: tvSlots, error: tvSlotsError }] =
-    await Promise.all([
-      supabase
-        .from("client_services")
-        .select("created_at, service:services(id, name)")
-        .gte("created_at", startDate.toISOString())
-        .lte("created_at", endDate.toISOString()),
-      supabase
-        .from("tv_slots")
-        .select("sold_at, plan_type")
-        .not("sold_at", "is", null)
-        .gte("sold_at", startDate.toISOString())
-        .lte("sold_at", endDate.toISOString()),
-    ]);
+  const [
+    { data: clientServices, error: clientServicesError },
+    { data: tvSlots, error: tvSlotsError },
+    { data: cloudAccesses, error: cloudAccessesError },
+  ] = await Promise.all([
+    supabase
+      .from("client_services")
+      .select("created_at, service:services(id, name)")
+      .gte("created_at", startDate.toISOString())
+      .lte("created_at", endDate.toISOString()),
+    supabase
+      .from("tv_slots")
+      .select("sold_at, plan_type")
+      .not("sold_at", "is", null)
+      .gte("sold_at", startDate.toISOString())
+      .lte("sold_at", endDate.toISOString()),
+    supabase
+      .from("cloud_accesses")
+      .select("created_at, service_id, service:services(id, name)")
+      .gte("created_at", startDate.toISOString())
+      .lte("created_at", endDate.toISOString()),
+  ]);
 
   if (clientServicesError) {
     throw clientServicesError;
   }
   if (tvSlotsError && !isSchemaMissing(tvSlotsError)) {
     throw tvSlotsError;
+  }
+  if (cloudAccessesError && !isSchemaMissing(cloudAccessesError)) {
+    throw cloudAccessesError;
   }
 
   type ServiceKey = string;
@@ -156,6 +173,27 @@ export const GET = createApiHandler(async (req) => {
     const key: ServiceKey = slot.plan_type === "PREMIUM" ? "tv-premium" : "tv-essencial";
     if (!serviceCatalog.has(key)) {
       serviceCatalog.set(key, { key, name: plan, group: "TV" });
+    }
+    events.push({ serviceKey: key, occurredAt: occurredAt.toISOString() });
+  });
+
+  // Adicionar acessos Cloud (Cloud, Tele, Hub)
+  const cloudAccessRows = (cloudAccesses ?? []) as unknown as CloudAccessSaleRow[];
+  cloudAccessRows.forEach((access) => {
+    const rawDate = access.created_at;
+    const service = access.service;
+    if (!rawDate || !service?.id || !service?.name) {
+      return;
+    }
+    const occurredAt = new Date(rawDate);
+    if (Number.isNaN(occurredAt.getTime())) {
+      return;
+    }
+    const serviceName = service.name.trim();
+    // Ignorar se já foi processado via client_services
+    const key = `svc-${service.id}`;
+    if (!serviceCatalog.has(key)) {
+      serviceCatalog.set(key, { key, name: serviceName, group: "SERVICO" });
     }
     events.push({ serviceKey: key, occurredAt: occurredAt.toISOString() });
   });
