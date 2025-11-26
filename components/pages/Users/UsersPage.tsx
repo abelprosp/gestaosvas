@@ -51,7 +51,7 @@ import {
   FiPhone,
   FiTrash2,
 } from "react-icons/fi";
-import { fetchTVOverview, regenerateTVSlotPassword, releaseTVSlot, updateTVSlot, updateTVAccountEmail } from "@/lib/api/tv";
+import { fetchTVOverview, regenerateTVSlotPassword, releaseTVSlot, updateTVSlot, updateTVAccountEmail, deleteTVAccount } from "@/lib/api/tv";
 import { PaginatedResponse, TVOverviewRecord, TVSlotStatus } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { createRequest } from "@/lib/api/requests";
@@ -185,6 +185,7 @@ export function UsersPage() {
   const [editingEmail, setEditingEmail] = useState("");
   const [originalEmail, setOriginalEmail] = useState("");
   const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const limit = 50;
   const hasSearch = searchTerm.trim().length > 0;
   const effectivePage = hasSearch ? 1 : page;
@@ -534,10 +535,77 @@ export function UsersPage() {
       setEditingEmail("");
       setOriginalEmail("");
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Erro ao atualizar e-mail";
-      toast({ title: "Erro ao atualizar e-mail", description: errorMessage, status: "error", duration: 5000 });
+      // Extrair mensagem de erro mais detalhada
+      let errorMessage = "Erro ao atualizar e-mail";
+      if (error && typeof error === "object") {
+        if ("response" in error) {
+          const axiosError = error as { response?: { data?: { message?: string } } };
+          if (axiosError.response?.data?.message) {
+            errorMessage = axiosError.response.data.message;
+          }
+        } else if ("message" in error && typeof (error as { message?: string }).message === "string") {
+          errorMessage = (error as { message: string }).message;
+        }
+      }
+      toast({ 
+        title: "Erro ao atualizar e-mail", 
+        description: errorMessage, 
+        status: "error", 
+        duration: 6000,
+        isClosable: true
+      });
     } finally {
       setIsUpdatingEmail(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!editingAccountId) return;
+
+    const confirmed = window.confirm(
+      `Tem certeza que deseja remover a conta de TV "${originalEmail}"?\n\n` +
+      "Esta ação não pode ser desfeita. Todos os slots desta conta serão removidos automaticamente."
+    );
+
+    if (!confirmed) return;
+
+    setIsDeletingAccount(true);
+    try {
+      const result = await deleteTVAccount(editingAccountId);
+      toast({ 
+        title: "Conta removida com sucesso", 
+        description: result.slotsRemoved || "A conta e todos os seus slots foram removidos.",
+        status: "success",
+        duration: 5000,
+        isClosable: true
+      });
+      queryClient.invalidateQueries({ queryKey: ["tvOverview"] });
+      editEmailModal.onClose();
+      setEditingAccountId(null);
+      setEditingEmail("");
+      setOriginalEmail("");
+    } catch (error) {
+      // Extrair mensagem de erro mais detalhada
+      let errorMessage = "Erro ao remover conta";
+      if (error && typeof error === "object") {
+        if ("response" in error) {
+          const axiosError = error as { response?: { data?: { message?: string } } };
+          if (axiosError.response?.data?.message) {
+            errorMessage = axiosError.response.data.message;
+          }
+        } else if ("message" in error && typeof (error as { message?: string }).message === "string") {
+          errorMessage = (error as { message: string }).message;
+        }
+      }
+      toast({ 
+        title: "Erro ao remover conta", 
+        description: errorMessage, 
+        status: "error", 
+        duration: 6000,
+        isClosable: true
+      });
+    } finally {
+      setIsDeletingAccount(false);
     }
   };
 
@@ -1259,13 +1327,25 @@ export function UsersPage() {
             </FormControl>
           </ModalBody>
           <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={editEmailModal.onClose} isDisabled={isUpdatingEmail}>
+            <Button 
+              colorScheme="red" 
+              variant="outline"
+              mr="auto"
+              onClick={handleDeleteAccount} 
+              isLoading={isDeletingAccount}
+              isDisabled={isUpdatingEmail || isDeletingAccount}
+              leftIcon={<FiTrash2 />}
+            >
+              Remover conta
+            </Button>
+            <Button variant="ghost" mr={3} onClick={editEmailModal.onClose} isDisabled={isUpdatingEmail || isDeletingAccount}>
               Cancelar
             </Button>
             <Button 
               colorScheme="blue" 
               onClick={handleUpdateEmail} 
               isLoading={isUpdatingEmail}
+              isDisabled={isDeletingAccount}
             >
               Salvar e confirmar
             </Button>

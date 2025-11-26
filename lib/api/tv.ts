@@ -61,6 +61,23 @@ export async function updateTVAccountEmail(accountId: string, email: string) {
   }
 }
 
+export async function deleteTVAccount(accountId: string) {
+  try {
+    const response = await api.delete<{
+      message: string;
+      deletedAccount: { id: string; email: string };
+      slotsRemoved?: string;
+    }>(`/tv/accounts/${accountId}`);
+    return response.data;
+  } catch (error) {
+    const typedError = error as ApiError;
+    if (isSchemaUnavailable(typedError)) {
+      throw new Error("As tabelas de TV não estão configuradas. Execute o script supabase/schema.sql.");
+    }
+    throw typedError;
+  }
+}
+
 export async function fetchClientTVAssignments(clientId: string): Promise<ClientTVAssignment[]> {
   try {
     const response = await api.get<ClientTVAssignment[]>(`/tv/slots`, {
