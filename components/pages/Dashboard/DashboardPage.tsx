@@ -242,23 +242,30 @@ export function DashboardPage() {
   const activeServices = useMemo<SalesTimeseries["services"]>(() => {
     const services: SalesTimeseries["services"] = [];
     
-    // Adicionar serviço TV agregado (Essencial + Premium)
-    const tvEssencial = salesData.services.find((s) => s.key === "tv-essencial");
-    const tvPremium = salesData.services.find((s) => s.key === "tv-premium");
-    if (tvEssencial || tvPremium) {
-      services.push({
-        key: "tv-total",
-        name: "TV (Essencial + Premium)",
-        group: "TV" as const,
-      });
+    // Verificar se TV deve ser incluída (se não há filtro ou se foi explicitamente selecionada)
+    const shouldIncludeTV = !selectedServiceNames.length || selectedServiceNames.includes("TV (Essencial + Premium)");
+    
+    // Adicionar serviço TV agregado (Essencial + Premium) se necessário
+    if (shouldIncludeTV) {
+      const tvEssencial = salesData.services.find((s) => s.key === "tv-essencial");
+      const tvPremium = salesData.services.find((s) => s.key === "tv-premium");
+      if (tvEssencial || tvPremium) {
+        services.push({
+          key: "tv-total",
+          name: "TV (Essencial + Premium)",
+          group: "TV" as const,
+        });
+      }
     }
     
     // Adicionar outros serviços não-TV
     const nonTvServices = availableServices.filter((service) => service.group !== "TV");
     
     if (!selectedServiceNames.length) {
+      // Se não há filtro, mostrar todos os serviços não-TV
       services.push(...nonTvServices);
     } else {
+      // Filtrar apenas os serviços selecionados (exceto TV que já foi tratada acima)
       const filtered = nonTvServices.filter((service) => selectedServiceNames.includes(service.name));
       services.push(...filtered);
     }
@@ -393,6 +400,11 @@ export function DashboardPage() {
           </Text>
           <CheckboxGroup value={selectedServiceNames} onChange={(values) => setSelectedServiceNames(values as string[])}>
             <Wrap spacing={3}>
+              {/* Adicionar checkbox para TV agregada */}
+              <WrapItem key="tv-total">
+                <Checkbox value="TV (Essencial + Premium)">TV (Essencial + Premium)</Checkbox>
+              </WrapItem>
+              {/* Adicionar outros serviços */}
               {availableServices
                 .filter((service) => service.group !== "TV")
                 .map((service) => (
