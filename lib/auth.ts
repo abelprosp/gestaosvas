@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { maskEmail, getSafeErrorMessage } from "@/lib/utils/privacy";
 
 export interface AuthUser {
   id: string;
@@ -50,11 +51,13 @@ export async function requireAuth(request: NextRequest): Promise<{ user: AuthUse
     const { data, error } = await supabase.auth.getUser(token);
 
     if (error) {
+      const safeMessage = getSafeErrorMessage(error, "Erro de autenticação");
       console.error("[requireAuth] Erro ao validar token:", {
-        message: error.message,
+        message: safeMessage,
         status: (error as any)?.status,
       });
-      return NextResponse.json({ message: `Sessão inválida: ${error.message}` }, { status: 401 });
+      // Sempre retornar mensagem genérica para não expor detalhes
+      return NextResponse.json({ message: "Sessão inválida" }, { status: 401 });
     }
 
     if (!data?.user) {
@@ -68,11 +71,11 @@ export async function requireAuth(request: NextRequest): Promise<{ user: AuthUse
       role: (data.user.user_metadata as { role?: string } | undefined)?.role ?? "user",
     };
 
-    console.log(`[requireAuth] Usuário autenticado: ${user.email} (role: ${user.role})`);
+    console.log(`[requireAuth] Usuário autenticado: ${maskEmail(user.email)} (role: ${user.role})`);
     return { user };
   } catch (error) {
     console.error("[requireAuth] Erro inesperado na autenticação:", error);
-    const message = error instanceof Error ? error.message : "Erro na autenticação";
+    const message = getSafeErrorMessage(error instanceof Error ? error : new Error("Erro na autenticação"), "Erro na autenticação");
     return NextResponse.json({ message }, { status: 500 });
   }
 }
@@ -80,7 +83,7 @@ export async function requireAuth(request: NextRequest): Promise<{ user: AuthUse
 export function requireAdmin(user: AuthUser): boolean {
   const isAdmin = user.role === "admin";
   if (!isAdmin) {
-    console.warn(`Acesso negado: usuário ${user.email} tem role "${user.role}", mas requer "admin"`);
+    console.warn(`Acesso negado: usuário ${maskEmail(user.email)} tem role "${user.role}", mas requer "admin"`);
   }
   return isAdmin;
 }

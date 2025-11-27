@@ -3,13 +3,17 @@ import { createApiHandler } from "@/lib/utils/apiHandler";
 import { createServerClient } from "@/lib/supabase/server";
 import { HttpError } from "@/lib/utils/httpError";
 import { mapContractRow, mapClientRow, mapLineRow, mapTemplateRow, contractUpdatePayload } from "@/lib/utils/mappers";
+import { validateRouteParamUUID } from "@/lib/utils/validation";
 
 export const GET = createApiHandler(async (req, { params }) => {
+  // Validar UUID do parâmetro
+  const contractId = validateRouteParamUUID(params.id, "id");
+  
   const supabase = createServerClient();
   const { data, error } = await supabase
     .from("contracts")
     .select("*, client:clients(*, lines(*)), template:contract_templates(*)")
-    .eq("id", params.id)
+    .eq("id", contractId)
     .maybeSingle();
 
   if (error) {

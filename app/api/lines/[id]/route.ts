@@ -4,6 +4,7 @@ import { createApiHandler } from "@/lib/utils/apiHandler";
 import { createServerClient } from "@/lib/supabase/server";
 import { HttpError } from "@/lib/utils/httpError";
 import { lineUpdatePayload, mapLineRow } from "@/lib/utils/mappers";
+import { validateRouteParamUUID } from "@/lib/utils/validation";
 
 const lineUpdateSchema = z
   .object({
@@ -17,6 +18,9 @@ const lineUpdateSchema = z
   .partial();
 
 export const PUT = createApiHandler(async (req, { params }) => {
+  // Validar UUID do parâmetro
+  const lineId = validateRouteParamUUID(params.id, "id");
+  
   const supabase = createServerClient();
   const body = await req.json();
   const payload = lineUpdateSchema.parse(body);
@@ -24,7 +28,7 @@ export const PUT = createApiHandler(async (req, { params }) => {
   const { data, error } = await supabase
     .from("lines")
     .update(updatePayload)
-    .eq("id", params.id)
+    .eq("id", lineId)
     .select("*")
     .maybeSingle();
 
@@ -40,8 +44,11 @@ export const PUT = createApiHandler(async (req, { params }) => {
 });
 
 export const DELETE = createApiHandler(async (req, { params }) => {
+  // Validar UUID do parâmetro
+  const lineId = validateRouteParamUUID(params.id, "id");
+  
   const supabase = createServerClient();
-  const { error } = await supabase.from("lines").delete().eq("id", params.id);
+  const { error } = await supabase.from("lines").delete().eq("id", lineId);
 
   if (error) {
     throw error;

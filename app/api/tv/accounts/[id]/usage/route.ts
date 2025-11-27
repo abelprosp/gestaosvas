@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createApiHandler } from "@/lib/utils/apiHandler";
 import { createServerClient } from "@/lib/supabase/server";
 import { PostgrestError } from "@supabase/supabase-js";
+import { validateRouteParamUUID } from "@/lib/utils/validation";
 
 const SCHEMA_ERROR_CODES = new Set(["PGRST200", "PGRST201", "PGRST202", "PGRST203", "PGRST204", "PGRST205"]);
 
@@ -11,7 +12,8 @@ function isSchemaMissing(error: unknown): error is PostgrestError {
 
 export const GET = createApiHandler(
   async (req, { params }) => {
-    const accountId = params.id;
+    // Validar UUID do parâmetro
+    const accountId = validateRouteParamUUID(params.id, "id");
     const supabase = createServerClient();
 
     // Buscar todos os slots da conta

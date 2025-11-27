@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createApiHandler } from "@/lib/utils/apiHandler";
 import { createServerClient } from "@/lib/supabase/server";
 import { HttpError } from "@/lib/utils/httpError";
+import { validateRouteParamUUID } from "@/lib/utils/validation";
 
 const updateSchema = z
   .object({
@@ -26,6 +27,9 @@ function mapCloudRow(row: any) {
 }
 
 export const PATCH = createApiHandler(async (req, { params }) => {
+  // Validar UUID do parâmetro
+  const accessId = validateRouteParamUUID(params.id, "id");
+  
   const supabase = createServerClient();
   const body = await req.json();
   const payload = updateSchema.parse(body);
@@ -39,7 +43,7 @@ export const PATCH = createApiHandler(async (req, { params }) => {
   const { data, error } = await supabase
     .from("cloud_accesses")
     .update(updatePayload)
-    .eq("id", params.id)
+    .eq("id", accessId)
     .select(
       "id, client_id, service_id, expires_at, is_test, notes, client:clients(id, name, email, document), service:services(id, name)",
     )
@@ -58,8 +62,11 @@ export const PATCH = createApiHandler(async (req, { params }) => {
 
 export const DELETE = createApiHandler(
   async (req, { params }) => {
+    // Validar UUID do parâmetro
+    const accessId = validateRouteParamUUID(params.id, "id");
+    
     const supabase = createServerClient();
-    const { error } = await supabase.from("cloud_accesses").delete().eq("id", params.id);
+    const { error } = await supabase.from("cloud_accesses").delete().eq("id", accessId);
 
     if (error) {
       throw error;

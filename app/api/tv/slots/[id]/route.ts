@@ -6,6 +6,7 @@ import { HttpError } from "@/lib/utils/httpError";
 import { PostgrestError } from "@supabase/supabase-js";
 import { mapTVSlotRow } from "@/lib/utils/mappers";
 import { generateNumericPassword } from "@/lib/utils/password";
+import { validateRouteParamUUID } from "@/lib/utils/validation";
 
 const SCHEMA_ERROR_CODES = new Set(["PGRST200", "PGRST201", "PGRST202", "PGRST203", "PGRST204", "PGRST205"]);
 
@@ -42,8 +43,10 @@ const updateSchema = z
   .refine((value) => Object.keys(value).length > 0, { message: "Nenhuma alteração fornecida" });
 
 export const PATCH = createApiHandler(async (req, { params, user }) => {
+  // Validar UUID do parâmetro
+  const slotId = validateRouteParamUUID(params.id, "id");
+  
   const supabase = createServerClient();
-  const slotId = params.id;
   const body = await req.json();
   const payload = updateSchema.parse(body);
   const isAdmin = user.role === "admin";
@@ -115,8 +118,10 @@ export const PATCH = createApiHandler(async (req, { params, user }) => {
 });
 
 export const DELETE = createApiHandler(async (req, { params, user }) => {
+  // Validar UUID do parâmetro
+  const slotId = validateRouteParamUUID(params.id, "id");
+  
   const supabase = createServerClient();
-  const slotId = params.id;
   const isAdmin = user.role === "admin";
 
   if (!isAdmin) {

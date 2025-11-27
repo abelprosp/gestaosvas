@@ -90,7 +90,7 @@ function sanitizeDocument(document: string): string {
 // function isUniqueViolation(error: PostgrestError) { return error.code === "23505"; }
 
 async function syncClientServices(clientId: string, selections: ServiceSelection[]) {
-  console.log(`[syncClientServices] Iniciando para cliente ${clientId}, serviços:`, JSON.stringify(selections));
+  console.log(`[syncClientServices] Iniciando para cliente ${clientId}, ${selections.length} serviços`);
   // Usa Service Role Key para garantir que services sejam salvos independente de RLS
   const supabase = createServerClient(true);
   const uniqueSelections = new Map<string, ServiceSelection>();
@@ -100,7 +100,7 @@ async function syncClientServices(clientId: string, selections: ServiceSelection
     }
   });
 
-  console.log(`[syncClientServices] IDs únicos a salvar:`, Array.from(uniqueSelections.keys()));
+  console.log(`[syncClientServices] ${uniqueSelections.size} IDs únicos a salvar`);
 
   const { error: deleteError } = await supabase.from("client_services").delete().eq("client_id", clientId);
   if (deleteError) {
@@ -128,7 +128,7 @@ async function syncClientServices(clientId: string, selections: ServiceSelection
     sold_by: selection.soldBy ?? null,
   }));
 
-  console.log(`[syncClientServices] Inserindo ${rows.length} linhas:`, JSON.stringify(rows));
+  console.log(`[syncClientServices] Inserindo ${rows.length} linhas`);
 
   const { error: insertError } = await supabase.from("client_services").insert(rows);
 
@@ -272,7 +272,7 @@ async function handleTvServiceForClient(
   }
 
   // Se não tem acessos, CRIA AGORA
-  console.log("[handleTvServiceForClient] Criando acessos de TV para cliente", clientId);
+  console.log("[handleTvServiceForClient] Criando acessos de TV para cliente");
 
   // Dados padrão
   let soldBy = "Sistema";
@@ -561,13 +561,12 @@ export const GET = createApiHandler(async (req) => {
 export const POST = createApiHandler(async (req) => {
   const body = await req.json();
   
-  console.log("[POST /api/clients] Payload recebido:", JSON.stringify({
-    name: body.name,
-    serviceIds: body.serviceIds,
-    serviceSelectionsCount: body.serviceSelections?.length,
-    tvSetup: body.tvSetup,
+  console.log("[POST /api/clients] Payload recebido:", {
+    hasName: !!body.name,
+    serviceIdsCount: body.serviceIds?.length || 0,
+    serviceSelectionsCount: body.serviceSelections?.length || 0,
     hasTvSetup: !!body.tvSetup
-  }, null, 2));
+  });
 
   const validation = clientCreateSchema.safeParse(body);
 
@@ -626,7 +625,7 @@ export const POST = createApiHandler(async (req) => {
         });
     }
     
-    console.log("[POST] Sincronizando serviços (final):", selections.length, JSON.stringify(selections));
+    console.log("[POST] Sincronizando serviços (final):", selections.length, "serviços");
 
     // 2. Salva Serviços
     await syncClientServices(newClient.id, selections);

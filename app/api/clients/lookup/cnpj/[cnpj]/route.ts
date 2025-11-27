@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createApiHandler } from "@/lib/utils/apiHandler";
 import { HttpError } from "@/lib/utils/httpError";
+import { rateLimit, RATE_LIMITS } from "@/lib/utils/rateLimit";
+import { validateAndSanitizeCnpj } from "@/lib/utils/validation";
 
 function sanitizeDocument(document: string): string {
   const digits = document.replace(/\D/g, "");
@@ -10,13 +12,7 @@ function sanitizeDocument(document: string): string {
   throw new HttpError(400, "Informe um CPF ou CNPJ válido.");
 }
 
-function sanitizeCnpj(document: string): string {
-  const digits = sanitizeDocument(document);
-  if (digits.length !== 14) {
-    throw new HttpError(400, "Informe um CNPJ válido com 14 dígitos.");
-  }
-  return digits;
-}
+// Função removida - usando validateAndSanitizeCnpj diretamente do módulo de validação
 
 type BrasilApiCnpjResponse = {
   cnpj: string;
@@ -145,13 +141,24 @@ function buildAddress(row: BrasilApiCnpjResponse) {
   return parts.join(" · ") || null;
 }
 
-export const GET = createApiHandler(async (req, { params }) => {
+export const GET = async (req: NextRequest, context: { params: Promise<{ cnpj: string }> | { cnpj: string } }) => {
+  // Aplicar rate limiting (rota pública que faz chamadas externas)
+  const rateLimitResult = rateLimit(RATE_LIMITS.CNPJ_LOOKUP)(req);
+  if (rateLimitResult) {
+    return rateLimitResult; // Retorna 429 se excedido
+  }
+
+  const params = typeof context.params === "object" && "then" in context.params
+    ? await context.params
+    : context.params;
+
   try {
-    const cnpj = sanitizeCnpj(params.cnpj ?? "");
-    console.log(`[CNPJ Lookup] Buscando CNPJ: ${cnpj}`);
+    const cnpj = validateAndSanitizeCnpj(params.cnpj ?? "");
+    console.log(`[CNPJ Lookup] Buscando CNPJ`);
     
     const data = await fetchCnpjData(cnpj);
-    console.log(`[CNPJ Lookup] Dados recebidos da BrasilAPI:`, JSON.stringify(data, null, 2));
+    // Log sanitizado - não expor dados completos
+    console.log(`[CNPJ Lookup] Dados recebidos da BrasilAPI`);
     
     const companyName = data.razao_social?.trim() ?? null;
     const tradeName = data.nome_fantasia?.trim() ?? null;
@@ -177,7 +184,7 @@ export const GET = createApiHandler(async (req, { params }) => {
       openingDate: data.abertura ?? null,
     };
     
-    console.log(`[CNPJ Lookup] Retornando resultado:`, JSON.stringify(result, null, 2));
+    console.log(`[CNPJ Lookup] Resultado processado com sucesso`);
     
     return NextResponse.json(result);
   } catch (error) {

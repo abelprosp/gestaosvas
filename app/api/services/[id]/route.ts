@@ -4,6 +4,7 @@ import { createApiHandler } from "@/lib/utils/apiHandler";
 import { createServerClient } from "@/lib/supabase/server";
 import { HttpError } from "@/lib/utils/httpError";
 import { mapServiceRow, serviceUpdatePayload } from "@/lib/utils/mappers";
+import { validateRouteParamUUID } from "@/lib/utils/validation";
 
 function normalizePriceInput(input: string | number): number {
   if (typeof input === "number") {
@@ -39,6 +40,9 @@ const serviceUpdateSchema = serviceSchema
 
 export const PATCH = createApiHandler(
   async (req, { params }) => {
+    // Validar UUID do parâmetro
+    const serviceId = validateRouteParamUUID(params.id, "id");
+    
     const supabase = createServerClient();
     const body = await req.json();
     const payload = serviceUpdateSchema.parse(body);
@@ -46,7 +50,7 @@ export const PATCH = createApiHandler(
     const { data, error } = await supabase
       .from("services")
       .update(updatePayload)
-      .eq("id", params.id)
+      .eq("id", serviceId)
       .select("*")
       .maybeSingle();
 
@@ -65,8 +69,11 @@ export const PATCH = createApiHandler(
 
 export const DELETE = createApiHandler(
   async (req, { params }) => {
+    // Validar UUID do parâmetro
+    const serviceId = validateRouteParamUUID(params.id, "id");
+    
     const supabase = createServerClient();
-    const { error } = await supabase.from("services").delete().eq("id", params.id);
+    const { error } = await supabase.from("services").delete().eq("id", serviceId);
 
     if (error) {
       throw error;

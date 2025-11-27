@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createApiHandler } from "@/lib/utils/apiHandler";
 import { createServerClient } from "@/lib/supabase/server";
 import { HttpError } from "@/lib/utils/httpError";
+import { RATE_LIMITS } from "@/lib/utils/rateLimit";
 
 const createUserSchema = z.object({
   email: z.string().email(),

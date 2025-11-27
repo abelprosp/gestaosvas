@@ -4,13 +4,17 @@ import { createServerClient } from "@/lib/supabase/server";
 import { HttpError } from "@/lib/utils/httpError";
 import { mapContractRow, contractUpdatePayload } from "@/lib/utils/mappers";
 import { sendToZapsign } from "@/lib/services/zapsignSimulator";
+import { validateRouteParamUUID } from "@/lib/utils/validation";
 
 export const POST = createApiHandler(async (req, { params }) => {
+  // Validar UUID do parâmetro
+  const contractId = validateRouteParamUUID(params.id, "id");
+  
   const supabase = createServerClient();
   const { data: contractRow, error } = await supabase
     .from("contracts")
     .select("*, client:clients(*)")
-    .eq("id", params.id)
+    .eq("id", contractId)
     .maybeSingle();
 
   if (error) {

@@ -73,7 +73,9 @@ const MAX_HISTORY_MESSAGES = 100;
 function loadChatHistory(): Message[] {
   if (typeof window === "undefined") return [];
   try {
-    const stored = localStorage.getItem(CHAT_HISTORY_KEY);
+    // Usar sessionStorage ao invés de localStorage para melhor segurança
+    // Dados são apagados quando a aba é fechada, reduzindo risco de XSS
+    const stored = sessionStorage.getItem(CHAT_HISTORY_KEY);
     if (stored) {
       const parsed = JSON.parse(stored) as Message[];
       return Array.isArray(parsed) ? parsed : [];
@@ -88,8 +90,9 @@ function saveChatHistory(messages: Message[]) {
   if (typeof window === "undefined") return;
   try {
     // Limita o histórico aos últimos N mensagens
+    // Usar sessionStorage ao invés de localStorage para melhor segurança
     const limitedMessages = messages.slice(-MAX_HISTORY_MESSAGES);
-    localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(limitedMessages));
+    sessionStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(limitedMessages));
   } catch (error) {
     console.error("Erro ao salvar histórico do chat:", error);
   }
@@ -671,7 +674,7 @@ Quer saber como fazer algo específico?`,
     // Limpar histórico
     if (/(limpar.*histórico|apagar.*histórico|resetar.*chat|novo.*chat)/i.test(lowerQuestion)) {
       if (typeof window !== "undefined") {
-        localStorage.removeItem(CHAT_HISTORY_KEY);
+        sessionStorage.removeItem(CHAT_HISTORY_KEY);
       }
       return {
         sender: "assistant",
@@ -1303,7 +1306,7 @@ Digite "ajuda" para ver todos os comandos disponíveis ou faça uma pergunta esp
                   variant="ghost"
                   onClick={() => {
                     if (window.confirm("Deseja realmente limpar o histórico de conversas?")) {
-                      localStorage.removeItem(CHAT_HISTORY_KEY);
+                      sessionStorage.removeItem(CHAT_HISTORY_KEY);
                       setMessages([initialMessage]);
                       toast({
                         title: "Histórico limpo",

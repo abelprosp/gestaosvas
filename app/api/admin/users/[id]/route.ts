@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createApiHandler } from "@/lib/utils/apiHandler";
 import { createServerClient } from "@/lib/supabase/server";
 import { HttpError } from "@/lib/utils/httpError";
+import { validateRouteParamUUID } from "@/lib/utils/validation";
 
 const updateUserSchema = z
   .object({
@@ -19,11 +20,14 @@ const updateUserSchema = z
 
 export const PATCH = createApiHandler(
   async (req, { params }) => {
+    // Validar UUID do parâmetro (usuários Supabase podem não ser UUID, mas validamos formato)
+    const userId = validateRouteParamUUID(params.id, "id");
+    
     const supabase = createServerClient();
     const body = await req.json();
     const payload = updateUserSchema.parse(body);
 
-    const existing = await supabase.auth.admin.getUserById(params.id);
+    const existing = await supabase.auth.admin.getUserById(userId);
     if (existing.error) {
       throw existing.error;
     }
@@ -55,7 +59,7 @@ export const PATCH = createApiHandler(
       updatePayload.password = payload.password;
     }
 
-    const { data, error } = await supabase.auth.admin.updateUserById(params.id, updatePayload);
+    const { data, error } = await supabase.auth.admin.updateUserById(userId, updatePayload);
 
     if (error) {
       throw error;
@@ -73,8 +77,11 @@ export const PATCH = createApiHandler(
 
 export const DELETE = createApiHandler(
   async (req, { params }) => {
+    // Validar UUID do parâmetro
+    const userId = validateRouteParamUUID(params.id, "id");
+    
     const supabase = createServerClient();
-    const { error } = await supabase.auth.admin.deleteUser(params.id);
+    const { error } = await supabase.auth.admin.deleteUser(userId);
 
     if (error) {
       throw error;

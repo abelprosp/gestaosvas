@@ -7,6 +7,7 @@ import { PostgrestError } from "@supabase/supabase-js";
 import { mapClientRow, mapContractRow, clientUpdatePayload } from "@/lib/utils/mappers";
 import { assignMultipleSlotsToClient, assignSlotToClient, releaseSlotsForClient } from "@/lib/services/tvAssignments";
 import { TVPlanType } from "@/types";
+import { validateRouteParamUUID } from "@/lib/utils/validation";
 
 type ServiceSelection = {
   serviceId: string;
@@ -653,14 +654,22 @@ async function fetchClientSummary(id: string) {
   return client;
 }
 
-export const GET = createApiHandler(async (req, { params }) => {
+export const GET = createApiHandler(async (req, { params, user }) => {
+  // Validar UUID do parâmetro
+  const clientId = validateRouteParamUUID(params.id, "id");
+  
   const supabase = createServerClient();
+  
+  // Verificar se o usuário tem acesso ao recurso
+  const { requireResourceAccess } = await import("@/lib/utils/resourceAuth");
+  await requireResourceAccess("client", clientId, user, supabase);
+  
   const { data, error } = await supabase
     .from("clients")
     .select(
       "*, contracts(*), client_services:client_services(custom_price, custom_price_essencial, custom_price_premium, service:services(*)), cloud_accesses:cloud_accesses(id, client_id, service_id, expires_at, is_test, notes, created_at, updated_at, service:services(*))",
     )
-    .eq("id", params.id)
+    .eq("id", clientId)
     .maybeSingle();
 
   if (error) {
@@ -680,8 +689,15 @@ export const GET = createApiHandler(async (req, { params }) => {
 });
 
 export const PUT = createApiHandler(
-  async (req, { params }) => {
+  async (req, { params, user }) => {
+    // Validar UUID do parâmetro
+    const clientId = validateRouteParamUUID(params.id, "id");
+    
     const supabase = createServerClient();
+    
+    // Verificar se o usuário tem acesso ao recurso
+    const { requireResourceAccess } = await import("@/lib/utils/resourceAuth");
+    await requireResourceAccess("client", clientId, user, supabase);
     const body = await req.json();
     const payload = clientUpdateSchema.parse(body);
     const { serviceIds, serviceSelections, tvSetup, cloudSetups, ...clientData } = payload;
@@ -692,7 +708,7 @@ export const PUT = createApiHandler(
     const { data, error } = await supabase
       .from("clients")
       .update(updatePayload)
-      .eq("id", params.id)
+      .eq("id", clientId)
       .select("id")
       .maybeSingle();
 
@@ -730,9 +746,16 @@ export const PUT = createApiHandler(
 );
 
 export const DELETE = createApiHandler(
-  async (req, { params }) => {
+  async (req, { params, user }) => {
+    // Validar UUID do parâmetro
+    const clientId = validateRouteParamUUID(params.id, "id");
+    
     const supabase = createServerClient();
-    const { error } = await supabase.from("clients").delete().eq("id", params.id);
+    
+    // Verificar se o usuário tem acesso ao recurso
+    const { requireResourceAccess } = await import("@/lib/utils/resourceAuth");
+    await requireResourceAccess("client", clientId, user, supabase);
+    const { error } = await supabase.from("clients").delete().eq("id", clientId);
 
     if (error) {
       throw error;

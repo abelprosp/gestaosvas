@@ -4,6 +4,7 @@ import { createApiHandler } from "@/lib/utils/apiHandler";
 import { createServerClient } from "@/lib/supabase/server";
 import { HttpError } from "@/lib/utils/httpError";
 import { mapTemplateRow, templateUpdatePayload } from "@/lib/utils/mappers";
+import { validateRouteParamUUID } from "@/lib/utils/validation";
 
 const templateSchema = z.object({
   name: z.string().min(3),
@@ -17,6 +18,9 @@ const templateDeleteSchema = z.object({
 });
 
 export const PUT = createApiHandler(async (req, { params, user }) => {
+  // Validar UUID do parâmetro
+  const templateId = validateRouteParamUUID(params.id, "id");
+  
   const supabase = createServerClient();
   const body = await req.json();
   const payload = templateUpdateSchema.parse(body);
@@ -24,7 +28,7 @@ export const PUT = createApiHandler(async (req, { params, user }) => {
   const { data, error } = await supabase
     .from("contract_templates")
     .update(updatePayload)
-    .eq("id", params.id)
+    .eq("id", templateId)
     .select("*")
     .maybeSingle();
 
@@ -58,7 +62,10 @@ export const DELETE = createApiHandler(
       throw new HttpError(401, "Senha incorreta. Tente novamente.");
     }
 
-    const { error } = await supabase.from("contract_templates").delete().eq("id", params.id);
+    // Validar UUID do parâmetro
+    const templateId = validateRouteParamUUID(params.id, "id");
+    
+    const { error } = await supabase.from("contract_templates").delete().eq("id", templateId);
 
     if (error) {
       throw error;

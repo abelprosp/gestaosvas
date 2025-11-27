@@ -3,14 +3,18 @@ import { createApiHandler } from "@/lib/utils/apiHandler";
 import { createServerClient } from "@/lib/supabase/server";
 import { HttpError } from "@/lib/utils/httpError";
 import { mapContractRow, contractUpdatePayload } from "@/lib/utils/mappers";
+import { validateRouteParamUUID } from "@/lib/utils/validation";
 
 export const POST = createApiHandler(async (req, { params }) => {
+  // Validar UUID do parâmetro
+  const contractId = validateRouteParamUUID(params.id, "id");
+  
   const supabase = createServerClient();
   const updatePayload = contractUpdatePayload({ status: "CANCELLED" });
   const { data, error } = await supabase
     .from("contracts")
     .update(updatePayload)
-    .eq("id", params.id)
+    .eq("id", contractId)
     .select("*, client:clients(*), template:contract_templates(*)")
     .maybeSingle();
 

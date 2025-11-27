@@ -5,6 +5,7 @@ import { mapTVAccountRow } from "@/lib/utils/mappers";
 import { z } from "zod";
 import { HttpError } from "@/lib/utils/httpError";
 import { PostgrestError } from "@supabase/supabase-js";
+import { validateRouteParamUUID } from "@/lib/utils/validation";
 
 function isUniqueViolation(error: PostgrestError) {
   return error.code === "23505";
@@ -16,7 +17,8 @@ const updateAccountSchema = z.object({
 
 export const PATCH = createApiHandler(
   async (req, { params }) => {
-    const accountId = params.id;
+    // Validar UUID do parâmetro
+    const accountId = validateRouteParamUUID(params.id, "id");
     const body = await req.json();
     const { email } = updateAccountSchema.parse(body);
 
@@ -71,7 +73,8 @@ export const PATCH = createApiHandler(
 
 export const DELETE = createApiHandler(
   async (req, { params }) => {
-    const accountId = params.id;
+    // Validar UUID do parâmetro
+    const accountId = validateRouteParamUUID(params.id, "id");
     const supabase = createServerClient();
 
     // Verificar se a conta existe
