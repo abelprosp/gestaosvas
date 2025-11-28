@@ -193,6 +193,7 @@ export function UsersPage() {
   const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
   const [accountSlots, setAccountSlots] = useState<Record<string, any[]>>({});
   const [editingMaxSlots, setEditingMaxSlots] = useState<number>(8);
+  const [editingMaxSlotsInput, setEditingMaxSlotsInput] = useState<string>("8");
   const [editingSlotUsernames, setEditingSlotUsernames] = useState<Record<string, string>>({});
   const [isUpdatingAccount, setIsUpdatingAccount] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState<Record<string, boolean>>({});
@@ -550,6 +551,7 @@ export function UsersPage() {
           // Buscar max_slots da conta
           const accountMaxSlots = accountData.account?.maxSlots ?? 8;
           setEditingMaxSlots(accountMaxSlots);
+          setEditingMaxSlotsInput(String(accountMaxSlots));
           
           // Buscar slots completos para edição
           try {
@@ -577,6 +579,7 @@ export function UsersPage() {
           const assignedSlots = records.filter(r => r.accountId === accountId && r.status === "ASSIGNED").length;
           setAccountUsageInfo({ assignedSlots, totalSlots: 8 });
           setEditingMaxSlots(8);
+          setEditingMaxSlotsInput("8");
         }
       }
     } catch (error) {
@@ -585,6 +588,7 @@ export function UsersPage() {
       const assignedSlots = records.filter(r => r.accountId === accountId && r.status === "ASSIGNED").length;
       setAccountUsageInfo({ assignedSlots, totalSlots: 8 });
       setEditingMaxSlots(8);
+      setEditingMaxSlotsInput("8");
     }
     
     editEmailModal.onOpen();
@@ -635,6 +639,7 @@ export function UsersPage() {
       setOriginalEmail("");
       setAccountUsageInfo(null);
       setEditingMaxSlots(8);
+      setEditingMaxSlotsInput("8");
       setEditingSlotUsernames({});
     } catch (error) {
       // Extrair mensagem de erro mais detalhada
@@ -1601,11 +1606,29 @@ export function UsersPage() {
                   type="number"
                   min={1}
                   max={8}
-                  value={editingMaxSlots}
+                  value={editingMaxSlotsInput}
                   onChange={(e) => {
-                    const value = parseInt(e.target.value) || 1;
-                    setEditingMaxSlots(Math.min(Math.max(value, 1), 8));
+                    const inputValue = e.target.value;
+                    // Permitir digitação livre - apenas atualizar o valor do input
+                    setEditingMaxSlotsInput(inputValue);
                   }}
+                  onBlur={(e) => {
+                    // Validar quando sair do campo
+                    const numValue = parseInt(e.target.value, 10);
+                    if (isNaN(numValue) || numValue < 1) {
+                      const finalValue = 1;
+                      setEditingMaxSlots(finalValue);
+                      setEditingMaxSlotsInput(String(finalValue));
+                    } else if (numValue > 8) {
+                      const finalValue = 8;
+                      setEditingMaxSlots(finalValue);
+                      setEditingMaxSlotsInput(String(finalValue));
+                    } else {
+                      setEditingMaxSlots(numValue);
+                      setEditingMaxSlotsInput(String(numValue));
+                    }
+                  }}
+                  isDisabled={isUpdatingEmail || isUpdatingAccount || isDeletingAccount}
                 />
                 <Text fontSize="sm" color="gray.500" mt={1}>
                   Número máximo de acessos que este email pode gerar (1-8)
@@ -1900,7 +1923,7 @@ export function UsersPage() {
                                                         >
                                                           Liberar
                                                         </Button>
-                                                      ) : slot.status === "AVAILABLE" ? (
+                                                      ) : slot.status === "AVAILABLE" && isAdmin ? (
                                                         <Button
                                                           size="xs"
                                                           colorScheme="red"

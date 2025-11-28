@@ -46,6 +46,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // O interceptor em lib/api/client.ts já gerencia o token automaticamente
+    // Este useEffect é mantido apenas para compatibilidade, mas o interceptor tem prioridade
     if (session?.access_token) {
       api.defaults.headers.common.Authorization = `Bearer ${session.access_token}`;
     } else {

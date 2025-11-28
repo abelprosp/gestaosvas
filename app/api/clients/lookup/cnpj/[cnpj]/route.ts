@@ -191,7 +191,7 @@ export const GET = async (req: NextRequest, context: { params: Promise<{ cnpj: s
     console.error(`[CNPJ Lookup] Erro ao buscar CNPJ:`, error);
     throw error;
   }
-});
+};
 
 
 

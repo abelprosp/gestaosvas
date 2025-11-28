@@ -50,7 +50,10 @@ export const PATCH = createApiHandler(async (req, { params, user }) => {
   const supabase = createServerClient();
   const body = await req.json();
   const payload = updateSchema.parse(body);
-  const isAdmin = user.role === "admin";
+  
+  // Verificar se user existe antes de acessar role
+  // Nota: Esta rota não requer admin obrigatoriamente, então verificamos aqui
+  const isAdmin = user?.role === "admin";
 
   if (!isAdmin) {
     const forbiddenKeys = Object.keys(payload).filter(
@@ -123,72 +126,73 @@ export const PATCH = createApiHandler(async (req, { params, user }) => {
   return NextResponse.json(mapTVSlotRow(data));
 });
 
-export const DELETE = createApiHandler(async (req, { params, user }) => {
-  // Validar UUID do parâmetro
-  const slotId = validateRouteParamUUID(params.id, "id");
-  
-  const supabase = createServerClient();
-  const isAdmin = user.role === "admin";
+export const DELETE = createApiHandler(
+  async (req, { params, user }) => {
+    // Validar UUID do parâmetro
+    const slotId = validateRouteParamUUID(params.id, "id");
+    
+    const supabase = createServerClient();
+    
+    // Nota: A verificação de admin já é feita pelo createApiHandler quando requireAdmin: true
+    // Não precisamos verificar novamente aqui
 
-  if (!isAdmin) {
-    throw new HttpError(403, "Apenas administradores podem remover slots.");
-  }
+    // Verificar se o slot existe e obter informações
+    const { data: slot, error: fetchError } = await supabase
+      .from("tv_slots")
+      .select("id, slot_number, status, client_id, tv_account_id, tv_accounts(email)")
+      .eq("id", slotId)
+      .maybeSingle();
 
-  // Verificar se o slot existe e obter informações
-  const { data: slot, error: fetchError } = await supabase
-    .from("tv_slots")
-    .select("id, slot_number, status, client_id, tv_account_id, tv_accounts(email)")
-    .eq("id", slotId)
-    .maybeSingle();
+    if (fetchError) {
+      ensureTablesAvailable(fetchError as PostgrestError);
+      throw fetchError;
+    }
 
-  if (fetchError) {
-    ensureTablesAvailable(fetchError as PostgrestError);
-    throw fetchError;
-  }
+    if (!slot) {
+      throw new HttpError(404, "Slot não encontrado");
+    }
 
-  if (!slot) {
-    throw new HttpError(404, "Slot não encontrado");
-  }
+    // Se o slot está atribuído a um cliente, não permitir remoção direta
+    // O usuário deve primeiro liberar o slot
+    if (slot.status === "ASSIGNED" && slot.client_id) {
+      throw new HttpError(400, "Não é possível remover um slot que está atribuído a um cliente. Libere o slot primeiro.");
+    }
 
-  // Se o slot está atribuído a um cliente, não permitir remoção direta
-  // O usuário deve primeiro liberar o slot
-  if (slot.status === "ASSIGNED" && slot.client_id) {
-    throw new HttpError(400, "Não é possível remover um slot que está atribuído a um cliente. Libere o slot primeiro.");
-  }
+    // Deletar o slot
+    const { error: deleteError } = await supabase
+      .from("tv_slots")
+      .delete()
+      .eq("id", slotId);
 
-  // Deletar o slot
-  const { error: deleteError } = await supabase
-    .from("tv_slots")
-    .delete()
-    .eq("id", slotId);
+    if (deleteError) {
+      ensureTablesAvailable(deleteError as PostgrestError);
+      throw deleteError;
+    }
 
-  if (deleteError) {
-    ensureTablesAvailable(deleteError as PostgrestError);
-    throw deleteError;
-  }
+    // Registrar no histórico (se possível)
+    try {
+      await supabase.from("tv_slot_history").insert({
+        tv_slot_id: slotId,
+        action: "DELETED",
+        metadata: {
+          slot_number: slot.slot_number,
+          email: (slot.tv_accounts as any)?.email,
+        },
+      });
+    } catch (historyError) {
+      // Ignorar erros de histórico
+      console.warn("Erro ao registrar histórico de remoção:", historyError);
+    }
 
-  // Registrar no histórico (se possível)
-  try {
-    await supabase.from("tv_slot_history").insert({
-      tv_slot_id: slotId,
-      action: "DELETED",
-      metadata: {
-        slot_number: slot.slot_number,
+    return NextResponse.json({
+      message: "Slot removido com sucesso",
+      deletedSlot: {
+        id: slot.id,
+        slotNumber: slot.slot_number,
         email: (slot.tv_accounts as any)?.email,
       },
     });
-  } catch (historyError) {
-    // Ignorar erros de histórico
-    console.warn("Erro ao registrar histórico de remoção:", historyError);
-  }
-
-  return NextResponse.json({
-    message: "Slot removido com sucesso",
-    deletedSlot: {
-      id: slot.id,
-      slotNumber: slot.slot_number,
-      email: (slot.tv_accounts as any)?.email,
-    },
-  });
-}, { requireAdmin: true });
+  },
+  { requireAdmin: true }
+);
 
