@@ -39,6 +39,7 @@ const updateSchema = z
       .string()
       .regex(/^\d{4}$/, { message: "A senha deve conter exatamente 4 dígitos." })
       .optional(),
+    username: z.string().trim().min(1).max(100).optional().nullable(),
   })
   .refine((value) => Object.keys(value).length > 0, { message: "Nenhuma alteração fornecida" });
 
@@ -72,6 +73,11 @@ export const PATCH = createApiHandler(async (req, { params, user }) => {
   }
   if (payload.hasTelephony !== undefined) {
     updateData.has_telephony = payload.hasTelephony ?? null;
+  }
+  if (payload.username !== undefined) {
+    updateData.custom_username = payload.username && payload.username.trim().length > 0 
+      ? payload.username.trim() 
+      : null;
   }
   let shouldRandomize = false;
   if (payload.status !== undefined) {

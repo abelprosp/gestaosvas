@@ -101,6 +101,7 @@ type ServiceRow = {
 type TVAccountRow = {
   id: string;
   email: string;
+  max_slots?: number | null;
   created_at: string;
 };
 
@@ -109,6 +110,7 @@ type TVSlotRow = {
   tv_account_id: string;
   slot_number: number;
   username: string;
+  custom_username?: string | null;
   password: string;
   status: string;
   client_id: string | null;
@@ -413,6 +415,7 @@ export function mapTVAccountRow(row: TVAccountRow): TVAccount {
   return {
     id: row.id,
     email: row.email,
+    maxSlots: row.max_slots ?? 8, // Padrão 8 se não especificado
     createdAt: row.created_at,
   };
 }
@@ -431,7 +434,7 @@ export function mapTVSlotRow(row: TVSlotRow, history: TVSlotHistoryRow[] = []): 
     id: row.id,
     tvAccountId: row.tv_account_id,
     slotNumber: row.slot_number,
-    username: row.username,
+    username: row.custom_username ?? row.username, // Usa custom_username se disponível, senão usa username padrão
     password: row.password,
     status: row.status as TVSlot["status"],
     clientId: row.client_id,

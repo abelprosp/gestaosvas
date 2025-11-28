@@ -61,6 +61,35 @@ export async function updateTVAccountEmail(accountId: string, email: string) {
   }
 }
 
+export async function updateTVAccountMaxSlots(accountId: string, maxSlots: number) {
+  try {
+    const response = await api.patch<{ id: string; email: string; maxSlots: number; createdAt: string }>(
+      `/tv/accounts/${accountId}`,
+      { maxSlots }
+    );
+    return response.data;
+  } catch (error) {
+    const typedError = error as ApiError;
+    if (isSchemaUnavailable(typedError)) {
+      throw new Error("As tabelas de TV não estão configuradas. Execute o script supabase/schema.sql.");
+    }
+    throw typedError;
+  }
+}
+
+export async function updateTVSlotUsername(slotId: string, username: string | null) {
+  try {
+    const response = await api.patch(`/tv/slots/${slotId}`, { username });
+    return response.data;
+  } catch (error) {
+    const typedError = error as ApiError;
+    if (isSchemaUnavailable(typedError)) {
+      throw new Error("As tabelas de TV não estão configuradas. Execute o script supabase/schema.sql.");
+    }
+    throw typedError;
+  }
+}
+
 export async function deleteTVAccount(accountId: string) {
   try {
     const response = await api.delete<{

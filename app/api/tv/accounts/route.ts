@@ -10,7 +10,7 @@ export const GET = createApiHandler(async (req) => {
   const supabase = createServerClient();
   const { data, error } = await supabase
     .from("tv_accounts")
-    .select("*, tv_slots(*)")
+    .select("id, email, max_slots, created_at, tv_slots(id, slot_number, username, custom_username, status, client_id)")
     .order("email", { ascending: true })
     .order("slot_number", { ascending: true, foreignTable: "tv_slots" });
 
@@ -52,10 +52,10 @@ export const POST = createApiHandler(
       throw new HttpError(409, "Este e-mail já está cadastrado");
     }
 
-    // Criar a conta
+    // Criar a conta com max_slots padrão (8)
     const { data: account, error: accountError } = await supabase
       .from("tv_accounts")
-      .insert({ email: email.toLowerCase().trim() })
+      .insert({ email: email.toLowerCase().trim(), max_slots: 8 })
       .select("id")
       .single();
 
@@ -63,8 +63,9 @@ export const POST = createApiHandler(
       throw accountError;
     }
 
-    // Criar os 8 slots para a conta
-    const slotsToInsert = Array.from({ length: 8 }, (_, i) => ({
+    // Criar os slots para a conta (padrão 8, mas pode ser configurado via max_slots)
+    const maxSlots = 8; // Padrão ao criar manualmente
+    const slotsToInsert = Array.from({ length: maxSlots }, (_, i) => ({
       tv_account_id: account.id,
       slot_number: i + 1,
       username: `#${i + 1}`,

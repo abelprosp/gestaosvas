@@ -19,7 +19,7 @@ export const GET = createApiHandler(
 
     const { data: slots, error } = await supabase
       .from("tv_slots")
-      .select("*, tv_accounts(*), client:clients(id, name, email, document)")
+      .select("id, slot_number, username, custom_username, status, client_id, plan_type, sold_by, sold_at, expires_at, notes, has_telephony, tv_accounts(id, email, max_slots), client:clients(id, name, email, document)")
       .eq("tv_account_id", accountId)
       .order("slot_number", { ascending: true });
 

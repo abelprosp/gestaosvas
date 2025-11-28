@@ -109,11 +109,11 @@ async function fetchStandardEmails(supabase: any): Promise<string[]> {
 async function createAccountBatch(supabase: any, index: number): Promise<boolean> {
   const { email } = buildEmail(index);
   
-  // 1. Cria a conta
+  // 1. Cria a conta com max_slots padrão (8)
   const { data: insertedAccount, error: insertAccountError } = await supabase
     .from("tv_accounts")
-    .insert({ email })
-    .select("id")
+    .insert({ email, max_slots: USERS_PER_ACCOUNT })
+    .select("id, max_slots")
     .maybeSingle();
 
   if (insertAccountError) {
@@ -124,8 +124,9 @@ async function createAccountBatch(supabase: any, index: number): Promise<boolean
 
   if (!insertedAccount) return false;
 
-  // 2. Cria os 8 slots para a conta
-  const slotsToInsert = Array.from({ length: USERS_PER_ACCOUNT }, (_, i) => ({
+  // 2. Cria os slots para a conta respeitando max_slots
+  const maxSlots = insertedAccount.max_slots ?? USERS_PER_ACCOUNT;
+  const slotsToInsert = Array.from({ length: maxSlots }, (_, i) => ({
     tv_account_id: insertedAccount.id,
     slot_number: i + 1,
     username: `#${i + 1}`, // Formato: #1, #2, #3, etc.

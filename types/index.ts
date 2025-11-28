@@ -15,6 +15,7 @@ export interface Service {
 export interface TVAccount {
   id: string;
   email: string;
+  maxSlots?: number;
   createdAt: string;
 }
 

@@ -16,7 +16,7 @@ export const GET = createApiHandler(async (req) => {
     // Buscar todas as contas de TV com informações de slots
     const { data: accounts, error: accountsError } = await supabase
       .from("tv_accounts")
-      .select("id, email, created_at")
+      .select("id, email, max_slots, created_at")
       .order("email", { ascending: true });
 
     if (accountsError && !isSchemaMissing(accountsError)) {

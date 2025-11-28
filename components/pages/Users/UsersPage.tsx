@@ -51,7 +51,7 @@ import {
   FiPhone,
   FiTrash2,
 } from "react-icons/fi";
-import { fetchTVOverview, regenerateTVSlotPassword, releaseTVSlot, updateTVSlot, updateTVAccountEmail, deleteTVAccount, getNextEmailInfo, listTVAccounts, TVAccountInfo, getTVAccountSlots, TVAccountSlot, fetchTVAccountUsage, deleteTVSlot } from "@/lib/api/tv";
+import { fetchTVOverview, regenerateTVSlotPassword, releaseTVSlot, updateTVSlot, updateTVAccountEmail, updateTVAccountMaxSlots, updateTVSlotUsername, deleteTVAccount, getNextEmailInfo, listTVAccounts, TVAccountInfo, getTVAccountSlots, TVAccountSlot, fetchTVAccountUsage, deleteTVSlot } from "@/lib/api/tv";
 import { PaginatedResponse, TVOverviewRecord, TVSlotStatus } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { createRequest } from "@/lib/api/requests";
@@ -192,6 +192,9 @@ export function UsersPage() {
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
   const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
   const [accountSlots, setAccountSlots] = useState<Record<string, any[]>>({});
+  const [editingMaxSlots, setEditingMaxSlots] = useState<number>(8);
+  const [editingSlotUsernames, setEditingSlotUsernames] = useState<Record<string, string>>({});
+  const [isUpdatingAccount, setIsUpdatingAccount] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState<Record<string, boolean>>({});
   const limit = 50;
   const hasSearch = searchTerm.trim().length > 0;
@@ -532,7 +535,7 @@ export function UsersPage() {
     setEditingEmail(currentEmail);
     setOriginalEmail(currentEmail);
     
-    // Buscar informações sobre uso da conta
+    // Buscar informações sobre uso da conta e slots
     try {
       const response = await fetch(`/api/tv/accounts`);
       if (response.ok) {
@@ -543,10 +546,37 @@ export function UsersPage() {
           const assignedSlots = slots.filter((s: any) => s.status === "ASSIGNED" && s.clientId).length;
           const totalSlots = slots.length;
           setAccountUsageInfo({ assignedSlots, totalSlots });
+          
+          // Buscar max_slots da conta
+          const accountMaxSlots = accountData.account?.maxSlots ?? 8;
+          setEditingMaxSlots(accountMaxSlots);
+          
+          // Buscar slots completos para edição
+          try {
+            const slotsData = await getTVAccountSlots(accountId);
+            setAccountSlots(prev => ({ ...prev, [accountId]: slotsData }));
+            
+            // Carregar usernames dos slots (usar o username já mapeado que considera custom_username)
+            const usernames: Record<string, string> = {};
+            slotsData.forEach((slot: TVAccountSlot) => {
+              // Usar o username do slot (que já considera custom_username no mapper)
+              usernames[slot.id] = slot.username || "";
+            });
+            setEditingSlotUsernames(usernames);
+          } catch (error) {
+            console.error("Erro ao carregar slots:", error);
+            // Fallback: usar slots da resposta da API
+            const usernames: Record<string, string> = {};
+            slots.forEach((slot: any) => {
+              usernames[slot.id] = slot.username || "";
+            });
+            setEditingSlotUsernames(usernames);
+          }
         } else {
           // Fallback: contar dos registros atuais
           const assignedSlots = records.filter(r => r.accountId === accountId && r.status === "ASSIGNED").length;
           setAccountUsageInfo({ assignedSlots, totalSlots: 8 });
+          setEditingMaxSlots(8);
         }
       }
     } catch (error) {
@@ -554,27 +584,48 @@ export function UsersPage() {
       // Fallback: contar dos registros atuais
       const assignedSlots = records.filter(r => r.accountId === accountId && r.status === "ASSIGNED").length;
       setAccountUsageInfo({ assignedSlots, totalSlots: 8 });
+      setEditingMaxSlots(8);
     }
     
     editEmailModal.onOpen();
   };
 
-  const handleUpdateEmail = async () => {
-    if (!editingAccountId || !editingEmail.trim()) {
-      toast({ title: "Informe um e-mail válido", status: "warning" });
+  const handleUpdateAccount = async () => {
+    if (!editingAccountId) {
+      toast({ title: "Erro: ID da conta não encontrado", status: "error" });
       return;
     }
 
-    if (editingEmail.trim() === originalEmail) {
-      toast({ title: "O e-mail não foi alterado", status: "info" });
-      editEmailModal.onClose();
-      return;
-    }
-
+    setIsUpdatingAccount(true);
     setIsUpdatingEmail(true);
+    
     try {
-      await updateTVAccountEmail(editingAccountId, editingEmail.trim());
-      toast({ title: "E-mail atualizado com sucesso", status: "success" });
+      const updates: Promise<any>[] = [];
+
+      // Atualizar email se mudou
+      if (editingEmail.trim() !== originalEmail && editingEmail.trim()) {
+        updates.push(updateTVAccountEmail(editingAccountId, editingEmail.trim()));
+      }
+
+      // Atualizar max_slots
+      updates.push(updateTVAccountMaxSlots(editingAccountId, editingMaxSlots));
+
+      // Atualizar usernames dos slots
+      if (editingAccountId && accountSlots[editingAccountId]) {
+        accountSlots[editingAccountId].forEach((slot: TVAccountSlot) => {
+          const newUsername = editingSlotUsernames[slot.id]?.trim() || null;
+          const currentUsername = slot.username || null;
+          // Só atualiza se mudou (comparar com o username atual do slot)
+          // Se newUsername é null e currentUsername também é null (ou vazio), não precisa atualizar
+          if (newUsername !== currentUsername && (newUsername || currentUsername)) {
+            updates.push(updateTVSlotUsername(slot.id, newUsername));
+          }
+        });
+      }
+
+      await Promise.all(updates);
+
+      toast({ title: "Conta atualizada com sucesso", status: "success" });
       queryClient.invalidateQueries({ queryKey: ["tvOverview"] });
       queryClient.invalidateQueries({ queryKey: ["tvNextEmail"] });
       queryClient.invalidateQueries({ queryKey: ["tvAccounts"] });
@@ -583,9 +634,11 @@ export function UsersPage() {
       setEditingEmail("");
       setOriginalEmail("");
       setAccountUsageInfo(null);
+      setEditingMaxSlots(8);
+      setEditingSlotUsernames({});
     } catch (error) {
       // Extrair mensagem de erro mais detalhada
-      let errorMessage = "Erro ao atualizar e-mail";
+      let errorMessage = "Erro ao atualizar conta";
       if (error && typeof error === "object") {
         if ("response" in error) {
           const axiosError = error as { response?: { data?: { message?: string } } };
@@ -597,7 +650,7 @@ export function UsersPage() {
         }
       }
       toast({ 
-        title: "Erro ao atualizar e-mail", 
+        title: "Erro ao atualizar conta", 
         description: errorMessage, 
         status: "error", 
         duration: 6000,
@@ -605,7 +658,13 @@ export function UsersPage() {
       });
     } finally {
       setIsUpdatingEmail(false);
+      setIsUpdatingAccount(false);
     }
+  };
+
+  const handleUpdateEmail = async () => {
+    // Função mantida para compatibilidade, mas agora usa handleUpdateAccount
+    await handleUpdateAccount();
   };
 
   const handleDeleteAccount = async () => {
@@ -1515,31 +1574,52 @@ export function UsersPage() {
         </HStack>
       </Stack>
 
-      {/* Modal para editar e-mail da conta TV */}
-      <Modal isOpen={editEmailModal.isOpen} onClose={editEmailModal.onClose}>
+      {/* Modal para editar conta TV */}
+      <Modal isOpen={editEmailModal.isOpen} onClose={editEmailModal.onClose} size="xl" scrollBehavior="inside">
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>Editar e-mail de acesso</ModalHeader>
+          <ModalHeader>Editar conta de acesso TV</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
-            <FormControl>
-              <FormLabel>E-mail</FormLabel>
-              <Input
-                type="email"
-                value={editingEmail}
-                onChange={(e) => setEditingEmail(e.target.value)}
-                placeholder="exemplo@nexusrs.com.br"
-                onKeyPress={(e) => {
-                  if (e.key === "Enter" && !isUpdatingEmail) {
-                    handleUpdateEmail();
-                  }
-                }}
-              />
-              <Text fontSize="sm" color="gray.500" mt={2}>
-                Este e-mail será atualizado para todos os slots desta conta
-              </Text>
+            <Stack spacing={4}>
+              <FormControl>
+                <FormLabel>E-mail</FormLabel>
+                <Input
+                  type="email"
+                  value={editingEmail}
+                  onChange={(e) => setEditingEmail(e.target.value)}
+                  placeholder="exemplo@nexusrs.com.br"
+                />
+                <Text fontSize="sm" color="gray.500" mt={1}>
+                  Este e-mail será atualizado para todos os slots desta conta
+                </Text>
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Quantidade máxima de acessos</FormLabel>
+                <Input
+                  type="number"
+                  min={1}
+                  max={8}
+                  value={editingMaxSlots}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || 1;
+                    setEditingMaxSlots(Math.min(Math.max(value, 1), 8));
+                  }}
+                />
+                <Text fontSize="sm" color="gray.500" mt={1}>
+                  Número máximo de acessos que este email pode gerar (1-8)
+                </Text>
+                {accountUsageInfo && accountUsageInfo.assignedSlots > editingMaxSlots && (
+                  <Text fontSize="sm" color="red.500" mt={1}>
+                    ⚠️ Atenção: Esta conta possui {accountUsageInfo.assignedSlots} slot(s) atribuído(s). 
+                    Não é possível reduzir abaixo deste valor.
+                  </Text>
+                )}
+              </FormControl>
+
               {accountUsageInfo && (
-                <Box mt={4} p={3} bg="gray.50" borderRadius="md" _dark={{ bg: "gray.700" }}>
+                <Box p={3} bg="gray.50" borderRadius="md" _dark={{ bg: "gray.700" }}>
                   <Text fontSize="sm" fontWeight="semibold" mb={2}>Informações de uso:</Text>
                   <Text fontSize="sm" color={accountUsageInfo.assignedSlots > 0 ? "orange.500" : "green.500"}>
                     {accountUsageInfo.assignedSlots > 0 
@@ -1551,7 +1631,39 @@ export function UsersPage() {
                   </Text>
                 </Box>
               )}
-            </FormControl>
+
+              {editingAccountId && accountSlots[editingAccountId] && (
+                <Box>
+                  <FormLabel mb={2}>Nomes dos acessos</FormLabel>
+                  <Text fontSize="sm" color="gray.500" mb={3}>
+                    Edite os nomes dos usuários. Deixe em branco para usar o padrão (#1, #2, etc.)
+                  </Text>
+                  <Stack spacing={2} maxH="300px" overflowY="auto">
+                    {accountSlots[editingAccountId].map((slot: TVAccountSlot) => (
+                      <HStack key={slot.id} spacing={2}>
+                        <Text fontSize="sm" minW="80px" color="gray.600">
+                          Slot #{slot.slotNumber}:
+                        </Text>
+                        <Input
+                          size="sm"
+                          value={editingSlotUsernames[slot.id] || ""}
+                          onChange={(e) => {
+                            setEditingSlotUsernames(prev => ({
+                              ...prev,
+                              [slot.id]: e.target.value
+                            }));
+                          }}
+                          placeholder={`#${slot.slotNumber}`}
+                        />
+                        {slot.clientId && (
+                          <Badge colorScheme="orange" fontSize="xs">Em uso</Badge>
+                        )}
+                      </HStack>
+                    ))}
+                  </Stack>
+                </Box>
+              )}
+            </Stack>
           </ModalBody>
           <ModalFooter>
             <Button 
@@ -1560,21 +1672,26 @@ export function UsersPage() {
               mr="auto"
               onClick={handleDeleteAccount} 
               isLoading={isDeletingAccount}
-              isDisabled={isUpdatingEmail || isDeletingAccount}
+              isDisabled={isUpdatingEmail || isUpdatingAccount || isDeletingAccount}
               leftIcon={<FiTrash2 />}
             >
               Remover conta
             </Button>
-            <Button variant="ghost" mr={3} onClick={editEmailModal.onClose} isDisabled={isUpdatingEmail || isDeletingAccount}>
+            <Button 
+              variant="ghost" 
+              mr={3} 
+              onClick={editEmailModal.onClose} 
+              isDisabled={isUpdatingEmail || isUpdatingAccount || isDeletingAccount}
+            >
               Cancelar
             </Button>
             <Button 
               colorScheme="blue" 
-              onClick={handleUpdateEmail} 
-              isLoading={isUpdatingEmail}
+              onClick={handleUpdateAccount} 
+              isLoading={isUpdatingEmail || isUpdatingAccount}
               isDisabled={isDeletingAccount}
             >
-              Salvar e confirmar
+              Salvar alterações
             </Button>
           </ModalFooter>
         </ModalContent>
