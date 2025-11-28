@@ -24,3 +24,4 @@ echo "1. Pare o servidor (Ctrl+C)"
 echo "2. Execute: npm run dev"
 echo "3. No navegador, faça um hard refresh (Ctrl+Shift+R)"
 echo ""
+

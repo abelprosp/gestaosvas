@@ -79,3 +79,4 @@ Estes arquivos têm alterações locais que **NÃO devem ir para produção** ai
 3. ✅ Verificar se emails de acesso estão aparecendo
 4. ✅ Verificar se opções de edição estão funcionando
 5. ✅ Só então fazer novas alterações em branch separada
+

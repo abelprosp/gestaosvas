@@ -129,3 +129,4 @@ Depois, no Vercel, faça deploy dessa branch.
 3. ✅ Verifique se as variáveis de ambiente estão corretas
 4. ✅ Se necessário, faça rollback para um commit estável
 5. ✅ Teste tudo localmente antes de fazer novos deploys
+

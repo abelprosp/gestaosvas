@@ -471,6 +471,102 @@ async function syncCloudAccesses(
   }
 }
 
+export async function ensureTvServiceLinked(clientId: string, assignments: any[]): Promise<boolean> {
+  if (assignments.length === 0) return false;
+  
+  const supabase = createServerClient(true); // Usa Service Role Key
+  const hasEssencial = assignments.some(a => (a.planType ?? "ESSENCIAL") === "ESSENCIAL");
+  const hasPremium = assignments.some(a => a.planType === "PREMIUM");
+  
+  console.log(`[ensureTvServiceLinked] Cliente ${clientId}: ${assignments.length} acessos (Essencial: ${hasEssencial}, Premium: ${hasPremium})`);
+  
+  // Verificar serviços já vinculados
+  const { data: existingServices, error: existingError } = await supabase
+    .from("client_services")
+    .select("service_id, service:services(id, name)")
+    .eq("client_id", clientId);
+  
+  if (existingError && !isSchemaMissing(existingError)) {
+    console.warn("[ensureTvServiceLinked] Erro ao verificar serviços existentes:", existingError);
+    return false;
+  }
+  
+  const existingServiceNames = new Set((existingServices ?? []).map((cs: any) => (cs.service?.name ?? "").toLowerCase()));
+  const hasTvService = Array.from(existingServiceNames).some(name => name.includes("tv"));
+  
+  if (hasTvService) {
+    console.log(`[ensureTvServiceLinked] Cliente ${clientId} já tem serviço TV vinculado`);
+    return false; // Já tem serviço TV vinculado
+  }
+  
+  // Buscar serviços TV disponíveis (priorizar TV Essencial)
+  const { data: tvServices, error: tvError } = await supabase
+    .from("services")
+    .select("id, name")
+    .or("name.ilike.%tv essencial%,name.ilike.%tv premium%,name.ilike.%tv%");
+  
+  if (tvError || !tvServices || tvServices.length === 0) {
+    console.warn("[ensureTvServiceLinked] Nenhum serviço TV encontrado na tabela services");
+    return false;
+  }
+  
+  console.log(`[ensureTvServiceLinked] Serviços TV encontrados:`, tvServices.map(s => s.name));
+  
+  // Priorizar TV Essencial se houver acessos Essencial, senão usar o primeiro disponível
+  let tvServiceId: string | null = null;
+  let tvServiceName: string | null = null;
+  
+  if (hasEssencial) {
+    // Buscar TV Essencial primeiro
+    const essencialService = tvServices.find(s => s.name?.toLowerCase().includes("essencial"));
+    if (essencialService) {
+      tvServiceId = essencialService.id;
+      tvServiceName = essencialService.name;
+    } else {
+      // Se não tem Essencial específico, usar qualquer TV que não seja Premium
+      const anyTv = tvServices.find(s => !s.name?.toLowerCase().includes("premium") && s.name?.toLowerCase().includes("tv"));
+      tvServiceId = anyTv?.id ?? tvServices[0]?.id ?? null;
+      tvServiceName = anyTv?.name ?? tvServices[0]?.name ?? null;
+    }
+  } else if (hasPremium) {
+    const premiumService = tvServices.find(s => s.name?.toLowerCase().includes("premium"));
+    tvServiceId = premiumService?.id ?? tvServices[0]?.id ?? null;
+    tvServiceName = premiumService?.name ?? tvServices[0]?.name ?? null;
+  } else {
+    // Sem planType definido, usar TV Essencial ou primeiro disponível
+    const essencialService = tvServices.find(s => s.name?.toLowerCase().includes("essencial"));
+    tvServiceId = essencialService?.id ?? tvServices[0]?.id ?? null;
+    tvServiceName = essencialService?.name ?? tvServices[0]?.name ?? null;
+  }
+  
+  if (!tvServiceId) {
+    console.warn(`[ensureTvServiceLinked] Não foi possível determinar qual serviço TV vincular`);
+    return false;
+  }
+  
+  console.log(`[ensureTvServiceLinked] Vinculando serviço ${tvServiceName} (${tvServiceId}) ao cliente ${clientId}`);
+  
+  // Vincular serviço TV
+  const { error: linkError } = await supabase
+    .from("client_services")
+    .insert({
+      client_id: clientId,
+      service_id: tvServiceId,
+      custom_price: null,
+      custom_price_essencial: null,
+      custom_price_premium: null,
+      sold_by: null,
+    });
+  
+  if (linkError && !isSchemaMissing(linkError)) {
+    console.error(`[ensureTvServiceLinked] ❌ Erro ao vincular serviço TV:`, linkError);
+    return false;
+  } else {
+    console.log(`[ensureTvServiceLinked] ✅ Serviço TV "${tvServiceName}" vinculado automaticamente para cliente ${clientId}`);
+    return true; // Indica que um serviço foi vinculado
+  }
+}
+
 async function fetchClientSummary(clientId: string) {
   const supabase = createServerClient();
   const { data, error } = await supabase
@@ -483,6 +579,9 @@ async function fetchClientSummary(clientId: string) {
 
   const assignmentsMap = await fetchTvAssignmentsForClients([clientId]);
   const assignments = assignmentsMap.get(clientId) ?? [];
+  
+  // Garantir que serviço TV está vinculado se houver acessos
+  await ensureTvServiceLinked(clientId, assignments);
 
   return {
     ...mapClientRow(data),
@@ -537,6 +636,54 @@ export const GET = createApiHandler(async (req) => {
   let filteredClients = clients;
   const clientIds = clients.map(c => c.id);
   const assignmentsMap = await fetchTvAssignmentsForClients(clientIds);
+  
+  // Garantir que clientes com acessos TV tenham serviço vinculado
+  const clientsWithTvAccess = new Set<string>();
+  const clientsWithLinkedServices = new Set<string>();
+  
+  for (const client of clients) {
+    const assignments = assignmentsMap.get(client.id) ?? [];
+    if (assignments.length > 0) {
+      clientsWithTvAccess.add(client.id);
+      const hadTvService = (client.services ?? []).some(s => s.name?.toLowerCase().includes("tv"));
+      const wasLinked = await ensureTvServiceLinked(client.id, assignments);
+      if (wasLinked) {
+        clientsWithLinkedServices.add(client.id);
+        console.log(`[GET /api/clients] Cliente ${client.id} teve serviço TV vinculado`);
+      } else if (!hadTvService) {
+        // Se não tinha serviço antes e não vinculou agora, pode ser que já exista mas não foi carregado
+        // Marcar para recarregar de qualquer forma
+        clientsWithLinkedServices.add(client.id);
+      }
+    }
+  }
+  
+  // Recarregar serviços para clientes com acesso TV (para garantir que serviços vinculados sejam exibidos)
+  if (clientsWithTvAccess.size > 0) {
+    console.log(`[GET /api/clients] Recarregando serviços para ${clientsWithTvAccess.size} clientes com acesso TV...`);
+    const supabaseForReload = createServerClient(true);
+    const { data: updatedData, error: updatedError } = await supabaseForReload
+      .from("clients")
+      .select("*, client_services(custom_price, custom_price_essencial, custom_price_premium, service:services(*))")
+      .in("id", Array.from(clientsWithTvAccess));
+    
+    if (!updatedError && updatedData) {
+      const updatedClients = (updatedData ?? []).map(mapClientRow);
+      // Substituir completamente os serviços dos clientes que foram atualizados
+      updatedClients.forEach(updatedClient => {
+        const originalClient = clients.find(c => c.id === updatedClient.id);
+        if (originalClient) {
+          const oldCount = (originalClient.services ?? []).length;
+          originalClient.services = updatedClient.services;
+          const newCount = (originalClient.services ?? []).length;
+          console.log(`[GET /api/clients] Cliente ${originalClient.id}: ${oldCount} -> ${newCount} serviços`);
+        }
+      });
+      console.log(`[GET /api/clients] ✅ Serviços recarregados para ${updatedClients.length} clientes`);
+    } else if (updatedError) {
+      console.warn("[GET /api/clients] Erro ao recarregar serviços após vínculo:", updatedError);
+    }
+  }
   
   if (hasTelephonyFilter === "WITH_TELEPHONY") {
       // Precisamos buscar os slots para saber quem tem telefonia

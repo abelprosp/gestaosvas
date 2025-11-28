@@ -17,3 +17,4 @@ SELECT
   raw_user_meta_data->>'role' as role
 FROM auth.users
 WHERE email = 'thomas.bugs@nexusrs.com.br'; -- ⚠️ SUBSTITUA PELO SEU EMAIL
+

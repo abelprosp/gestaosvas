@@ -91,7 +91,8 @@ function isUniqueViolation(error: PostgrestError) {
 }
 
 async function syncClientServices(clientId: string, selections: ServiceSelection[]) {
-  const supabase = createServerClient();
+  // Usa Service Role Key para garantir que services sejam salvos independente de RLS
+  const supabase = createServerClient(true);
   const uniqueSelections = new Map<string, ServiceSelection>();
   selections.forEach((selection) => {
     if (selection?.serviceId) {
@@ -684,6 +685,28 @@ export const GET = createApiHandler(async (req, { params, user }) => {
   const contracts = Array.isArray(data.contracts) ? data.contracts.map(mapContractRow) : [];
   const assignments = await fetchTvAssignmentsForClients([client.id], { includeHistory: true });
   client.tvAssignments = assignments.get(client.id) ?? [];
+  
+  // Garantir que serviço TV está vinculado se houver acessos
+  if (client.tvAssignments.length > 0) {
+    const { ensureTvServiceLinked } = await import("../route");
+    const wasLinked = await ensureTvServiceLinked(client.id, client.tvAssignments);
+    
+    // Recarregar dados do cliente se um serviço foi vinculado
+    if (wasLinked) {
+      const supabaseForReload = createServerClient(true);
+      const { data: updatedData, error: updatedError } = await supabaseForReload
+        .from("clients")
+        .select("*, client_services(custom_price, custom_price_essencial, custom_price_premium, service:services(*))")
+        .eq("id", client.id)
+        .single();
+      
+      if (!updatedError && updatedData) {
+        const updatedClient = mapClientRow(updatedData);
+        client.services = updatedClient.services;
+        console.log(`[GET /api/clients/${client.id}] Serviços atualizados após vínculo: ${client.services.length} serviços`);
+      }
+    }
+  }
 
   return NextResponse.json({ ...client, contracts });
 });
@@ -731,7 +754,16 @@ export const PUT = createApiHandler(
           customPrice: null,
         }));
       const selectedServiceIdsList = selections.map((selection) => selection.serviceId);
-      await syncClientServices(data.id, selections);
+      
+      console.log(`[PUT /api/clients/${clientId}] Salvando ${selections.length} serviços`);
+      try {
+        await syncClientServices(data.id, selections);
+        console.log(`[PUT /api/clients/${clientId}] ✅ Serviços salvos com sucesso`);
+      } catch (syncError) {
+        console.error(`[PUT /api/clients/${clientId}] ❌ Erro ao salvar serviços:`, syncError);
+        throw syncError;
+      }
+      
       await handleTvServiceForClient(data.id, selections, tvSetup);
       await syncCloudAccesses(data.id, selectedServiceIdsList, cloudSetups ?? []);
     } else if (cloudSetups) {

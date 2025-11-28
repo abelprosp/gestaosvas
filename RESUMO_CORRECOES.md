@@ -119,3 +119,4 @@ WHERE email = 'SEU_EMAIL_AQUI@exemplo.com';
 3. Faça hard refresh no navegador (`Ctrl+Shift+R`)
 4. Se ainda tiver problemas de autenticação, corrija o role do usuário
 5. Faça logout e login novamente
+

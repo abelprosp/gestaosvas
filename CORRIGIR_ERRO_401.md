@@ -101,3 +101,4 @@ if (data.session) {
 4. ✅ Teste novamente
 
 Se ainda tiver problemas, os logs do `[API Interceptor]` no Console vão mostrar exatamente o que está acontecendo.
+

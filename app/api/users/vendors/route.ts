@@ -3,7 +3,8 @@ import { createApiHandler } from "@/lib/utils/apiHandler";
 import { createServerClient } from "@/lib/supabase/server";
 
 export const GET = createApiHandler(async (req) => {
-  const supabase = createServerClient();
+  // admin.listUsers() requer Service Role Key
+  const supabase = createServerClient(true);
   const { data, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
   if (error) {
     throw error;

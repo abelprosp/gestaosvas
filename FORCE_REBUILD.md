@@ -56,3 +56,4 @@ Abra o DevTools (F12) e vá na aba Console. Procure por:
 - Erros de compilação
 - Mensagens de erro de autenticação
 - Logs do `[createApiHandler]` ou `[API Interceptor]`
+

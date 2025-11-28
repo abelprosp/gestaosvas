@@ -66,3 +66,4 @@ Se a sessão não existir ou estiver expirada:
 1. Verifique se você está realmente logado (veja o nome do usuário no topo da página)
 2. Se estiver logado mas ainda der erro 401, pode ser um problema com o role do usuário
 3. Execute o script SQL para corrigir o role (veja `supabase/fix_user_role_simple.sql`)
+

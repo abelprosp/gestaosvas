@@ -88,6 +88,13 @@ export const GET = createApiHandler(async (req) => {
   const formatted = filteredData.map((row) => {
     const mapped = mapTVSlotRow(row);
     
+    // Determinar profileLabel: usar customUsername se disponível, senão null (será gerado depois)
+    let profileLabel: string | null = null;
+    if (mapped.username && mapped.username !== `#${mapped.slotNumber}` && !mapped.username.startsWith("#")) {
+      // Se o username é customizado (não é o padrão #X), usar ele como profileLabel
+      profileLabel = mapped.username;
+    }
+    
     return {
       id: mapped.id,
       slotNumber: mapped.slotNumber,
@@ -105,7 +112,7 @@ export const GET = createApiHandler(async (req) => {
       hasTelephony: mapped.hasTelephony ?? null,
       client: row.client ?? null,
       clientId: mapped.clientId ?? null,
-      profileLabel: null as string | null,
+      profileLabel: profileLabel,
       document: row.client?.document ?? null,
     };
   });
@@ -130,7 +137,11 @@ export const GET = createApiHandler(async (req) => {
       return a.slotNumber - b.slotNumber;
     });
     list.forEach((item, index) => {
-      item.profileLabel = `Perfil ${index + 1}`;
+      // Se já tem profileLabel (customUsername), manter
+      // Senão, usar o padrão "Perfil X"
+      if (!item.profileLabel) {
+        item.profileLabel = `Perfil ${index + 1}`;
+      }
     });
   });
 

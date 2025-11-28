@@ -57,3 +57,4 @@ O campo `role` deve mostrar `admin`.
 - ⚠️ **Sempre faça logout e login novamente** após alterar o role
 - ⚠️ **Limpe o cache do navegador** (Ctrl+Shift+R)
 - ⚠️ O Supabase usa `raw_user_meta_data` na tabela `auth.users`, não `user_metadata`
+

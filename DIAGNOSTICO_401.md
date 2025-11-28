@@ -103,3 +103,4 @@ Se não tiver, adicione:
 4. ✅ Se necessário, **faça logout e login novamente**
 
 Os logs do servidor vão mostrar exatamente por que o token está sendo rejeitado.
+

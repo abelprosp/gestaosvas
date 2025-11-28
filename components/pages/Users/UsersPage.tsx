@@ -51,7 +51,7 @@ import {
   FiPhone,
   FiTrash2,
 } from "react-icons/fi";
-import { fetchTVOverview, regenerateTVSlotPassword, releaseTVSlot, updateTVSlot, updateTVAccountEmail, updateTVAccountMaxSlots, updateTVSlotUsername, deleteTVAccount, getNextEmailInfo, listTVAccounts, TVAccountInfo, getTVAccountSlots, TVAccountSlot, fetchTVAccountUsage, deleteTVSlot } from "@/lib/api/tv";
+import { fetchTVOverview, regenerateTVSlotPassword, releaseTVSlot, updateTVSlot, updateTVAccountEmail, updateTVAccountMaxSlots, updateTVSlotUsername, deleteTVAccount, getNextEmailInfo, listTVAccounts, TVAccountInfo, getTVAccountSlots, TVAccountSlot, fetchTVAccountUsage, deleteTVSlot, createTVAccount } from "@/lib/api/tv";
 import { PaginatedResponse, TVOverviewRecord, TVSlotStatus } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { createRequest } from "@/lib/api/requests";
@@ -532,66 +532,78 @@ export function UsersPage() {
 
   const handleEditEmail = async (accountId: string, currentEmail: string) => {
     if (!isAdmin) return;
+    
+    // Limpar estados anteriores ANTES de abrir o modal
+    setEditingAccountId(null);
+    setEditingEmail("");
+    setOriginalEmail("");
+    setAccountUsageInfo(null);
+    setEditingMaxSlots(8);
+    setEditingMaxSlotsInput("8");
+    setEditingSlotUsernames({});
+    
+    // Abrir modal primeiro (para mostrar loading)
+    editEmailModal.onOpen();
+    
+    // Definir ID e email
     setEditingAccountId(accountId);
     setEditingEmail(currentEmail);
     setOriginalEmail(currentEmail);
     
     // Buscar informações sobre uso da conta e slots
     try {
-      const response = await fetch(`/api/tv/accounts`);
-      if (response.ok) {
-        const accounts = await response.json();
-        const accountData = accounts.find((acc: any) => acc.account.id === accountId);
-        if (accountData) {
-          const slots = accountData.slots || [];
-          const assignedSlots = slots.filter((s: any) => s.status === "ASSIGNED" && s.clientId).length;
-          const totalSlots = slots.length;
-          setAccountUsageInfo({ assignedSlots, totalSlots });
-          
-          // Buscar max_slots da conta
-          const accountMaxSlots = accountData.account?.maxSlots ?? 8;
-          setEditingMaxSlots(accountMaxSlots);
-          setEditingMaxSlotsInput(String(accountMaxSlots));
-          
-          // Buscar slots completos para edição
-          try {
-            const slotsData = await getTVAccountSlots(accountId);
-            setAccountSlots(prev => ({ ...prev, [accountId]: slotsData }));
-            
-            // Carregar usernames dos slots (usar o username já mapeado que considera custom_username)
-            const usernames: Record<string, string> = {};
-            slotsData.forEach((slot: TVAccountSlot) => {
-              // Usar o username do slot (que já considera custom_username no mapper)
-              usernames[slot.id] = slot.username || "";
-            });
-            setEditingSlotUsernames(usernames);
-          } catch (error) {
-            console.error("Erro ao carregar slots:", error);
-            // Fallback: usar slots da resposta da API
-            const usernames: Record<string, string> = {};
-            slots.forEach((slot: any) => {
-              usernames[slot.id] = slot.username || "";
-            });
-            setEditingSlotUsernames(usernames);
-          }
-        } else {
-          // Fallback: contar dos registros atuais
-          const assignedSlots = records.filter(r => r.accountId === accountId && r.status === "ASSIGNED").length;
-          setAccountUsageInfo({ assignedSlots, totalSlots: 8 });
-          setEditingMaxSlots(8);
-          setEditingMaxSlotsInput("8");
-        }
+      // Buscar uso da conta
+      const usage = await fetchTVAccountUsage(accountId);
+      setAccountUsageInfo(usage);
+      
+      // Buscar slots completos para edição
+      const slotsData = await getTVAccountSlots(accountId);
+      setAccountSlots(prev => ({ ...prev, [accountId]: slotsData }));
+      
+      // Buscar informações da conta (incluindo max_slots)
+      const accountsList = await listTVAccounts();
+      const account = accountsList.find(acc => acc.id === accountId);
+      
+      if (account) {
+        // Usar max_slots da conta, ou usar o número de slots existentes
+        const accountMaxSlots = account.totalSlots || slotsData.length || 8;
+        setEditingMaxSlots(accountMaxSlots);
+        setEditingMaxSlotsInput(String(accountMaxSlots));
+      } else {
+        // Fallback: usar número de slots existentes
+        const accountMaxSlots = slotsData.length || 8;
+        setEditingMaxSlots(accountMaxSlots);
+        setEditingMaxSlotsInput(String(accountMaxSlots));
       }
+      
+      // Carregar usernames dos slots (usar o username já mapeado que considera custom_username)
+      const usernames: Record<string, string> = {};
+      slotsData.forEach((slot: TVAccountSlot) => {
+        // Se o username é customizado (não é o padrão #X), usar o valor customizado
+        // Caso contrário, deixar vazio para permitir que o usuário digite um novo nome
+        if (slot.username && slot.username !== `#${slot.slotNumber}` && !slot.username.startsWith("#")) {
+          usernames[slot.id] = slot.username;
+        } else {
+          // Deixar vazio para permitir que o usuário digite um novo nome
+          usernames[slot.id] = "";
+        }
+      });
+      setEditingSlotUsernames(usernames);
     } catch (error) {
       console.error("Erro ao buscar informações da conta:", error);
+      toast({
+        title: "Erro ao carregar dados",
+        description: "Não foi possível carregar todas as informações da conta. Alguns campos podem estar vazios.",
+        status: "warning",
+        duration: 5000,
+      });
       // Fallback: contar dos registros atuais
       const assignedSlots = records.filter(r => r.accountId === accountId && r.status === "ASSIGNED").length;
       setAccountUsageInfo({ assignedSlots, totalSlots: 8 });
       setEditingMaxSlots(8);
       setEditingMaxSlotsInput("8");
     }
-    
-    editEmailModal.onOpen();
+    // Modal já foi aberto no início da função
   };
 
   const handleUpdateAccount = async () => {
@@ -618,21 +630,26 @@ export function UsersPage() {
       if (editingAccountId && accountSlots[editingAccountId]) {
         accountSlots[editingAccountId].forEach((slot: TVAccountSlot) => {
           const newUsername = editingSlotUsernames[slot.id]?.trim() || null;
-          const currentUsername = slot.username || null;
-          // Só atualiza se mudou (comparar com o username atual do slot)
-          // Se newUsername é null e currentUsername também é null (ou vazio), não precisa atualizar
-          if (newUsername !== currentUsername && (newUsername || currentUsername)) {
-            updates.push(updateTVSlotUsername(slot.id, newUsername));
-          }
+          // Se o username foi limpo (vazio), significa que quer usar o padrão, então enviar null
+          // Se tem valor, enviar o valor
+          // Sempre atualizar para garantir que está sincronizado
+          updates.push(updateTVSlotUsername(slot.id, newUsername));
         });
       }
 
       await Promise.all(updates);
 
       toast({ title: "Conta atualizada com sucesso", status: "success" });
-      queryClient.invalidateQueries({ queryKey: ["tvOverview"] });
-      queryClient.invalidateQueries({ queryKey: ["tvNextEmail"] });
-      queryClient.invalidateQueries({ queryKey: ["tvAccounts"] });
+      
+      // Invalidar todas as queries relacionadas para forçar recarregamento
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["tvOverview"] }),
+        queryClient.invalidateQueries({ queryKey: ["tvNextEmail"] }),
+        queryClient.invalidateQueries({ queryKey: ["tvAccounts"] }),
+        queryClient.invalidateQueries({ queryKey: ["tvAccountSlots"] }),
+      ]);
+      
+      // Limpar estados
       editEmailModal.onClose();
       setEditingAccountId(null);
       setEditingEmail("");
@@ -641,6 +658,15 @@ export function UsersPage() {
       setEditingMaxSlots(8);
       setEditingMaxSlotsInput("8");
       setEditingSlotUsernames({});
+      
+      // Limpar cache de slots da conta editada
+      if (editingAccountId) {
+        setAccountSlots(prev => {
+          const updated = { ...prev };
+          delete updated[editingAccountId];
+          return updated;
+        });
+      }
     } catch (error) {
       // Extrair mensagem de erro mais detalhada
       let errorMessage = "Erro ao atualizar conta";
@@ -781,18 +807,9 @@ export function UsersPage() {
                     // Se a conta não existir, criar ela automaticamente
                     if (!selectedAccount) {
                       try {
-                        const response = await fetch("/api/tv/accounts", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ email: selectedEmail }),
-                        });
+                        // Usar a função createTVAccount que já tem autenticação configurada
+                        await createTVAccount(selectedEmail);
                         
-                        if (!response.ok) {
-                          const error = await response.json();
-                          throw new Error(error.message || "Erro ao criar conta");
-                        }
-                        
-                        const data = await response.json();
                         // Recarregar lista de contas
                         accounts = await listTVAccounts();
                         selectedAccount = accounts.find(a => a.email === selectedEmail);
@@ -801,9 +818,10 @@ export function UsersPage() {
                           throw new Error("Conta criada mas não encontrada na lista");
                         }
                       } catch (createError: any) {
+                        const errorMessage = createError?.response?.data?.message || createError?.message || "Não foi possível criar a conta para editar";
                         toast({
                           title: "Erro ao criar conta",
-                          description: createError.message || "Não foi possível criar a conta para editar",
+                          description: errorMessage,
                           status: "error",
                           duration: 5000,
                         });
@@ -812,18 +830,60 @@ export function UsersPage() {
                     }
                     
                     if (selectedAccount) {
+                      // Limpar estados antes de carregar
+                      setEditingAccountId(null);
+                      setEditingEmail("");
+                      setOriginalEmail("");
+                      setAccountUsageInfo(null);
+                      setEditingMaxSlots(8);
+                      setEditingMaxSlotsInput("8");
+                      setEditingSlotUsernames({});
+                      
+                      // Abrir modal primeiro
+                      editEmailModal.onOpen();
+                      
+                      // Definir ID e email
                       setEditingAccountId(selectedAccount.id);
                       setEditingEmail(selectedAccount.email);
                       setOriginalEmail(selectedAccount.email);
-                      // Buscar informações de uso
+                      
+                      // Buscar informações de uso e slots
                       try {
                         const usage = await fetchTVAccountUsage(selectedAccount.id);
                         setAccountUsageInfo(usage);
+                        
+                        // Buscar slots completos para edição
+                        const slotsData = await getTVAccountSlots(selectedAccount.id);
+                        setAccountSlots(prev => ({ ...prev, [selectedAccount.id]: slotsData }));
+                        
+                        // Buscar informações da conta (incluindo max_slots)
+                        const accountsList = await listTVAccounts();
+                        const account = accountsList.find(acc => acc.id === selectedAccount.id);
+                        
+                        if (account) {
+                          const accountMaxSlots = account.totalSlots || slotsData.length || 8;
+                          setEditingMaxSlots(accountMaxSlots);
+                          setEditingMaxSlotsInput(String(accountMaxSlots));
+                        } else {
+                          const accountMaxSlots = slotsData.length || 8;
+                          setEditingMaxSlots(accountMaxSlots);
+                          setEditingMaxSlotsInput(String(accountMaxSlots));
+                        }
+                        
+                        // Carregar usernames dos slots
+                        const usernames: Record<string, string> = {};
+                        slotsData.forEach((slot: TVAccountSlot) => {
+                          if (slot.username && slot.username !== `#${slot.slotNumber}` && !slot.username.startsWith("#")) {
+                            usernames[slot.id] = slot.username;
+                          } else {
+                            usernames[slot.id] = "";
+                          }
+                        });
+                        setEditingSlotUsernames(usernames);
                       } catch (error) {
-                        console.error("Erro ao buscar uso da conta:", error);
+                        console.error("Erro ao buscar informações da conta:", error);
                         setAccountUsageInfo({ totalSlots: 0, assignedSlots: 0 });
                       }
-                      editEmailModal.onOpen();
                     }
                   } catch (error: any) {
                     toast({
@@ -1194,7 +1254,10 @@ export function UsersPage() {
                       </HStack>
                       </Td>
                       <Td display={{ base: "none", md: "table-cell" }}>
-                        <Badge colorScheme="blue">#{record.slotNumber}</Badge>
+                        {record.username && record.username !== `#${record.slotNumber}` && !record.username.startsWith("#")
+                          ? <Badge colorScheme="blue">{record.username}</Badge>
+                          : <Badge colorScheme="blue">#{record.slotNumber}</Badge>
+                        }
                       </Td>
                       <Td display={{ base: "none", md: "table-cell" }}>
                         {record.planType ? (
@@ -1210,9 +1273,11 @@ export function UsersPage() {
                           <Stack spacing={1}>
                             <Text>{record.client.name}</Text>
                             <Text fontSize="xs" color="gray.500">
-                              {record.profileLabel
+                              {record.username && record.username !== `#${record.slotNumber}` && !record.username.startsWith("#")
+                                ? `(${record.username})`
+                                : record.profileLabel
                                 ? `(${record.client.name.split(" ")[0]} ${record.profileLabel.replace("Perfil", "").trim()})`
-                                : `(${record.client.name.split(" ")[0]}1)`}
+                                : `(${record.client.name.split(" ")[0]}${record.slotNumber})`}
                             </Text>
                             {record.client.email && (
                               <Text fontSize="sm" color="gray.500">
@@ -1320,11 +1385,17 @@ export function UsersPage() {
                                   {record.client ? (
                                     <Stack spacing={1} mt={1}>
                                       <Text>{record.client.name}</Text>
-                              {record.profileLabel && (
-                                <Text fontSize="xs" color="gray.500">
-                                  ({record.client.name.split(" ")[0]} {record.profileLabel.replace("Perfil", "").trim()})
-                                </Text>
-                              )}
+                              {record.username && record.username !== `#${record.slotNumber}` && !record.username.startsWith("#")
+                                ? (
+                                  <Text fontSize="xs" color="gray.500">
+                                    ({record.username})
+                                  </Text>
+                                )
+                                : record.profileLabel && (
+                                  <Text fontSize="xs" color="gray.500">
+                                    ({record.client.name.split(" ")[0]} {record.profileLabel.replace("Perfil", "").trim()})
+                                  </Text>
+                                )}
                                       {record.client.email && (
                                         <Text fontSize="sm" color="gray.500">
                                           {record.client.email}
@@ -1580,7 +1651,22 @@ export function UsersPage() {
       </Stack>
 
       {/* Modal para editar conta TV */}
-      <Modal isOpen={editEmailModal.isOpen} onClose={editEmailModal.onClose} size="xl" scrollBehavior="inside">
+      <Modal 
+        isOpen={editEmailModal.isOpen} 
+        onClose={() => {
+          // Limpar estados ao fechar
+          setEditingAccountId(null);
+          setEditingEmail("");
+          setOriginalEmail("");
+          setAccountUsageInfo(null);
+          setEditingMaxSlots(8);
+          setEditingMaxSlotsInput("8");
+          setEditingSlotUsernames({});
+          editEmailModal.onClose();
+        }} 
+        size="xl" 
+        scrollBehavior="inside"
+      >
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>Editar conta de acesso TV</ModalHeader>
@@ -1655,14 +1741,15 @@ export function UsersPage() {
                 </Box>
               )}
 
-              {editingAccountId && accountSlots[editingAccountId] && (
+              {editingAccountId && (
                 <Box>
                   <FormLabel mb={2}>Nomes dos acessos</FormLabel>
                   <Text fontSize="sm" color="gray.500" mb={3}>
                     Edite os nomes dos usuários. Deixe em branco para usar o padrão (#1, #2, etc.)
                   </Text>
-                  <Stack spacing={2} maxH="300px" overflowY="auto">
-                    {accountSlots[editingAccountId].map((slot: TVAccountSlot) => (
+                  {accountSlots[editingAccountId] && accountSlots[editingAccountId].length > 0 ? (
+                    <Stack spacing={2} maxH="300px" overflowY="auto">
+                      {accountSlots[editingAccountId].map((slot: TVAccountSlot) => (
                       <HStack key={slot.id} spacing={2}>
                         <Text fontSize="sm" minW="80px" color="gray.600">
                           Slot #{slot.slotNumber}:
@@ -1683,7 +1770,12 @@ export function UsersPage() {
                         )}
                       </HStack>
                     ))}
-                  </Stack>
+                    </Stack>
+                  ) : (
+                    <Text fontSize="sm" color="gray.500" fontStyle="italic">
+                      Carregando slots...
+                    </Text>
+                  )}
                 </Box>
               )}
             </Stack>
@@ -1703,7 +1795,17 @@ export function UsersPage() {
             <Button 
               variant="ghost" 
               mr={3} 
-              onClick={editEmailModal.onClose} 
+              onClick={() => {
+                // Limpar estados ao cancelar
+                setEditingAccountId(null);
+                setEditingEmail("");
+                setOriginalEmail("");
+                setAccountUsageInfo(null);
+                setEditingMaxSlots(8);
+                setEditingMaxSlotsInput("8");
+                setEditingSlotUsernames({});
+                editEmailModal.onClose();
+              }} 
               isDisabled={isUpdatingEmail || isUpdatingAccount || isDeletingAccount}
             >
               Cancelar

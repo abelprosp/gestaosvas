@@ -451,10 +451,24 @@ const getSortIcon = (key: string): ReactElement | undefined => {
 
   const updateClientServices = useMutation({
     mutationFn: async ({ id, values }: { id: string; values: ClientServicesFormValues }) => {
-      await api.put(`/clients/${id}`, values);
+      console.log("[updateClientServices] Enviando dados:", { id, values });
+      const response = await api.put(`/clients/${id}`, values);
+      console.log("[updateClientServices] Resposta recebida:", response.data);
+      return response.data;
     },
     onSuccess: () => {
+      console.log("[updateClientServices] ✅ Sucesso! Invalidando queries...");
       queryClient.invalidateQueries({ queryKey: ["clients"] });
+      toast({ title: "Serviços atualizados com sucesso", status: "success" });
+    },
+    onError: (error: any) => {
+      console.error("[updateClientServices] ❌ Erro:", error);
+      toast({ 
+        title: "Erro ao atualizar serviços", 
+        description: error?.response?.data?.message || error?.message || "Não foi possível salvar as alterações",
+        status: "error",
+        duration: 5000,
+      });
     },
   });
 
@@ -465,7 +479,13 @@ const getSortIcon = (key: string): ReactElement | undefined => {
       servicesModal.onClose();
       return;
     }
-    await updateClientServices.mutateAsync({ id: selectedClient.id, values });
+    try {
+      await updateClientServices.mutateAsync({ id: selectedClient.id, values });
+      servicesModal.onClose();
+    } catch (error) {
+      // Erro já é tratado no onError da mutation
+      console.error("[handleUpdateServices] Erro ao atualizar serviços:", error);
+    }
   };
 
   const sectionBg = useColorModeValue("rgba(255,255,255,0.78)", "rgba(15, 23, 42, 0.7)");
@@ -703,10 +723,11 @@ const getSortIcon = (key: string): ReactElement | undefined => {
                       <Td>{client.document}</Td>
                       <Td>
                         <HStack spacing={2} flexWrap="wrap" align="start">
-                          {(client.services ?? []).length === 0 ? (
+                          {(client.services ?? []).length === 0 && assignments.length === 0 ? (
                             <Badge colorScheme="gray">Sem serviços</Badge>
                           ) : (
-                            client.services?.map((service) => (
+                            <>
+                            {client.services?.map((service) => (
                               <Badge key={service.id} colorScheme="blue">
                                 {service.name}
                                 {service.customPrice !== null && service.customPrice !== undefined
@@ -715,8 +736,7 @@ const getSortIcon = (key: string): ReactElement | undefined => {
                                     ? " · negociável"
                                     : ""}
                               </Badge>
-                            ))
-                          )}
+                            ))}
                           {assignments.length > 0 && (
                             <>
                               {visibleAssignments.map((assignment) => (
@@ -736,6 +756,8 @@ const getSortIcon = (key: string): ReactElement | undefined => {
                                   {hiddenCount > 0 ? `Ver mais (+${hiddenCount})` : "Ver menos"}
                                 </Button>
                               )}
+                            </>
+                          )}
                             </>
                           )}
                         </HStack>
