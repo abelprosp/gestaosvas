@@ -153,6 +153,7 @@ const STATUS_LABEL: Record<TVSlotStatus, string> = {
   ASSIGNED: "Ativo",
   INACTIVE: "Inativo",
   SUSPENDED: "Suspenso",
+  USED: "Usado",
 };
 
 const STATUS_COLOR: Record<TVSlotStatus, string> = {
@@ -160,6 +161,7 @@ const STATUS_COLOR: Record<TVSlotStatus, string> = {
   ASSIGNED: "green",
   INACTIVE: "red",
   SUSPENDED: "orange",
+  USED: "blue",
 };
 
 export function UsersPage() {
@@ -693,11 +695,6 @@ export function UsersPage() {
     }
   };
 
-  const handleUpdateEmail = async () => {
-    // Função mantida para compatibilidade, mas agora usa handleUpdateAccount
-    await handleUpdateAccount();
-  };
-
   const handleDeleteAccount = async () => {
     if (!editingAccountId) return;
 
@@ -770,17 +767,33 @@ export function UsersPage() {
       </Flex>
 
       {isAdmin && nextEmailInfo && (
-        <HStack spacing={3} flexWrap="wrap">
-          <Box p={3} bg={tableBg} borderRadius="md" borderWidth={1} borderColor={borderColor} minW="250px">
+        <Flex direction={{ base: "column", md: "row" }} gap={3} flexWrap="wrap">
+          <Box 
+            p={3} 
+            bg={tableBg} 
+            borderRadius="md" 
+            borderWidth={1} 
+            borderColor={borderColor} 
+            flex={{ base: "1 1 100%", sm: "1 1 calc(50% - 6px)", md: "0 0 250px" }}
+            minW={{ base: "100%", sm: "250px" }}
+          >
             <HStack justify="space-between" mb={2}>
               <Text fontSize="sm" color="gray.500">Próximo email:</Text>
             </HStack>
-            <Text fontWeight="semibold" color="brand.500">{nextEmailInfo.nextEmail}</Text>
+            <Text fontWeight="semibold" color="brand.500" wordBreak="break-word">{nextEmailInfo.nextEmail}</Text>
             <Text fontSize="xs" color="gray.500" mt={1}>
               {nextEmailInfo.availableSlots} acesso(s) livre(s)
             </Text>
           </Box>
-          <Box p={3} bg={tableBg} borderRadius="md" borderWidth={1} borderColor={borderColor} minW="280px">
+          <Box 
+            p={3} 
+            bg={tableBg} 
+            borderRadius="md" 
+            borderWidth={1} 
+            borderColor={borderColor} 
+            flex={{ base: "1 1 100%", sm: "1 1 calc(50% - 6px)", md: "1 1 280px" }}
+            minW={{ base: "100%", sm: "280px" }}
+          >
             <HStack justify="space-between" mb={2}>
               <Text fontSize="sm" color="gray.500">Editar email padrão:</Text>
               <Button
@@ -941,86 +954,110 @@ export function UsersPage() {
               })()}
             </Select>
           </Box>
-        </HStack>
+        </Flex>
       )}
 
-      <Stack direction={{ base: "column", md: "row" }} spacing={4}>
-        <Button
-          colorScheme="blue"
-          variant="outline"
-          size="sm"
-          onClick={async () => {
-            emailsModal.onOpen();
-            setIsLoadingAccounts(true);
-            try {
-              const accounts = await listTVAccounts();
-              setAccountsList(accounts);
-            } catch (error) {
-              toast({
-                title: "Erro ao carregar emails",
-                status: "error",
-                duration: 3000,
-              });
-            } finally {
-              setIsLoadingAccounts(false);
-            }
-          }}
+      <Box
+        bg={tableBg}
+        borderRadius="xl"
+        p={{ base: 4, md: 5 }}
+        borderWidth={1}
+        borderColor={borderColor}
+        boxShadow="sm"
+      >
+        <Flex
+          direction={{ base: "column", md: "row" }}
+          gap={3}
+          flexWrap="wrap"
+          align={{ base: "stretch", md: "center" }}
         >
-          Ver emails de acesso
-        </Button>
-        <Input
-          placeholder="Buscar por cliente, e-mail, CPF/CNPJ ou anotação"
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          maxW={{ md: "320px" }}
-        />
-        <Select
-          maxW={{ md: "200px" }}
-          value={statusFilter}
-          onChange={(event) => setStatusFilter(event.target.value as TVSlotStatus | "ALL")}
-        >
-          <option value="ALL">Todos os status</option>
-          {Object.entries(STATUS_LABEL).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </Select>
-        <Select
-          maxW={{ md: "200px" }}
-          value={availabilityFilter}
-          onChange={(event) => setAvailabilityFilter(event.target.value as typeof availabilityFilter)}
-        >
-          <option value="ALL">Todos</option>
-          <option value="AVAILABLE">Somente disponíveis</option>
-          <option value="ASSIGNED">Somente atribuídos</option>
-        </Select>
-        <Select
-          maxW={{ md: "220px" }}
-          value={expirationFilter}
-          onChange={(event) => setExpirationFilter(event.target.value as ExpirationCategory | "ALL")}
-        >
-          <option value="ALL">Todos os vencimentos</option>
-          <option value="EXPIRING">Vencem em até 5 dias</option>
-          <option value="EXPIRED">Vencidos</option>
-          <option value="SAFE">Mais de 5 dias</option>
-          <option value="NO_DATE">Sem data definida</option>
-        </Select>
-        <Checkbox
-          isChecked={telephonyFilter}
-          onChange={(event) => setTelephonyFilter(event.target.checked)}
-          colorScheme="brand"
-          size="md"
-        >
-          <HStack spacing={2}>
-            <Box as={FiPhone} />
-            <Text>Apenas com telefonia</Text>
-          </HStack>
-        </Checkbox>
-      </Stack>
+          <Button
+            colorScheme="blue"
+            variant="outline"
+            size="sm"
+            w={{ base: "full", md: "auto" }}
+            onClick={async () => {
+              emailsModal.onOpen();
+              setIsLoadingAccounts(true);
+              try {
+                const accounts = await listTVAccounts();
+                setAccountsList(accounts);
+              } catch (error) {
+                toast({
+                  title: "Erro ao carregar emails",
+                  status: "error",
+                  duration: 3000,
+                });
+              } finally {
+                setIsLoadingAccounts(false);
+              }
+            }}
+          >
+            Ver emails de acesso
+          </Button>
+          <Input
+            placeholder="Buscar por cliente, e-mail, CPF/CNPJ ou anotação"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            flex={{ base: "1 1 100%", md: "1 1 300px" }}
+            minW={{ base: "100%", md: "200px" }}
+            maxW={{ base: "100%", md: "400px" }}
+          />
+          <Select
+            flex={{ base: "1 1 100%", sm: "1 1 calc(50% - 6px)", md: "0 0 180px" }}
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as TVSlotStatus | "ALL")}
+          >
+            <option value="ALL">Todos os status</option>
+            {Object.entries(STATUS_LABEL).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </Select>
+          <Select
+            flex={{ base: "1 1 100%", sm: "1 1 calc(50% - 6px)", md: "0 0 180px" }}
+            value={availabilityFilter}
+            onChange={(event) => setAvailabilityFilter(event.target.value as typeof availabilityFilter)}
+          >
+            <option value="ALL">Todos</option>
+            <option value="AVAILABLE">Somente disponíveis</option>
+            <option value="ASSIGNED">Somente atribuídos</option>
+          </Select>
+          <Select
+            flex={{ base: "1 1 100%", sm: "1 1 calc(50% - 6px)", md: "0 0 200px" }}
+            value={expirationFilter}
+            onChange={(event) => setExpirationFilter(event.target.value as ExpirationCategory | "ALL")}
+          >
+            <option value="ALL">Todos os vencimentos</option>
+            <option value="EXPIRING">Vencem em até 5 dias</option>
+            <option value="EXPIRED">Vencidos</option>
+            <option value="SAFE">Mais de 5 dias</option>
+            <option value="NO_DATE">Sem data definida</option>
+          </Select>
+          <Checkbox
+            isChecked={telephonyFilter}
+            onChange={(event) => setTelephonyFilter(event.target.checked)}
+            colorScheme="brand"
+            size="md"
+            flex={{ base: "1 1 100%", sm: "1 1 auto", md: "0 0 auto" }}
+            whiteSpace="nowrap"
+          >
+            <HStack spacing={2}>
+              <Box as={FiPhone} />
+              <Text>Apenas com telefonia</Text>
+            </HStack>
+          </Checkbox>
+        </Flex>
+      </Box>
 
-      <Stack direction={{ base: "column", md: "row" }} spacing={4} align={{ base: "stretch", md: "flex-end" }}>
-        <FormControl maxW={{ md: "260px" }}>
+      <Flex
+        direction={{ base: "column", md: "row" }}
+        gap={4}
+        align={{ base: "stretch", md: "flex-end" }}
+        flexWrap="wrap"
+      >
+        <FormControl flex={{ base: "1 1 100%", md: "0 0 260px" }} maxW={{ base: "100%", md: "260px" }}>
           <FormLabel fontSize="sm" color="gray.500">
             Documento para relatório
           </FormLabel>
@@ -1030,15 +1067,15 @@ export function UsersPage() {
             onChange={(event) => setExportDocument(event.target.value)}
           />
         </FormControl>
-        <HStack spacing={3}>
-          <Button variant="outline" onClick={handleExportDocument}>
+        <HStack spacing={3} flex={{ base: "1 1 100%", md: "0 0 auto" }} flexWrap="wrap">
+          <Button variant="outline" onClick={handleExportDocument} flex={{ base: "1 1 calc(50% - 6px)", sm: "0 0 auto" }}>
             Exportar documento
           </Button>
-          <Button colorScheme="brand" onClick={handleExportFiltered}>
+          <Button colorScheme="brand" onClick={handleExportFiltered} flex={{ base: "1 1 calc(50% - 6px)", sm: "0 0 auto" }}>
             Exportar filtrados
           </Button>
         </HStack>
-      </Stack>
+      </Flex>
 
       {(isLoading || isFetching) && (
         <HStack spacing={3} color="gray.500">
@@ -1635,20 +1672,27 @@ export function UsersPage() {
         </HStack>
       </Flex>
 
-      <Stack direction={{ base: "column", md: "row" }} spacing={6} color="gray.500" align="center">
+      <Flex
+        direction={{ base: "column", sm: "row" }}
+        gap={{ base: 3, sm: 6 }}
+        color="gray.500"
+        align={{ base: "flex-start", sm: "center" }}
+        justify={{ base: "flex-start", sm: "center" }}
+        flexWrap="wrap"
+      >
         <HStack spacing={2}>
           <Icon as={FiCheckCircle} color="green.400" />
-          <Text>Vencimento com mais de 5 dias</Text>
+          <Text fontSize={{ base: "sm", md: "md" }}>Vencimento com mais de 5 dias</Text>
         </HStack>
         <HStack spacing={2}>
           <Icon as={FiAlertCircle} color="yellow.400" />
-          <Text>Vence em até 5 dias</Text>
+          <Text fontSize={{ base: "sm", md: "md" }}>Vence em até 5 dias</Text>
         </HStack>
         <HStack spacing={2}>
           <Icon as={FiClock} color="red.400" />
-          <Text>Vencido ou vence em 24 horas</Text>
+          <Text fontSize={{ base: "sm", md: "md" }}>Vencido ou vence em 24 horas</Text>
         </HStack>
-      </Stack>
+      </Flex>
 
       {/* Modal para editar conta TV */}
       <Modal 
