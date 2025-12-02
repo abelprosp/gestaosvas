@@ -29,18 +29,44 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Local env files
+# Local env files - NUNCA commitar arquivos com credenciais
 .env
 .env*.local
 .env.development.local
 .env.test.local
 .env.production.local
+.env.local
+*.env
+*.env.local
 
 # Arquivos .env antigos (backend/frontend) - NUNCA commitar
 backend/.env
 frontend/.env
 backend/.env.local
 frontend/.env.local
+
+# Arquivos de configuração com possíveis credenciais
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env*.example
+**/secrets.*
+**/*secret*
+**/*key*
+**/*credential*
+
+# Arquivos de build que podem conter informações compiladas
+.next/
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Logs que podem conter informações sensíveis
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
 
 # Vercel
 .vercel
@@ -61,8 +87,8 @@ next-env.d.ts
 Thumbs.db
 
 # Scripts com credenciais (não commitar com credenciais hardcoded)
-# create-admin.ts
-# create-admin-direct.ts
+# create-admin.ts - OK se não tiver credenciais hardcoded
+# create-admin-direct.ts - OK se não tiver credenciais hardcoded
 
 # Scripts de atualização de senhas (NUNCA commitar - contém senhas)
 update-all-passwords.ts

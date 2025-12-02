@@ -27,24 +27,22 @@ const updateUserSchema = z
 
 export const GET = createApiHandler(
   async (req) => {
-    // Verificar se a Service Role Key está configurada ANTES de tentar criar cliente
+    // Verificar se a variável de ambiente necessária está configurada
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!serviceRoleKey) {
-      console.error("[GET /admin/users] SUPABASE_SERVICE_ROLE_KEY não está configurada no ambiente");
       throw new HttpError(
         500,
-        "Configuração de servidor incompleta. Service Role Key não encontrada. Configure SUPABASE_SERVICE_ROLE_KEY no Vercel (Settings > Environment Variables).",
+        "Configuração de servidor incompleta. Variável de ambiente necessária não encontrada.",
         { 
           missingEnvVar: "SUPABASE_SERVICE_ROLE_KEY",
-          hint: "Esta variável é necessária para operações administrativas do Supabase Auth"
+          hint: "Esta variável é necessária para operações administrativas"
         }
       );
     }
 
     let supabase;
     try {
-      console.log("[GET /admin/users] Criando cliente Supabase com Service Role Key...");
-      supabase = createServerClient(true); // Requer Service Role Key
+      supabase = createServerClient(true);
       if (!supabase) {
         throw new Error("Cliente Supabase retornou null/undefined");
       }
@@ -59,7 +57,6 @@ export const GET = createApiHandler(
     }
     
     try {
-      console.log("[GET /admin/users] Tentando listar usuários do Supabase Auth...");
       const { data, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
       
       if (error) {
@@ -74,7 +71,7 @@ export const GET = createApiHandler(
         if ((error as any)?.status === 401 || (error as any)?.status === 403) {
           throw new HttpError(
             403,
-            "Sem permissão para acessar usuários. Verifique se a Service Role Key está correta.",
+            "Sem permissão para acessar usuários. Verifique a configuração do servidor.",
             { supabaseError: error }
           );
         }
@@ -141,7 +138,7 @@ export const POST = createApiHandler(
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
       throw new HttpError(
         500,
-        "Configuração de servidor incompleta. Service Role Key não encontrada. Configure SUPABASE_SERVICE_ROLE_KEY no Vercel."
+        "Configuração de servidor incompleta. Variável de ambiente necessária não encontrada."
       );
     }
 

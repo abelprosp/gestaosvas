@@ -53,9 +53,6 @@ export async function requireAuth(request: NextRequest): Promise<{ user: AuthUse
     }
 
     console.log(`[requireAuth] Tentando validar token com Supabase...`);
-    console.log(`[requireAuth] URL Supabase: ${process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 30)}...`);
-    console.log(`[requireAuth] Usando ANON_KEY: ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "SIM" : "NÃO"}`);
-    console.log(`[requireAuth] Service Role Key presente: ${process.env.SUPABASE_SERVICE_ROLE_KEY ? "SIM" : "NÃO"}`);
     
     const { data, error } = await supabase.auth.getUser(token);
 
