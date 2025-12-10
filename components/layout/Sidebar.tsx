@@ -82,6 +82,7 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
   
   const shouldCollapse = !isMobile && isCollapsed;
   const pathname = usePathname();
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   
   // Salvar estado no localStorage quando mudar
   useEffect(() => {
@@ -301,6 +302,9 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
             offset={shouldCollapse ? [8, 0] : [0, 8]}
             isLazy
             closeOnBlur={true}
+            isOpen={isUserMenuOpen}
+            onOpen={() => setIsUserMenuOpen(true)}
+            onClose={() => setIsUserMenuOpen(false)}
           >
             <Tooltip 
               label={displayName} 
@@ -325,11 +329,15 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
                   transition="transform 0.25s ease, background-color 0.25s ease"
                   _active={{ transform: "scale(0.97)" }}
                   onClick={(e: React.MouseEvent) => {
-                    // Expandir o menu quando clicar no botão do perfil enquanto estiver colapsado
+                    // Expandir o menu e abrir o dropdown quando clicar no botão do perfil enquanto estiver colapsado
                     if (!isMobile && isCollapsed) {
                       e.preventDefault();
                       e.stopPropagation();
                       setIsCollapsed(false);
+                      // Abrir o dropdown após um pequeno delay para garantir que o menu expandiu
+                      setTimeout(() => {
+                        setIsUserMenuOpen(true);
+                      }, 100);
                     }
                   }}
                 />
