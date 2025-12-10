@@ -282,6 +282,20 @@ export function ClientsPage() {
     const term = searchTerm.toLowerCase();
     let scopedClients: Client[] = clients;
     
+    // Filtro de tipo de documento (CPF ou CNPJ) - aplicado como fallback caso o backend não tenha filtrado
+    if (documentTypeFilter !== "ALL") {
+      scopedClients = scopedClients.filter((client: Client) => {
+        if (!client.document) return false;
+        const documentDigits = client.document.replace(/\D/g, "");
+        if (documentTypeFilter === "CPF") {
+          return documentDigits.length === 11;
+        } else if (documentTypeFilter === "CNPJ") {
+          return documentDigits.length === 14;
+        }
+        return true;
+      });
+    }
+    
     // Filtro de telefonia (aplicado como fallback caso o backend não tenha filtrado)
     if (telephonyFilter) {
       scopedClients = scopedClients.filter((client: Client) => {
@@ -347,7 +361,7 @@ export function ClientsPage() {
     });
 
     return sorted;
-  }, [clients, searchTerm, sortConfig]);
+  }, [clients, searchTerm, sortConfig, documentTypeFilter, telephonyFilter]);
 
   const handleSort = (key: string) => {
     setSortConfig((prev) => {
