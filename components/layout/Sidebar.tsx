@@ -88,6 +88,13 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
       localStorage.setItem("sidebarCollapsed", String(isCollapsed));
     }
   }, [isCollapsed, isMobile]);
+
+  // Expandir menu automaticamente quando estiver na página de perfil e o menu estiver colapsado
+  useEffect(() => {
+    if (!isMobile && pathname === "/perfil" && isCollapsed) {
+      setIsCollapsed(false);
+    }
+  }, [pathname, isCollapsed, isMobile]);
   
   // Função para navegar sem expandir o menu quando colapsado
   const handleNavigate = (e: React.MouseEvent) => {
@@ -346,7 +353,20 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
               boxShadow="2xl"
               bg={useColorModeValue("white", "gray.800")}
             >
-            <MenuItem icon={<FiUser />} as={Link} href="/perfil" onClick={shouldCollapse ? handleNavigate : onNavigate}>
+            <MenuItem 
+              icon={<FiUser />} 
+              as={Link} 
+              href="/perfil" 
+              onClick={(e) => {
+                // Se o menu estiver colapsado, expandir antes de navegar
+                if (shouldCollapse && !isMobile) {
+                  setIsCollapsed(false);
+                }
+                if (onNavigate) {
+                  onNavigate();
+                }
+              }}
+            >
               Meu perfil
             </MenuItem>
             {isAdmin && (
