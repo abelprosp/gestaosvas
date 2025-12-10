@@ -62,12 +62,15 @@ const baseLinks: Array<{ label: string; to: string; icon: IconType }> = [
 
 interface SidebarProps {
   onNavigate?: () => void;
+  isMobile?: boolean;
 }
 
-export function Sidebar({ onNavigate }: SidebarProps) {
+export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
   const { isAdmin, user, signOut } = useAuth();
   const { colorMode, toggleColorMode } = useColorMode();
+  // No mobile, sempre expandido. No desktop, pode ser colapsado
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const shouldCollapse = !isMobile && isCollapsed;
   const activeBg = useColorModeValue("brand.100", "brand.700");
   const activeColor = useColorModeValue("brand.600", "brand.100");
   const defaultLinkColor = useColorModeValue("gray.600", "gray.300");
@@ -83,13 +86,13 @@ export function Sidebar({ onNavigate }: SidebarProps) {
   return (
     <Box
       as="nav"
-      w={{ base: "full", md: isCollapsed ? 20 : 72 }}
+      w={{ base: "full", md: shouldCollapse ? 20 : 72 }}
       bg={containerBg}
       borderRightWidth={0}
       borderColor={borderColor}
       h="full"
       maxH="100vh"
-      px={{ base: 5, md: isCollapsed ? 2 : 6 }}
+      px={{ base: 5, md: shouldCollapse ? 2 : 6 }}
       py={{ base: 6, md: 10 }}
       overflow="hidden"
       borderRadius={{ base: 0, md: "2xl" }}
@@ -99,25 +102,26 @@ export function Sidebar({ onNavigate }: SidebarProps) {
       transition="width 0.3s ease, padding 0.3s ease"
       position="relative"
     >
-      {/* Botão de colapsar/expandir */}
-      <IconButton
-        aria-label={isCollapsed ? "Expandir menu" : "Colapsar menu"}
-        icon={<Icon as={isCollapsed ? FiChevronRight : FiChevronLeft} />}
-        onClick={() => setIsCollapsed(!isCollapsed)}
-        variant="ghost"
-        size="sm"
-        position="absolute"
-        top={4}
-        right={2}
-        display={{ base: "none", md: "flex" }}
-        zIndex={10}
-      />
+      {/* Botão de colapsar/expandir - apenas no desktop */}
+      {!isMobile && (
+        <IconButton
+          aria-label={isCollapsed ? "Expandir menu" : "Colapsar menu"}
+          icon={<Icon as={isCollapsed ? FiChevronRight : FiChevronLeft} />}
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          variant="ghost"
+          size="sm"
+          position="absolute"
+          top={4}
+          right={2}
+          zIndex={10}
+        />
+      )}
 
-      <Flex align="center" mb={10} gap={4} display={{ base: "flex", md: isCollapsed ? "none" : "flex" }}>
+      <Flex align="center" mb={10} gap={4} display={shouldCollapse ? "none" : "flex"}>
         <Box w={{ base: 14, md: 16 }} h={{ base: 14, md: 16 }} borderRadius="2xl" overflow="hidden" boxShadow="lg" flexShrink={0}>
           <Image src="/assets/logo.png" alt="Serviços Telefonia" w="full" h="full" objectFit="cover" />
         </Box>
-        {!isCollapsed && (
+        {!shouldCollapse && (
           <Box>
             <Text fontWeight="bold" fontSize={{ base: "lg", md: "xl" }}>
               Serviços Telefonia
@@ -162,10 +166,10 @@ export function Sidebar({ onNavigate }: SidebarProps) {
                 transform: "translateX(4px)",
               }}
               _active={{ transform: "scale(0.97)" }}
-              justify={isCollapsed ? "center" : "flex-start"}
+              justify={shouldCollapse ? "center" : "flex-start"}
             >
               <Icon as={link.icon} boxSize={5} />
-              {!isCollapsed && <Text>{link.label}</Text>}
+              {!shouldCollapse && <Text>{link.label}</Text>}
             </Flex>
           );
 
@@ -178,7 +182,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
               onClick={onNavigate}
               _hover={{ textDecoration: "none" }}
             >
-              {isCollapsed ? (
+              {shouldCollapse ? (
                 <Tooltip label={link.label} placement="right" hasArrow>
                   {linkContent}
                 </Tooltip>
@@ -193,7 +197,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
       {/* Controles de usuário e tema - sempre visíveis */}
       <VStack mt={6} spacing={2} align="stretch">
         {/* Botão de alternar tema */}
-        {isCollapsed ? (
+        {shouldCollapse ? (
           <Tooltip label={colorMode === "light" ? "Modo escuro" : "Modo claro"} placement="right" hasArrow>
             <IconButton
               aria-label="Alternar modo de cor"
@@ -218,7 +222,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
         )}
 
         {/* Menu do usuário */}
-        <Menu placement={isCollapsed ? "right" : "top-end"}>
+        <Menu placement={shouldCollapse ? "right" : isMobile ? "bottom" : "top-end"}>
           <MenuButton
             as={Button}
             variant="solid"
@@ -227,10 +231,10 @@ export function Sidebar({ onNavigate }: SidebarProps) {
             colorScheme="brand"
             size="sm"
             w="full"
-            justifyContent={isCollapsed ? "center" : "flex-start"}
-            px={isCollapsed ? 0 : 4}
+            justifyContent={shouldCollapse ? "center" : "flex-start"}
+            px={shouldCollapse ? 0 : 4}
           >
-            {!isCollapsed && displayName}
+            {!shouldCollapse && displayName}
           </MenuButton>
           <MenuList>
             <MenuItem icon={<FiUser />} as={Link} href="/perfil" onClick={onNavigate}>

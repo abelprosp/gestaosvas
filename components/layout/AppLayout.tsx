@@ -7,12 +7,14 @@ import {
   useDisclosure,
   Flex,
   useColorModeValue,
+  IconButton,
 } from "@chakra-ui/react";
 import { PropsWithChildren } from "react";
 import { Sidebar } from "./Sidebar";
 import { VirtualAssistantChat } from "@/components/chat/VirtualAssistantChat";
 import { useProactiveAlerts } from "@/hooks/useProactiveAlerts";
 import { useAuth } from "@/context/AuthContext";
+import { FiMenu } from "react-icons/fi";
 
 export function AppLayout({ children }: PropsWithChildren) {
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -42,21 +44,47 @@ export function AppLayout({ children }: PropsWithChildren) {
       pt={0}
       {...backgroundStyles}
     >
-      <Drawer placement="left" onClose={onClose} isOpen={isOpen} size="xs">
+      <Drawer placement="left" onClose={onClose} isOpen={isOpen} size="sm">
         <DrawerContent bg={drawerBg}>
-          <Sidebar onNavigate={onClose} />
+          <Sidebar onNavigate={onClose} isMobile={true} />
         </DrawerContent>
       </Drawer>
 
       <Flex flex={1} direction="column" bg="transparent">
+        {/* Header mobile com botão de menu */}
+        <Flex
+          display={{ base: "flex", md: "none" }}
+          position="sticky"
+          top={0}
+          zIndex={100}
+          bg={useColorModeValue("rgba(255,255,255,0.9)", "rgba(15, 23, 42, 0.9)")}
+          backdropFilter="blur(10px)"
+          borderBottomWidth={1}
+          borderColor={useColorModeValue("gray.200", "gray.700")}
+          px={4}
+          py={3}
+          align="center"
+          justify="flex-start"
+          minH="60px"
+        >
+          <IconButton
+            aria-label="Abrir menu"
+            icon={<FiMenu />}
+            onClick={onOpen}
+            variant="ghost"
+            size="md"
+            mr={2}
+          />
+        </Flex>
+
         <Flex flex={1}>
           <Box display={{ base: "none", md: "block" }}>
-            <Sidebar />
+            <Sidebar isMobile={false} />
           </Box>
           <Box
             as="main"
             flex={1}
-            px={{ base: 3, md: 6 }}
+            px={{ base: 4, md: 6 }}
             pt={{ base: 4, md: 6 }}
             pb={{ base: 6, md: 10 }}
             bg="transparent"
@@ -66,6 +94,7 @@ export function AppLayout({ children }: PropsWithChildren) {
             maxW="1440px"
             mx="auto"
             width="100%"
+            overflowX="hidden"
           >
             {children}
           </Box>
