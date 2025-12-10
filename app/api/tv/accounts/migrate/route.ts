@@ -52,7 +52,7 @@ export const POST = createApiHandler(
     // Buscar slots atribuídos na conta de origem
     const { data: assignedSlots, error: slotsError } = await supabase
       .from("tv_slots")
-      .select("id, slot_number, username, password, client_id, sold_by, sold_at, starts_at, expires_at, notes, plan_type, has_telephony, status")
+      .select("id, slot_number, username, custom_username, password, client_id, sold_by, sold_at, starts_at, expires_at, notes, plan_type, has_telephony, status")
       .eq("tv_account_id", fromAccountId)
       .not("client_id", "is", null)
       .eq("status", "ASSIGNED");
@@ -128,6 +128,7 @@ export const POST = createApiHandler(
           plan_type: fromSlot.plan_type,
           has_telephony: fromSlot.has_telephony,
           username: fromSlot.username,
+          custom_username: fromSlot.custom_username,
           password: fromSlot.password,
           status: "ASSIGNED" as const,
         },
@@ -159,6 +160,8 @@ export const POST = createApiHandler(
         notes: null,
         plan_type: null,
         has_telephony: null,
+        username: null,
+        custom_username: null,
         status: "AVAILABLE",
       })
       .in("id", fromSlotIds);

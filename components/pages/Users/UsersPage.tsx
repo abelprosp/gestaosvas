@@ -1897,7 +1897,7 @@ export function UsersPage() {
                 <FormLabel>Quantidade máxima de acessos</FormLabel>
                 <Input
                   type="number"
-                  min={1}
+                  min={0}
                   max={8}
                   value={editingMaxSlotsInput}
                   onChange={(e) => {
@@ -1908,8 +1908,8 @@ export function UsersPage() {
                   onBlur={(e) => {
                     // Validar quando sair do campo
                     const numValue = parseInt(e.target.value, 10);
-                    if (isNaN(numValue) || numValue < 1) {
-                      const finalValue = 1;
+                    if (isNaN(numValue) || numValue < 0) {
+                      const finalValue = 0;
                       setEditingMaxSlots(finalValue);
                       setEditingMaxSlotsInput(String(finalValue));
                     } else if (numValue > 8) {
@@ -1924,9 +1924,15 @@ export function UsersPage() {
                   isDisabled={isUpdatingEmail || isUpdatingAccount || isDeletingAccount}
                 />
                 <Text fontSize="sm" color="gray.500" mt={1}>
-                  Número máximo de acessos que este email pode gerar (1-8)
+                  Número máximo de acessos que este email pode gerar (0-8). Use 0 para inutilizar temporariamente o email.
                 </Text>
-                {accountUsageInfo && accountUsageInfo.assignedSlots > editingMaxSlots && (
+                {accountUsageInfo && editingMaxSlots === 0 && accountUsageInfo.assignedSlots > 0 && (
+                  <Text fontSize="sm" color="red.500" mt={1}>
+                    ⚠️ Atenção: Não é possível definir 0 slots enquanto houver {accountUsageInfo.assignedSlots} acesso(s) atribuído(s). 
+                    Libere os acessos primeiro.
+                  </Text>
+                )}
+                {accountUsageInfo && editingMaxSlots > 0 && accountUsageInfo.assignedSlots > editingMaxSlots && (
                   <Text fontSize="sm" color="red.500" mt={1}>
                     ⚠️ Atenção: Esta conta possui {accountUsageInfo.assignedSlots} slot(s) atribuído(s). 
                     Não é possível reduzir abaixo deste valor.

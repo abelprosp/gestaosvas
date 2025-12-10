@@ -13,7 +13,7 @@ function isUniqueViolation(error: PostgrestError) {
 
 const updateAccountSchema = z.object({
   email: z.string().trim().min(1, "Email não pode estar vazio").email("Email inválido").optional(),
-  maxSlots: z.number().int().min(1).max(8).optional(),
+  maxSlots: z.number().int().min(0).max(8).optional(),
 });
 
 export const PATCH = createApiHandler(
@@ -65,7 +65,15 @@ export const PATCH = createApiHandler(
 
       const assignedCount = assignedSlots?.length ?? 0;
 
-      if (maxSlots < assignedCount) {
+      // Permitir maxSlots = 0 apenas se não houver slots atribuídos (para inutilizar o email)
+      if (maxSlots === 0 && assignedCount > 0) {
+        throw new HttpError(
+          400,
+          `Não é possível definir 0 slots enquanto houver ${assignedCount} slot(s) atribuído(s) a cliente(s). Libere os acessos primeiro.`
+        );
+      }
+
+      if (maxSlots > 0 && maxSlots < assignedCount) {
         throw new HttpError(
           400,
           `Não é possível reduzir para ${maxSlots} slots. Esta conta possui ${assignedCount} slot(s) atribuído(s) a cliente(s).`
@@ -74,7 +82,7 @@ export const PATCH = createApiHandler(
 
       updateData.max_slots = maxSlots;
 
-      // Se maxSlots foi reduzido, remover slots extras que não estão atribuídos
+      // Se maxSlots foi reduzido (ou definido como 0), remover slots extras que não estão atribuídos
       const { data: allSlots, error: allSlotsError } = await supabase
         .from("tv_slots")
         .select("id, slot_number, client_id")
@@ -85,7 +93,20 @@ export const PATCH = createApiHandler(
         throw allSlotsError;
       }
 
-      if (allSlots && allSlots.length > maxSlots) {
+      // Se maxSlots = 0, remover todos os slots disponíveis (já validamos que não há slots atribuídos)
+      if (maxSlots === 0) {
+        if (allSlots && allSlots.length > 0) {
+          const allSlotIds = allSlots.map(s => s.id);
+          const { error: deleteError } = await supabase
+            .from("tv_slots")
+            .delete()
+            .in("id", allSlotIds);
+
+          if (deleteError) {
+            throw deleteError;
+          }
+        }
+      } else if (allSlots && allSlots.length > maxSlots) {
         // Encontrar slots que podem ser removidos (não atribuídos e acima do maxSlots)
         const slotsToRemove = allSlots
           .filter(slot => slot.slot_number > maxSlots && !slot.client_id)
