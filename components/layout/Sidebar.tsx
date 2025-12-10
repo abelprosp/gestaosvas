@@ -71,6 +71,15 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
   // No mobile, sempre expandido. No desktop, pode ser colapsado
   const [isCollapsed, setIsCollapsed] = useState(false);
   const shouldCollapse = !isMobile && isCollapsed;
+  
+  // Função para navegar sem expandir o menu quando colapsado
+  const handleNavigate = (e: React.MouseEvent) => {
+    if (onNavigate) {
+      onNavigate();
+    }
+    // Não expandir o menu quando colapsado
+    e.stopPropagation();
+  };
   const activeBg = useColorModeValue("brand.100", "brand.700");
   const activeColor = useColorModeValue("brand.600", "brand.100");
   const defaultLinkColor = useColorModeValue("gray.600", "gray.300");
@@ -179,7 +188,7 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
               as={Link}
               href={link.to}
               style={{ textDecoration: "none" }}
-              onClick={onNavigate}
+              onClick={shouldCollapse ? handleNavigate : onNavigate}
               _hover={{ textDecoration: "none" }}
             >
               {shouldCollapse ? (
@@ -238,33 +247,62 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
         )}
 
         {/* Menu do usuário */}
-        <Menu placement={shouldCollapse ? "right" : isMobile ? "bottom" : "top-end"}>
-          <MenuButton
-            as={Button}
-            variant="solid"
-            borderRadius="xl"
-            leftIcon={<FiUser />}
-            colorScheme="brand"
-            size="sm"
-            w="full"
-            justifyContent={shouldCollapse ? "center" : "flex-start"}
-            px={shouldCollapse ? 0 : 4}
-            py={3}
-            fontWeight="medium"
-            transition="transform 0.25s ease, background-color 0.25s ease"
-            _hover={{
-              transform: "translateX(4px)",
-            }}
-            _active={{ transform: "scale(0.97)" }}
+        <Menu 
+          placement={shouldCollapse ? "right-start" : isMobile ? "bottom" : "top-end"}
+          offset={shouldCollapse ? [8, 0] : [0, 8]}
+        >
+          <Tooltip 
+            label={displayName} 
+            placement="right" 
+            hasArrow 
+            isDisabled={!shouldCollapse}
+            openDelay={300}
           >
-            {!shouldCollapse && displayName}
-          </MenuButton>
+            {shouldCollapse ? (
+              <MenuButton
+                as={IconButton}
+                variant="solid"
+                borderRadius="xl"
+                icon={<FiUser />}
+                aria-label="Menu do usuário"
+                colorScheme="brand"
+                size="sm"
+                w="full"
+                justifyContent="center"
+                px={0}
+                py={3}
+                transition="transform 0.25s ease, background-color 0.25s ease"
+                _active={{ transform: "scale(0.97)" }}
+              />
+            ) : (
+              <MenuButton
+                as={Button}
+                variant="solid"
+                borderRadius="xl"
+                leftIcon={<FiUser />}
+                colorScheme="brand"
+                size="sm"
+                w="full"
+                justifyContent="flex-start"
+                px={4}
+                py={3}
+                fontWeight="medium"
+                transition="transform 0.25s ease, background-color 0.25s ease"
+                _hover={{
+                  transform: "translateX(4px)",
+                }}
+                _active={{ transform: "scale(0.97)" }}
+              >
+                {displayName}
+              </MenuButton>
+            )}
+          </Tooltip>
           <MenuList>
-            <MenuItem icon={<FiUser />} as={Link} href="/perfil" onClick={onNavigate}>
+            <MenuItem icon={<FiUser />} as={Link} href="/perfil" onClick={shouldCollapse ? handleNavigate : onNavigate}>
               Meu perfil
             </MenuItem>
             {isAdmin && (
-              <MenuItem icon={<FiShield />} as={Link} href="/admin/usuarios" onClick={onNavigate}>
+              <MenuItem icon={<FiShield />} as={Link} href="/admin/usuarios" onClick={shouldCollapse ? handleNavigate : onNavigate}>
                 Administração
               </MenuItem>
             )}
