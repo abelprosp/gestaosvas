@@ -324,6 +324,14 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
                   py={3}
                   transition="transform 0.25s ease, background-color 0.25s ease"
                   _active={{ transform: "scale(0.97)" }}
+                  onClick={(e: React.MouseEvent) => {
+                    // Expandir o menu quando clicar no botão do perfil enquanto estiver colapsado
+                    if (!isMobile && isCollapsed) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsCollapsed(false);
+                    }
+                  }}
                 />
               ) : (
                 <MenuButton
