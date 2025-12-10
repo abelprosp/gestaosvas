@@ -23,7 +23,7 @@ export const PATCH = createApiHandler(
     // Validar UUID do parâmetro (usuários Supabase podem não ser UUID, mas validamos formato)
     const userId = validateRouteParamUUID(params.id, "id");
     
-    const supabase = createServerClient();
+    const supabase = createServerClient(true); // Requer Service Role Key para operações admin
     const body = await req.json();
     const payload = updateUserSchema.parse(body);
 
@@ -80,7 +80,7 @@ export const DELETE = createApiHandler(
     // Validar UUID do parâmetro
     const userId = validateRouteParamUUID(params.id, "id");
     
-    const supabase = createServerClient();
+    const supabase = createServerClient(true); // Requer Service Role Key para operações admin
     const { error } = await supabase.auth.admin.deleteUser(userId);
 
     if (error) {

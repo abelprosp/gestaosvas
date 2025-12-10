@@ -13,6 +13,10 @@ import {
   Icon,
   IconButton,
   Input,
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuList,
   Select,
   Spinner,
   Stack,
@@ -55,7 +59,7 @@ import { fetchTVOverview, regenerateTVSlotPassword, releaseTVSlot, updateTVSlot,
 import { PaginatedResponse, TVOverviewRecord, TVSlotStatus } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { createRequest } from "@/lib/api/requests";
-import { exportToCsv } from "@/lib/utils/exporters";
+import { exportToCsv, exportToPdf } from "@/lib/utils/exporters";
 
 const EXPIRATION_COLORS = {
   SAFE: "green.400",
@@ -489,6 +493,7 @@ export function UsersPage() {
     dataset.map((record) => ({
       Email: record.email,
       Usuario: record.username,
+      Senha: record.password ?? "",
       Slot: record.slotNumber,
       Cliente: record.client?.name ?? "",
       Documento: formatDocument(record.client?.document ?? ""),
@@ -499,37 +504,70 @@ export function UsersPage() {
       Comentario: record.notes ?? "",
     }));
 
-  const handleExportFiltered = () => {
-    if (!filteredRecords.length) {
-      toast({ title: "Nenhum registro para exportar", status: "info" });
-      return;
-    }
-    exportToCsv("usuarios_tv_filtrados.csv", buildExportRows(filteredRecords));
-    toast({ title: "Exportação iniciada", description: "Arquivo CSV gerado com o filtro atual.", status: "success" });
-  };
-
-  const handleExportDocument = () => {
+  const handleExport = (format: "csv" | "pdf") => {
+    // Determinar qual dataset usar
+    let dataset: TVOverviewRecord[] = [];
+    let filename = "";
+    
     const digits = exportDocument.replace(/\D/g, "");
-    if (!digits) {
-      toast({ title: "Informe um CPF ou CNPJ", status: "warning" });
-      return;
+    if (digits) {
+      // Exportar por documento
+      dataset = records.filter(
+        (record) => normalizeDocumentDigits(record.client?.document) === digits,
+      );
+      
+      if (!dataset.length) {
+        toast({
+          title: "Documento não encontrado",
+          description: "Nenhum usuário TV associado ao documento informado.",
+          status: "warning",
+        });
+        return;
+      }
+      filename = `usuarios_tv_${digits}`;
+    } else {
+      // Exportar filtrados
+      if (!filteredRecords.length) {
+        toast({ title: "Nenhum registro para exportar", status: "info" });
+        return;
+      }
+      dataset = filteredRecords;
+      filename = "usuarios_tv_filtrados";
     }
 
-    const dataset = records.filter(
-      (record) => normalizeDocumentDigits(record.client?.document) === digits,
-    );
-
-    if (!dataset.length) {
-      toast({
-        title: "Documento não encontrado",
-        description: "Nenhum usuário TV associado ao documento informado.",
-        status: "warning",
+    if (format === "csv") {
+      exportToCsv(`${filename}.csv`, buildExportRows(dataset));
+      toast({ 
+        title: "Exportação iniciada", 
+        description: "Arquivo CSV gerado com sucesso.", 
+        status: "success" 
       });
-      return;
-    }
+    } else {
+      // Exportar PDF com todas as informações organizadas
+      const headers = ["Email", "Usuário", "Senha", "Cliente", "Documento", "Plano", "Status", "Vencimento", "Vendedor", "Comentário"];
+      const rows = dataset.map((record) => [
+        record.email,
+        record.username || `#${record.slotNumber}`,
+        record.password || "-",
+        record.client?.name || "-",
+        formatDocument(record.client?.document ?? ""),
+        record.planType ? (record.planType === "PREMIUM" ? "Premium" : "Essencial") : "-",
+        STATUS_LABEL[record.status],
+        formatDate(record.expiresAt),
+        record.soldBy || "-",
+        record.notes || "-",
+      ]);
 
-    exportToCsv(`usuarios_tv_${digits}.csv`, buildExportRows(dataset));
-    toast({ title: "Exportação criada", status: "success" });
+      const documentNumber = digits ? formatDocument(digits) : "Filtrados";
+      const title = `Acessos TV - ${documentNumber}`;
+      
+      exportToPdf(title, headers, rows);
+      toast({ 
+        title: "Exportação iniciada", 
+        description: "Arquivo PDF gerado com sucesso.", 
+        status: "success" 
+      });
+    }
   };
 
   const handleEditEmail = async (accountId: string, currentEmail: string) => {
@@ -1062,19 +1100,24 @@ export function UsersPage() {
             Documento para relatório
           </FormLabel>
           <Input
-            placeholder="CPF ou CNPJ"
+            placeholder="CPF ou CNPJ (deixe vazio para exportar filtrados)"
             value={exportDocument}
             onChange={(event) => setExportDocument(event.target.value)}
           />
         </FormControl>
-        <HStack spacing={3} flex={{ base: "1 1 100%", md: "0 0 auto" }} flexWrap="wrap">
-          <Button variant="outline" onClick={handleExportDocument} flex={{ base: "1 1 calc(50% - 6px)", sm: "0 0 auto" }}>
-            Exportar documento
-          </Button>
-          <Button colorScheme="brand" onClick={handleExportFiltered} flex={{ base: "1 1 calc(50% - 6px)", sm: "0 0 auto" }}>
-            Exportar filtrados
-          </Button>
-        </HStack>
+        <Menu>
+          <MenuButton as={Button} colorScheme="brand" flex={{ base: "1 1 100%", md: "0 0 auto" }}>
+            Exportar <Icon as={FiChevronDown} ml={2} />
+          </MenuButton>
+          <MenuList>
+            <MenuItem onClick={() => handleExport("csv")}>
+              Exportar como CSV
+            </MenuItem>
+            <MenuItem onClick={() => handleExport("pdf")}>
+              Exportar como PDF
+            </MenuItem>
+          </MenuList>
+        </Menu>
       </Flex>
 
       {(isLoading || isFetching) && (

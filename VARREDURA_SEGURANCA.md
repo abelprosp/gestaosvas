@@ -8,7 +8,7 @@
 
 ## 📋 Resumo Executivos
 
-Realizada varredura completa do repositório em busca de credenciais expostas, informações sensíveis e configurações inseguras. **4 arquivos** foram encontrados com credenciais hardcoded e **corrigidos imediatamente**.
+Realizada varredura completa do repositório em busca de credenciais expostas, informações sensíveis e configurações inseguras. **4 arquivos** foram encontrados com credenciais hardcoded e **coorrigidos imediatamente**.
 
 ---
 
