@@ -22,7 +22,7 @@ import {
 } from "@chakra-ui/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   FiHome,
   FiUsers,
@@ -68,9 +68,25 @@ interface SidebarProps {
 export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
   const { isAdmin, user, signOut } = useAuth();
   const { colorMode, toggleColorMode } = useColorMode();
+  
   // No mobile, sempre expandido. No desktop, pode ser colapsado
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  // Persistir estado no localStorage para não perder ao navegar
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window !== "undefined" && !isMobile) {
+      const saved = localStorage.getItem("sidebarCollapsed");
+      return saved === "true";
+    }
+    return false;
+  });
+  
   const shouldCollapse = !isMobile && isCollapsed;
+  
+  // Salvar estado no localStorage quando mudar
+  useEffect(() => {
+    if (!isMobile && typeof window !== "undefined") {
+      localStorage.setItem("sidebarCollapsed", String(isCollapsed));
+    }
+  }, [isCollapsed, isMobile]);
   
   // Função para navegar sem expandir o menu quando colapsado
   const handleNavigate = (e: React.MouseEvent) => {
@@ -79,6 +95,11 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
     }
     // Não expandir o menu quando colapsado
     e.stopPropagation();
+  };
+  
+  // Função para alternar colapsado - apenas quando clicar na seta
+  const handleToggleCollapse = () => {
+    setIsCollapsed(prev => !prev);
   };
   const activeBg = useColorModeValue("brand.100", "brand.700");
   const activeColor = useColorModeValue("brand.600", "brand.100");
@@ -102,20 +123,21 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
       h={{ base: "full", md: "100vh" }}
       px={{ base: 5, md: shouldCollapse ? 2 : 6 }}
       py={{ base: 6, md: 10 }}
-      overflow="hidden"
+      overflow="visible"
       borderRadius={{ base: 0, md: "2xl" }}
       backdropFilter="blur(8px)"
       display="flex"
       flexDirection="column"
       transition="width 0.3s ease, padding 0.3s ease"
       position="relative"
+      zIndex={shouldCollapse ? 1000 : "auto"}
     >
       {/* Botão de colapsar/expandir - apenas no desktop */}
       {!isMobile && (
         <IconButton
           aria-label={isCollapsed ? "Expandir menu" : "Colapsar menu"}
           icon={<Icon as={isCollapsed ? FiChevronRight : FiChevronLeft} />}
-          onClick={() => setIsCollapsed(!isCollapsed)}
+          onClick={handleToggleCollapse}
           variant="ghost"
           size="sm"
           position="absolute"
@@ -146,8 +168,10 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
         spacing={2} 
         flex={1} 
         overflowY={{ base: "auto", md: "auto" }}
+        overflowX="visible"
         minH={0}
         pr={2}
+        position="relative"
         css={{
           '&::-webkit-scrollbar': {
             display: 'none',
@@ -247,57 +271,62 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
         )}
 
         {/* Menu do usuário */}
-        <Menu 
-          placement={shouldCollapse ? "right-start" : isMobile ? "bottom" : "top-end"}
-          offset={shouldCollapse ? [8, 0] : [0, 8]}
-        >
-          <Tooltip 
-            label={displayName} 
-            placement="right" 
-            hasArrow 
-            isDisabled={!shouldCollapse}
-            openDelay={300}
+        <Box position="relative" zIndex={shouldCollapse ? 1000 : "auto"}>
+          <Menu 
+            placement={shouldCollapse ? "right-start" : isMobile ? "bottom" : "top-end"}
+            offset={shouldCollapse ? [8, 0] : [0, 8]}
+            isLazy
           >
-            {shouldCollapse ? (
-              <MenuButton
-                as={IconButton}
-                variant="solid"
-                borderRadius="xl"
-                icon={<FiUser />}
-                aria-label="Menu do usuário"
-                colorScheme="brand"
-                size="sm"
-                w="full"
-                justifyContent="center"
-                px={0}
-                py={3}
-                transition="transform 0.25s ease, background-color 0.25s ease"
-                _active={{ transform: "scale(0.97)" }}
-              />
-            ) : (
-              <MenuButton
-                as={Button}
-                variant="solid"
-                borderRadius="xl"
-                leftIcon={<FiUser />}
-                colorScheme="brand"
-                size="sm"
-                w="full"
-                justifyContent="flex-start"
-                px={4}
-                py={3}
-                fontWeight="medium"
-                transition="transform 0.25s ease, background-color 0.25s ease"
-                _hover={{
-                  transform: "translateX(4px)",
-                }}
-                _active={{ transform: "scale(0.97)" }}
-              >
-                {displayName}
-              </MenuButton>
-            )}
-          </Tooltip>
-          <MenuList>
+            <Tooltip 
+              label={displayName} 
+              placement="right" 
+              hasArrow 
+              isDisabled={!shouldCollapse}
+              openDelay={300}
+            >
+              {shouldCollapse ? (
+                <MenuButton
+                  as={IconButton}
+                  variant="solid"
+                  borderRadius="xl"
+                  icon={<FiUser />}
+                  aria-label="Menu do usuário"
+                  colorScheme="brand"
+                  size="sm"
+                  w="full"
+                  justifyContent="center"
+                  px={0}
+                  py={3}
+                  transition="transform 0.25s ease, background-color 0.25s ease"
+                  _active={{ transform: "scale(0.97)" }}
+                />
+              ) : (
+                <MenuButton
+                  as={Button}
+                  variant="solid"
+                  borderRadius="xl"
+                  leftIcon={<FiUser />}
+                  colorScheme="brand"
+                  size="sm"
+                  w="full"
+                  justifyContent="flex-start"
+                  px={4}
+                  py={3}
+                  fontWeight="medium"
+                  transition="transform 0.25s ease, background-color 0.25s ease"
+                  _hover={{
+                    transform: "translateX(4px)",
+                  }}
+                  _active={{ transform: "scale(0.97)" }}
+                >
+                  {displayName}
+                </MenuButton>
+              )}
+            </Tooltip>
+            <MenuList 
+              zIndex={9999}
+              boxShadow="xl"
+            >
             <MenuItem icon={<FiUser />} as={Link} href="/perfil" onClick={shouldCollapse ? handleNavigate : onNavigate}>
               Meu perfil
             </MenuItem>
@@ -311,6 +340,7 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
             </MenuItem>
           </MenuList>
         </Menu>
+        </Box>
       </VStack>
     </Box>
   );
