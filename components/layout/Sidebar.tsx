@@ -325,8 +325,9 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
               )}
             </Tooltip>
             <MenuList 
-              zIndex={99999}
+              zIndex={9999}
               boxShadow="2xl"
+              bg={useColorModeValue("white", "gray.800")}
             >
             <MenuItem icon={<FiUser />} as={Link} href="/perfil" onClick={shouldCollapse ? handleNavigate : onNavigate}>
               Meu perfil

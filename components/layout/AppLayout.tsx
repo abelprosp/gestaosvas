@@ -85,6 +85,7 @@ export function AppLayout({ children }: PropsWithChildren) {
             top={0}
             alignSelf="flex-start"
             zIndex={100}
+            style={{ isolation: 'isolate' }}
           >
             <Sidebar isMobile={false} />
           </Box>
@@ -102,6 +103,8 @@ export function AppLayout({ children }: PropsWithChildren) {
             mx="auto"
             width="100%"
             overflowX="hidden"
+            position="relative"
+            zIndex={1}
           >
             {children}
           </Box>
