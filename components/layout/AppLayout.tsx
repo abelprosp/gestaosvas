@@ -84,6 +84,7 @@ export function AppLayout({ children }: PropsWithChildren) {
             position="sticky"
             top={0}
             alignSelf="flex-start"
+            zIndex={100}
           >
             <Sidebar isMobile={false} />
           </Box>

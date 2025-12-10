@@ -130,7 +130,7 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
       flexDirection="column"
       transition="width 0.3s ease, padding 0.3s ease"
       position="relative"
-      zIndex={shouldCollapse ? 1000 : "auto"}
+      zIndex={shouldCollapse ? 100 : "auto"}
     >
       {/* Botão de colapsar/expandir - apenas no desktop */}
       {!isMobile && (
@@ -271,11 +271,12 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
         )}
 
         {/* Menu do usuário */}
-        <Box position="relative" zIndex={shouldCollapse ? 1000 : "auto"}>
+        <Box position="relative" style={{ zIndex: shouldCollapse ? 1000 : 'auto' }}>
           <Menu 
             placement={shouldCollapse ? "right-start" : isMobile ? "bottom" : "top-end"}
             offset={shouldCollapse ? [8, 0] : [0, 8]}
             isLazy
+            closeOnBlur={true}
           >
             <Tooltip 
               label={displayName} 
@@ -324,8 +325,8 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
               )}
             </Tooltip>
             <MenuList 
-              zIndex={9999}
-              boxShadow="xl"
+              zIndex={99999}
+              boxShadow="2xl"
             >
             <MenuItem icon={<FiUser />} as={Link} href="/perfil" onClick={shouldCollapse ? handleNavigate : onNavigate}>
               Meu perfil
