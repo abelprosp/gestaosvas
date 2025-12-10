@@ -192,10 +192,11 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
             </ChakraLink>
           );
         })}
-      </VStack>
 
-      {/* Controles de usuário e tema - sempre visíveis */}
-      <VStack mt={6} spacing={2} align="stretch">
+        {/* Separador visual */}
+        <Box h="1px" bg={useColorModeValue("gray.200", "gray.700")} my={2} />
+
+        {/* Controles de usuário e tema - dentro do scroll */}
         {/* Botão de alternar tema */}
         {shouldCollapse ? (
           <Tooltip label={colorMode === "light" ? "Modo escuro" : "Modo claro"} placement="right" hasArrow>
@@ -206,6 +207,8 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
               variant="ghost"
               w="full"
               justifyContent="center"
+              px={4}
+              py={3}
             />
           </Tooltip>
         ) : (
@@ -216,6 +219,19 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
             w="full"
             justifyContent="flex-start"
             leftIcon={<Icon as={colorMode === "light" ? FiMoon : FiSun} />}
+            px={4}
+            py={3}
+            borderRadius="xl"
+            color={defaultLinkColor}
+            fontWeight="medium"
+            gap={3}
+            transition="transform 0.25s ease, background-color 0.25s ease"
+            _hover={{
+              bg: hoverBg,
+              color: hoverColor,
+              transform: "translateX(4px)",
+            }}
+            _active={{ transform: "scale(0.97)" }}
           >
             {colorMode === "light" ? "Modo escuro" : "Modo claro"}
           </Button>
@@ -226,13 +242,20 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
           <MenuButton
             as={Button}
             variant="solid"
-            borderRadius="full"
+            borderRadius="xl"
             leftIcon={<FiUser />}
             colorScheme="brand"
             size="sm"
             w="full"
             justifyContent={shouldCollapse ? "center" : "flex-start"}
             px={shouldCollapse ? 0 : 4}
+            py={3}
+            fontWeight="medium"
+            transition="transform 0.25s ease, background-color 0.25s ease"
+            _hover={{
+              transform: "translateX(4px)",
+            }}
+            _active={{ transform: "scale(0.97)" }}
           >
             {!shouldCollapse && displayName}
           </MenuButton>
