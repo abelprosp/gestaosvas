@@ -10,7 +10,6 @@ import {
 } from "@chakra-ui/react";
 import { PropsWithChildren } from "react";
 import { Sidebar } from "./Sidebar";
-import { TopBar } from "./TopBar";
 import { VirtualAssistantChat } from "@/components/chat/VirtualAssistantChat";
 import { useProactiveAlerts } from "@/hooks/useProactiveAlerts";
 import { useAuth } from "@/context/AuthContext";
@@ -50,7 +49,6 @@ export function AppLayout({ children }: PropsWithChildren) {
       </Drawer>
 
       <Flex flex={1} direction="column" bg="transparent">
-        <TopBar onOpenMenu={onOpen} />
         <Flex flex={1}>
           <Box display={{ base: "none", md: "block" }}>
             <Sidebar />
@@ -59,7 +57,7 @@ export function AppLayout({ children }: PropsWithChildren) {
             as="main"
             flex={1}
             px={{ base: 3, md: 6 }}
-            pt={{ base: 20, md: 24 }}
+            pt={{ base: 4, md: 6 }}
             pb={{ base: 6, md: 10 }}
             bg="transparent"
             borderRadius={{ base: 0, lg: "2xl" }}
