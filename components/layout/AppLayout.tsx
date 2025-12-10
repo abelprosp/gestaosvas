@@ -77,8 +77,14 @@ export function AppLayout({ children }: PropsWithChildren) {
           />
         </Flex>
 
-        <Flex flex={1}>
-          <Box display={{ base: "none", md: "block" }}>
+        <Flex flex={1} minH="0">
+          <Box 
+            display={{ base: "none", md: "block" }}
+            h="100vh"
+            position="sticky"
+            top={0}
+            alignSelf="flex-start"
+          >
             <Sidebar isMobile={false} />
           </Box>
           <Box
