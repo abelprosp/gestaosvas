@@ -55,7 +55,7 @@ import {
   FiPhone,
   FiTrash2,
 } from "react-icons/fi";
-import { fetchTVOverview, regenerateTVSlotPassword, releaseTVSlot, updateTVSlot, updateTVAccountEmail, updateTVAccountMaxSlots, updateTVSlotUsername, deleteTVAccount, getNextEmailInfo, listTVAccounts, TVAccountInfo, getTVAccountSlots, TVAccountSlot, fetchTVAccountUsage, deleteTVSlot, createTVAccount } from "@/lib/api/tv";
+import { fetchTVOverview, regenerateTVSlotPassword, releaseTVSlot, updateTVSlot, updateTVAccountEmail, updateTVAccountMaxSlots, updateTVSlotUsername, deleteTVAccount, getNextEmailInfo, listTVAccounts, TVAccountInfo, getTVAccountSlots, TVAccountSlot, fetchTVAccountUsage, deleteTVSlot, createTVAccount, migrateTVAccountSlots } from "@/lib/api/tv";
 import { PaginatedResponse, TVOverviewRecord, TVSlotStatus } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { createRequest } from "@/lib/api/requests";
@@ -203,6 +203,12 @@ export function UsersPage() {
   const [editingSlotUsernames, setEditingSlotUsernames] = useState<Record<string, string>>({});
   const [isUpdatingAccount, setIsUpdatingAccount] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState<Record<string, boolean>>({});
+  const migrateModal = useDisclosure();
+  const [migrateFromAccountId, setMigrateFromAccountId] = useState<string>("");
+  const [migrateToAccountId, setMigrateToAccountId] = useState<string>("");
+  const [isMigrating, setIsMigrating] = useState(false);
+  const [migrateFromInfo, setMigrateFromInfo] = useState<{ assignedSlots: number; totalSlots: number } | null>(null);
+  const [migrateToInfo, setMigrateToInfo] = useState<{ assignedSlots: number; totalSlots: number; availableSlots: number } | null>(null);
   const limit = 50;
   const hasSearch = searchTerm.trim().length > 0;
   const effectivePage = hasSearch ? 1 : page;
@@ -790,6 +796,120 @@ export function UsersPage() {
       });
     } finally {
       setIsDeletingAccount(false);
+    }
+  };
+
+  // Função para buscar informações de uso quando selecionar email de origem
+  const handleSelectFromAccount = async (accountId: string) => {
+    setMigrateFromAccountId(accountId);
+    try {
+      const usage = await fetchTVAccountUsage(accountId);
+      setMigrateFromInfo(usage);
+    } catch (error) {
+      toast({
+        title: "Erro ao buscar informações",
+        description: mutateErrorMessage(error),
+        status: "error",
+      });
+      setMigrateFromInfo(null);
+    }
+  };
+
+  // Função para buscar informações de uso quando selecionar email de destino
+  const handleSelectToAccount = async (accountId: string) => {
+    setMigrateToAccountId(accountId);
+    try {
+      const usage = await fetchTVAccountUsage(accountId);
+      // Buscar slots disponíveis - calcular baseado no total de slots menos os atribuídos
+      const availableSlots = usage.totalSlots - usage.assignedSlots;
+      setMigrateToInfo({
+        ...usage,
+        availableSlots: Math.max(0, availableSlots),
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao buscar informações",
+        description: mutateErrorMessage(error),
+        status: "error",
+      });
+      setMigrateToInfo(null);
+    }
+  };
+
+  // Função para executar a migração
+  const handleMigrate = async () => {
+    if (!migrateFromAccountId || !migrateToAccountId) {
+      toast({
+        title: "Selecione os emails",
+        description: "Por favor, selecione o email de origem e o email de destino",
+        status: "warning",
+      });
+      return;
+    }
+
+    if (migrateFromAccountId === migrateToAccountId) {
+      toast({
+        title: "Emails iguais",
+        description: "Não é possível migrar para o mesmo email",
+        status: "warning",
+      });
+      return;
+    }
+
+    if (!migrateFromInfo || migrateFromInfo.assignedSlots === 0) {
+      toast({
+        title: "Nenhum acesso para migrar",
+        description: "O email de origem não possui acessos atribuídos",
+        status: "warning",
+      });
+      return;
+    }
+
+    if (!migrateToInfo || migrateToInfo.availableSlots < migrateFromInfo.assignedSlots) {
+      toast({
+        title: "Slots insuficientes",
+        description: `O email de destino possui apenas ${migrateToInfo?.availableSlots ?? 0} slot(s) disponível(is), mas são necessários ${migrateFromInfo.assignedSlots}`,
+        status: "error",
+      });
+      return;
+    }
+
+    const fromEmail = accountsListForSelect?.find(acc => acc.id === migrateFromAccountId)?.email ?? "origem";
+    const toEmail = accountsListForSelect?.find(acc => acc.id === migrateToAccountId)?.email ?? "destino";
+
+    const confirmed = window.confirm(
+      `Tem certeza que deseja migrar ${migrateFromInfo.assignedSlots} acesso(s) de "${fromEmail}" para "${toEmail}"?\n\n` +
+      "Esta ação não pode ser desfeita."
+    );
+
+    if (!confirmed) return;
+
+    setIsMigrating(true);
+    try {
+      const result = await migrateTVAccountSlots(migrateFromAccountId, migrateToAccountId);
+      toast({
+        title: "Migração concluída",
+        description: result.message,
+        status: "success",
+        duration: 5000,
+      });
+      queryClient.invalidateQueries({ queryKey: ["tvOverview"] });
+      queryClient.invalidateQueries({ queryKey: ["tvAccounts"] });
+      queryClient.invalidateQueries({ queryKey: ["tvNextEmail"] });
+      migrateModal.onClose();
+      setMigrateFromAccountId("");
+      setMigrateToAccountId("");
+      setMigrateFromInfo(null);
+      setMigrateToInfo(null);
+    } catch (error) {
+      toast({
+        title: "Erro ao migrar acessos",
+        description: mutateErrorMessage(error),
+        status: "error",
+        duration: 6000,
+      });
+    } finally {
+      setIsMigrating(false);
     }
   };
 
@@ -1913,7 +2033,23 @@ export function UsersPage() {
       <Modal isOpen={emailsModal.isOpen} onClose={emailsModal.onClose} size="4xl" scrollBehavior="inside">
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>Emails de Acesso de TV</ModalHeader>
+          <ModalHeader>
+            <Flex justify="space-between" align="center">
+              <Text>Emails de Acesso de TV</Text>
+              <Button
+                colorScheme="blue"
+                size="sm"
+                onClick={() => {
+                  migrateModal.onOpen();
+                  if (accountsListForSelect) {
+                    setAccountsList(accountsListForSelect);
+                  }
+                }}
+              >
+                Migrar Acessos
+              </Button>
+            </Flex>
+          </ModalHeader>
           <ModalCloseButton />
           <ModalBody>
             {isLoadingAccounts ? (
@@ -2181,6 +2317,155 @@ export function UsersPage() {
           <ModalFooter>
             <Button variant="ghost" onClick={emailsModal.onClose}>
               Fechar
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Modal de Migração de Acessos */}
+      <Modal 
+        isOpen={migrateModal.isOpen} 
+        onClose={() => {
+          migrateModal.onClose();
+          setMigrateFromAccountId("");
+          setMigrateToAccountId("");
+          setMigrateFromInfo(null);
+          setMigrateToInfo(null);
+        }} 
+        size="xl" 
+        scrollBehavior="inside"
+      >
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Migrar Acessos entre Emails</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Stack spacing={4}>
+              <Text fontSize="sm" color="gray.500">
+                Migre todos os acessos atribuídos de um email para outro. O email de destino deve ter slots disponíveis suficientes.
+              </Text>
+
+              <FormControl>
+                <FormLabel>Email de Origem (de onde migrar)</FormLabel>
+                <Select
+                  placeholder="Selecione o email de origem"
+                  value={migrateFromAccountId}
+                  onChange={(e) => {
+                    const accountId = e.target.value;
+                    if (accountId) {
+                      handleSelectFromAccount(accountId);
+                    } else {
+                      setMigrateFromAccountId("");
+                      setMigrateFromInfo(null);
+                    }
+                  }}
+                  isDisabled={isMigrating}
+                >
+                  {accountsListForSelect
+                    ?.filter(acc => acc.id !== migrateToAccountId)
+                    .map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.email} ({acc.assignedSlots} em uso)
+                      </option>
+                    ))}
+                </Select>
+                {migrateFromInfo && (
+                  <Box mt={2} p={3} bg="blue.50" borderRadius="md" _dark={{ bg: "blue.900" }}>
+                    <Text fontSize="sm" fontWeight="semibold" mb={1}>
+                      Email de Origem: {accountsListForSelect?.find(acc => acc.id === migrateFromAccountId)?.email}
+                    </Text>
+                    <Text fontSize="sm" color={migrateFromInfo.assignedSlots > 0 ? "orange.600" : "green.600"}>
+                      {migrateFromInfo.assignedSlots > 0 
+                        ? `⚠️ ${migrateFromInfo.assignedSlots} acesso(s) será(ão) migrado(s)`
+                        : "✓ Nenhum acesso atribuído para migrar"}
+                    </Text>
+                    <Text fontSize="xs" color="gray.500" mt={1}>
+                      Total de slots: {migrateFromInfo.totalSlots}
+                    </Text>
+                  </Box>
+                )}
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Email de Destino (para onde migrar)</FormLabel>
+                <Select
+                  placeholder="Selecione o email de destino"
+                  value={migrateToAccountId}
+                  onChange={(e) => {
+                    const accountId = e.target.value;
+                    if (accountId) {
+                      handleSelectToAccount(accountId);
+                    } else {
+                      setMigrateToAccountId("");
+                      setMigrateToInfo(null);
+                    }
+                  }}
+                  isDisabled={isMigrating}
+                >
+                  {accountsListForSelect
+                    ?.filter(acc => acc.id !== migrateFromAccountId)
+                    .map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.email} ({acc.availableSlots} disponíveis)
+                      </option>
+                    ))}
+                </Select>
+                {migrateToInfo && (
+                  <Box mt={2} p={3} bg="green.50" borderRadius="md" _dark={{ bg: "green.900" }}>
+                    <Text fontSize="sm" fontWeight="semibold" mb={1}>
+                      Email de Destino: {accountsListForSelect?.find(acc => acc.id === migrateToAccountId)?.email}
+                    </Text>
+                    <Text fontSize="sm" color={migrateToInfo.availableSlots >= (migrateFromInfo?.assignedSlots ?? 0) ? "green.600" : "red.600"}>
+                      {migrateToInfo.availableSlots >= (migrateFromInfo?.assignedSlots ?? 0)
+                        ? `✓ ${migrateToInfo.availableSlots} slot(s) disponível(is) - Suficiente para migração`
+                        : `⚠️ Apenas ${migrateToInfo.availableSlots} slot(s) disponível(is) - Insuficiente`}
+                    </Text>
+                    <Text fontSize="xs" color="gray.500" mt={1}>
+                      Total: {migrateToInfo.totalSlots} | Em uso: {migrateToInfo.assignedSlots} | Disponíveis: {migrateToInfo.availableSlots}
+                    </Text>
+                  </Box>
+                )}
+              </FormControl>
+
+              {migrateFromInfo && migrateToInfo && migrateFromInfo.assignedSlots > 0 && (
+                <Box p={4} bg="yellow.50" borderRadius="md" _dark={{ bg: "yellow.900" }}>
+                  <Text fontSize="sm" fontWeight="semibold" mb={2}>
+                    Resumo da Migração:
+                  </Text>
+                  <Text fontSize="sm">
+                    • <strong>{migrateFromInfo.assignedSlots}</strong> acesso(s) será(ão) migrado(s) de{" "}
+                    <strong>{accountsListForSelect?.find(acc => acc.id === migrateFromAccountId)?.email}</strong>{" "}
+                    para <strong>{accountsListForSelect?.find(acc => acc.id === migrateToAccountId)?.email}</strong>
+                  </Text>
+                  <Text fontSize="xs" color="gray.600" mt={2}>
+                    ⚠️ Esta ação não pode ser desfeita. Os acessos serão transferidos mantendo todas as informações (cliente, plano, datas, etc.).
+                  </Text>
+                </Box>
+              )}
+            </Stack>
+          </ModalBody>
+          <ModalFooter>
+            <Button 
+              variant="ghost" 
+              mr={3} 
+              onClick={() => {
+                migrateModal.onClose();
+                setMigrateFromAccountId("");
+                setMigrateToAccountId("");
+                setMigrateFromInfo(null);
+                setMigrateToInfo(null);
+              }}
+              isDisabled={isMigrating}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              colorScheme="blue" 
+              onClick={handleMigrate}
+              isLoading={isMigrating}
+              isDisabled={!migrateFromAccountId || !migrateToAccountId || !migrateFromInfo || migrateFromInfo.assignedSlots === 0}
+            >
+              Migrar Acessos
             </Button>
           </ModalFooter>
         </ModalContent>

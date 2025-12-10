@@ -90,6 +90,28 @@ export async function updateTVSlotUsername(slotId: string, username: string | nu
   }
 }
 
+export async function migrateTVAccountSlots(fromAccountId: string, toAccountId: string) {
+  try {
+    const response = await api.post<{
+      message: string;
+      migrated: {
+        from: { email: string; slotsCount: number };
+        to: { email: string; slotsCount: number };
+      };
+    }>("/tv/accounts/migrate", {
+      fromAccountId,
+      toAccountId,
+    });
+    return response.data;
+  } catch (error) {
+    const typedError = error as ApiError;
+    if (isSchemaUnavailable(typedError)) {
+      throw new Error("As tabelas de TV não estão configuradas. Execute o script supabase/schema.sql.");
+    }
+    throw typedError;
+  }
+}
+
 export async function deleteTVAccount(accountId: string) {
   try {
     const response = await api.delete<{
