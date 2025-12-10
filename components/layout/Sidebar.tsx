@@ -81,6 +81,7 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
   });
   
   const shouldCollapse = !isMobile && isCollapsed;
+  const pathname = usePathname();
   
   // Salvar estado no localStorage quando mudar
   useEffect(() => {
@@ -117,7 +118,6 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
   const subtitleColor = useColorModeValue("gray.500", "gray.400");
   const containerBg = "transparent";
   const borderColor = "transparent";
-  const pathname = usePathname();
   const metadata = (user?.user_metadata ?? {}) as { name?: string; role?: string };
   const displayName = metadata.name ?? (metadata.role ? metadata.role.charAt(0).toUpperCase() + metadata.role.slice(1) : user?.user_metadata?.role ?? "Usuário");
 
