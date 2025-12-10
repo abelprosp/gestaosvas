@@ -40,6 +40,7 @@ import {
   FiPieChart,
   FiChevronLeft,
   FiChevronRight,
+  FiX,
 } from "react-icons/fi";
 import { FaPlayCircle } from "react-icons/fa";
 import { MdMedicalServices } from "react-icons/md";
@@ -147,19 +148,35 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
         />
       )}
 
-      <Flex align="center" mb={10} gap={4} display={shouldCollapse ? "none" : "flex"}>
-        <Box w={{ base: 14, md: 16 }} h={{ base: 14, md: 16 }} borderRadius="2xl" overflow="hidden" boxShadow="lg" flexShrink={0}>
-          <Image src="/assets/logo.png" alt="Serviços Telefonia" w="full" h="full" objectFit="cover" />
-        </Box>
-        {!shouldCollapse && (
-          <Box>
-            <Text fontWeight="bold" fontSize={{ base: "lg", md: "xl" }}>
-              Serviços Telefonia
-            </Text>
-            <Text fontSize={{ base: "sm", md: "md" }} color={subtitleColor}>
-              Central administrativa
-            </Text>
+      <Flex align="center" mb={10} gap={4} display={shouldCollapse ? "none" : "flex"} justify="space-between" w="full">
+        <Flex align="center" gap={4} flex={1}>
+          <Box w={{ base: 14, md: 16 }} h={{ base: 14, md: 16 }} borderRadius="2xl" overflow="hidden" boxShadow="lg" flexShrink={0}>
+            <Image src="/assets/logo.png" alt="Serviços Telefonia" w="full" h="full" objectFit="cover" />
           </Box>
+          {!shouldCollapse && (
+            <Box>
+              <Text fontWeight="bold" fontSize={{ base: "lg", md: "xl" }}>
+                Serviços Telefonia
+              </Text>
+              <Text fontSize={{ base: "sm", md: "md" }} color={subtitleColor}>
+                Central administrativa
+              </Text>
+            </Box>
+          )}
+        </Flex>
+        {/* Botão de fechar no mobile */}
+        {isMobile && !shouldCollapse && onNavigate && (
+          <IconButton
+            aria-label="Fechar menu"
+            icon={<Icon as={FiX} />}
+            onClick={onNavigate}
+            variant="ghost"
+            size="sm"
+            colorScheme="gray"
+            _hover={{
+              bg: useColorModeValue("gray.100", "gray.700"),
+            }}
+          />
         )}
       </Flex>
 
