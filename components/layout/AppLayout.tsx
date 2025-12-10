@@ -14,7 +14,7 @@ import { Sidebar } from "./Sidebar";
 import { VirtualAssistantChat } from "@/components/chat/VirtualAssistantChat";
 import { useProactiveAlerts } from "@/hooks/useProactiveAlerts";
 import { useAuth } from "@/context/AuthContext";
-import { FiMenu } from "react-icons/fi";
+import { FiMenu, FiX } from "react-icons/fi";
 
 export function AppLayout({ children }: PropsWithChildren) {
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -68,9 +68,9 @@ export function AppLayout({ children }: PropsWithChildren) {
           minH="60px"
         >
           <IconButton
-            aria-label="Abrir menu"
-            icon={<FiMenu />}
-            onClick={onOpen}
+            aria-label={isOpen ? "Fechar menu" : "Abrir menu"}
+            icon={isOpen ? <FiX /> : <FiMenu />}
+            onClick={isOpen ? onClose : onOpen}
             variant="ghost"
             size="md"
             mr={2}
