@@ -717,9 +717,6 @@ const getSortIcon = (key: string): ReactElement | undefined => {
               )}
               {filteredClients.map((client) => {
                 const assignments = client.tvAssignments ?? [];
-                const isTvExpanded = expandedAssignments[client.id] ?? false;
-                const visibleAssignments = isTvExpanded ? assignments : assignments.slice(0, 1);
-                const hiddenCount = assignments.length - visibleAssignments.length;
                 const isExpanded = expandedClientId === client.id;
                 const hasTelephony = assignments.some((assignment) => assignment.hasTelephony === true);
 
@@ -751,27 +748,24 @@ const getSortIcon = (key: string): ReactElement | undefined => {
                                     : ""}
                               </Badge>
                             ))}
-                          {assignments.length > 0 && (
-                            <>
-                              {visibleAssignments.map((assignment) => (
-                                <Badge
-                                  key={assignment.slotId}
-                                  colorScheme={assignment.planType === "PREMIUM" ? "pink" : "teal"}
-                                >
-                                  {assignment.profileLabel ?? "TV"}
-                                </Badge>
-                              ))}
-                              {assignments.length > 1 && (
-                                <Button
-                                  size="xs"
-                                  variant="ghost"
-                                  onClick={() => toggleAssignmentsVisibility(client.id)}
-                                >
-                                  {hiddenCount > 0 ? `Ver mais (+${hiddenCount})` : "Ver menos"}
-                                </Button>
-                              )}
-                            </>
-                          )}
+                          {assignments.length > 0 && (() => {
+                            const essencialCount = assignments.filter((a) => (a.planType ?? "ESSENCIAL") === "ESSENCIAL").length;
+                            const premiumCount = assignments.filter((a) => a.planType === "PREMIUM").length;
+                            return (
+                              <>
+                                {essencialCount > 0 && (
+                                  <Badge colorScheme="teal">
+                                    Essencial: {essencialCount}
+                                  </Badge>
+                                )}
+                                {premiumCount > 0 && (
+                                  <Badge colorScheme="pink">
+                                    Premium: {premiumCount}
+                                  </Badge>
+                                )}
+                              </>
+                            );
+                          })()}
                             </>
                           )}
                         </HStack>

@@ -227,7 +227,7 @@ export function ClientServicesModal({
         soldAt: firstAssignment.soldAt ? firstAssignment.soldAt.slice(0, 10) : new Date().toISOString().slice(0, 10),
         startsAt: firstAssignment.startsAt ? firstAssignment.startsAt.slice(0, 10) : new Date().toISOString().slice(0, 10),
         expiresAt: firstAssignment.expiresAt ? firstAssignment.expiresAt.slice(0, 10) : "",
-        notes: firstAssignment.notes ?? "",
+        notes: "", // Observações do cliente não devem ser as mesmas dos serviços/produtos
         hasTelephony: firstAssignment.hasTelephony ?? false,
       });
     }

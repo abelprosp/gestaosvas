@@ -165,7 +165,7 @@ export function ServiceReportsPage() {
         Status: row.status ?? "",
         Inicio: formatDate(row.startsAt),
         Vencimento: formatDate(row.expiresAt),
-        Notas: row.notes ?? "",
+        Notas: (row.notes ?? "").replace(/\n/g, " ").replace(/\r/g, ""), // Substituir quebras de linha por espaços
       };
     });
 
