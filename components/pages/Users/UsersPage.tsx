@@ -1436,9 +1436,10 @@ export function UsersPage() {
                         <HStack spacing={2} flexWrap="wrap">
                         <Text
                           fontWeight="semibold"
-                          maxW={{ base: "240px", md: "unset" }}
-                          isTruncated
-                          title={record.email}
+                          maxW={{ base: "full", md: "unset" }}
+                          whiteSpace={{ base: "normal", md: "nowrap" }}
+                          overflowWrap="anywhere"
+                          wordBreak="break-word"
                         >
                           {record.email}
                         </Text>
