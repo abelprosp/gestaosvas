@@ -80,28 +80,34 @@ Se pedirem algo que dependa de dados (ex.: “quantos clientes temos?”), respo
 }
 
 function formatNowPtBr() {
-  // Em alguns ambientes (ex.: Vercel) TZ pode vir como ":UTC" (inválido no Intl)
-  const rawTz = process.env.TZ;
-  const sanitizedTz =
-    typeof rawTz === "string" && rawTz.trim().length > 0
-      ? rawTz.trim().replace(/^:/, "")
-      : "America/Sao_Paulo";
+  // Queremos hora correta para o Brasil. Em alguns ambientes (ex.: Vercel) TZ vem como UTC (ou ":UTC").
+  // Preferimos sempre America/Sao_Paulo, a menos que o usuário configure explicitamente ASSISTANT_TIMEZONE.
+  const rawTz = process.env.ASSISTANT_TIMEZONE ?? process.env.TZ;
+  const candidate =
+    typeof rawTz === "string" && rawTz.trim().length > 0 ? rawTz.trim().replace(/^:/, "") : "";
+
+  const DEFAULT_TZ = "America/Sao_Paulo";
+  const blocked = new Set(["UTC", "Etc/UTC", "GMT", "Etc/GMT"]);
+  const tzToUse = candidate && !blocked.has(candidate) ? candidate : DEFAULT_TZ;
 
   const dt = new Date();
   try {
+    // valida timezone
+    new Intl.DateTimeFormat("pt-BR", { timeZone: tzToUse }).format(dt);
     return new Intl.DateTimeFormat("pt-BR", {
-      timeZone: sanitizedTz,
+      timeZone: tzToUse,
       dateStyle: "full",
       timeStyle: "medium",
     }).format(dt);
   } catch (error) {
-    // Fallback seguro (não quebrar o endpoint por causa do TZ)
-    console.error("[assistant/chat] Timezone inválido, usando fallback:", {
+    console.error("[assistant/chat] Timezone inválido, usando DEFAULT_TZ:", {
       rawTz,
-      sanitizedTz,
+      candidate,
+      tzToUse,
       error,
     });
     return new Intl.DateTimeFormat("pt-BR", {
+      timeZone: DEFAULT_TZ,
       dateStyle: "full",
       timeStyle: "medium",
     }).format(dt);
