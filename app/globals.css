@@ -16,6 +16,23 @@ body {
   height: 100%;
 }
 
+/* Mobile-first: evitar cortes e scroll lateral desnecessário.
+   Em telas pequenas, o conteúdo deve "quebrar linha" (ir para segunda linha) ao invés de estourar horizontalmente. */
+@media (max-width: 48em) {
+  /* Tabelas: permitir quebra de texto dentro das células */
+  .chakra-table th,
+  .chakra-table td {
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
+
+  /* HStack/Stack: permitir que itens quebrem linha (botões, badges, etc.) */
+  .chakra-stack {
+    flex-wrap: wrap !important;
+  }
+}
+
 
 
 

@@ -102,7 +102,7 @@ export function AppLayout({ children }: PropsWithChildren) {
             maxW="1440px"
             mx="auto"
             width="100%"
-            overflowX="hidden"
+            overflowX={{ base: "visible", md: "hidden" }}
             position="relative"
             zIndex={1}
           >
