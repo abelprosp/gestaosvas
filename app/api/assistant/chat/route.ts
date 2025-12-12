@@ -80,13 +80,32 @@ Se pedirem algo que dependa de dados (ex.: “quantos clientes temos?”), respo
 }
 
 function formatNowPtBr() {
-  const tz = process.env.TZ || "America/Sao_Paulo";
+  // Em alguns ambientes (ex.: Vercel) TZ pode vir como ":UTC" (inválido no Intl)
+  const rawTz = process.env.TZ;
+  const sanitizedTz =
+    typeof rawTz === "string" && rawTz.trim().length > 0
+      ? rawTz.trim().replace(/^:/, "")
+      : "America/Sao_Paulo";
+
   const dt = new Date();
-  return new Intl.DateTimeFormat("pt-BR", {
-    timeZone: tz,
-    dateStyle: "full",
-    timeStyle: "medium",
-  }).format(dt);
+  try {
+    return new Intl.DateTimeFormat("pt-BR", {
+      timeZone: sanitizedTz,
+      dateStyle: "full",
+      timeStyle: "medium",
+    }).format(dt);
+  } catch (error) {
+    // Fallback seguro (não quebrar o endpoint por causa do TZ)
+    console.error("[assistant/chat] Timezone inválido, usando fallback:", {
+      rawTz,
+      sanitizedTz,
+      error,
+    });
+    return new Intl.DateTimeFormat("pt-BR", {
+      dateStyle: "full",
+      timeStyle: "medium",
+    }).format(dt);
+  }
 }
 
 function handleDateTimeQuestion(message: string): string | null {
