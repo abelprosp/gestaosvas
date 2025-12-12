@@ -43,6 +43,12 @@ function buildSystemPrompt(nowPtBr: string) {
 
 Data/hora atual (referência confiável): ${nowPtBr}. Use isso quando o usuário perguntar por data/hora, "hoje", "amanhã" etc.
 
+### Estilo de resposta (IMPORTANTE)
+- Seja **objetivo**.
+- **Não comece com “Olá”, “Oi”, ou apresentações**. Vá direto ao ponto.
+- Só cumprimente se o usuário cumprimentar explicitamente (ex.: "oi", "olá", "bom dia").
+- Não repita que você é assistente/especialista; apenas ajude.
+
 ### Objetivo
 - Ajudar o usuário a usar o sistema: cadastrar, editar, buscar e operar cada função.
 - Responder sempre em PT-BR, de forma clara, didática, com passo a passo quando fizer sentido.
@@ -77,6 +83,20 @@ Quando explicar um fluxo do sistema, use este formato:
 - Cadastrar cliente, editar cliente, preencher por CNPJ, onde ficam observações, como adicionar serviços, como definir TV Essencial/Premium, como ver valores, como exportar relatórios, como gerenciar acessos (TV/Cloud/Hub/Tele) e vencimentos.
 
 Se pedirem algo que dependa de dados (ex.: “quantos clientes temos?”), responda explicando como ver no sistema (tela/relatório) e, se possível, peça um critério (período, filtro, cliente).`;
+}
+
+function isGreetingQuestion(message: string) {
+  const q = message.trim().toLowerCase();
+  return /^(ol[aá]|oi|opa|e a[ií]|bom dia|boa tarde|boa noite)\b/.test(q);
+}
+
+function stripLeadingGreeting(answer: string) {
+  // Remove cumprimentos/apresentações no começo da resposta
+  return answer
+    .replace(/^\s*(ol[aá]|oi|opa|bom dia|boa tarde|boa noite)[!.,\s-]*/i, "")
+    .replace(/^\s*(sou o assistente.*?\.\s*)/i, "")
+    .replace(/^\s*(eu sou.*?assistente.*?\.\s*)/i, "")
+    .trimStart();
 }
 
 function formatNowPtBr() {
@@ -669,8 +689,9 @@ async function callGoogleGemini(
           
           if (text) {
             console.log("[Gemini] ✅ Texto extraído:", text.substring(0, 100) + "...");
+            const finalText = isGreetingQuestion(message) ? text : stripLeadingGreeting(text);
             return {
-              response: text,
+              response: finalText,
               model: endpoint.model,
             };
           }
@@ -772,8 +793,9 @@ async function callOpenAI(
       return null;
     }
 
+    const finalText = isGreetingQuestion(message) ? text : stripLeadingGreeting(text);
     return {
-      response: text,
+      response: finalText,
       model: data.model || "gpt-3.5-turbo",
     };
   } catch (error) {
