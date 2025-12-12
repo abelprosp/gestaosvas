@@ -490,6 +490,9 @@ export function ServicesPage() {
                   <Td>
                     <Stack spacing={1} align="flex-start">
                       <Text fontWeight="semibold">{service.name}</Text>
+                      <Text display={{ base: "block", md: "none" }} fontSize="sm" color={mutedText}>
+                        {service.description ?? "—"}
+                      </Text>
                       <Badge colorScheme="purple" fontSize="0.75rem">
                         Última atualização: {new Date(service.updatedAt).toLocaleDateString("pt-BR")}
                       </Badge>
