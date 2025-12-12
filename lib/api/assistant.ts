@@ -95,3 +95,33 @@ export async function getProactiveSuggestions(): Promise<ProactiveSuggestion[]> 
   return response.data.results;
 }
 
+export interface ChatMessage {
+  sender: "assistant" | "user";
+  content: string;
+}
+
+export async function chatWithAI(
+  message: string,
+  history: ChatMessage[] = []
+): Promise<string | null> {
+  try {
+    const response = await api.post<{ response: string; model?: string; fallback?: boolean }>(
+      "/assistant/chat",
+      { message, history }
+    );
+    
+    // Se a API retornou fallback, significa que não está configurada
+    if (response.data.fallback) {
+      return null;
+    }
+    
+    return response.data.response;
+  } catch (error: any) {
+    // Se a API não estiver configurada ou houver erro, retornar null para usar fallback
+    if (error?.response?.status === 503 || error?.response?.status === 500) {
+      return null; // Retornar null para indicar que deve usar fallback
+    }
+    throw error;
+  }
+}
+

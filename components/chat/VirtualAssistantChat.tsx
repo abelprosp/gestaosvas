@@ -30,11 +30,13 @@ import {
   getExpiringServices,
   getSalesAnalysis,
   getProactiveSuggestions,
+  chatWithAI,
   type ClientSearchResult,
   type PendingContract,
   type ExpiringService,
   type SalesAnalysis,
   type ProactiveSuggestion,
+  type ChatMessage,
 } from "@/lib/api/assistant";
 
 interface Message {
@@ -1206,7 +1208,31 @@ Exemplos de perguntas:
       };
     }
 
-    // Resposta genérica amigável
+    // Se chegou aqui, não encontrou padrão específico
+    // Tentar usar IA se disponível
+    try {
+      const history: ChatMessage[] = messages
+        .slice(-10) // Últimas 10 mensagens para contexto
+        .map((msg) => ({
+          sender: msg.sender,
+          content: msg.content,
+        }));
+
+      const aiResponse = await chatWithAI(question, history);
+      
+      if (aiResponse) {
+        return {
+          sender: "assistant",
+          content: aiResponse,
+          type: "text",
+        };
+      }
+    } catch (error) {
+      console.error("Erro ao chamar IA:", error);
+      // Continuar para resposta genérica
+    }
+
+    // Resposta genérica amigável (fallback)
     return {
       sender: "assistant",
       content: `Olá! 😊 Não entendi completamente sua pergunta, mas estou aqui para ajudar!
