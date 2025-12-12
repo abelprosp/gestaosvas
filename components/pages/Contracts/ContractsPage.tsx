@@ -30,7 +30,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { FiEye, FiFilter, FiPlus, FiSearch, FiDownload, FiFilePlus, FiUpload } from "react-icons/fi";
 import { api } from "@/lib/api/client";
-import { Client, Contract, ContractTemplate, ContractStatus, PaginatedResponse } from "@/types";
+import { Client, Contract, ContractTemplate, PaginatedResponse } from "@/types";
 import { formatDateTime } from "@/lib/utils/format";
 import {
   ContractCreateModal,
@@ -39,6 +39,11 @@ import {
 import { ContractPreviewDrawer } from "@/components/forms/ContractPreviewDrawer";
 import { exportToCsv, exportToPdf } from "@/lib/utils/exporters";
 import Papa from "papaparse";
+
+type ContractStatus = "DRAFT" | "SENT" | "SIGNED" | "CANCELLED";
+type ContractsApiResponse = PaginatedResponse<Contract> & {
+  summary?: { statusCounts?: Partial<Record<ContractStatus, number>> };
+};
 
 const statusColor: Record<ContractStatus, string> = {
   DRAFT: "gray",
@@ -79,7 +84,7 @@ export function ContractsPage() {
     data: contractsResponse,
     isLoading,
     isFetching,
-  } = useQuery<PaginatedResponse<Contract>>({
+  } = useQuery<ContractsApiResponse>({
     queryKey: ["contracts", { page, status: statusFilter || null, search: searchTerm || null, limit }],
     queryFn: async () => {
       const params: Record<string, unknown> = {
@@ -93,7 +98,7 @@ export function ContractsPage() {
       if (searchValue.length) {
         params.search = searchValue;
       }
-      const response = await api.get<PaginatedResponse<Contract>>("/contracts", { params });
+      const response = await api.get<ContractsApiResponse>("/contracts", { params });
       return response.data;
     },
     placeholderData: (previousData) => previousData,
@@ -126,8 +131,7 @@ export function ContractsPage() {
   const totalContracts = contractsResponse?.total ?? 0;
   const totalPages = contractsResponse?.totalPages ?? 1;
   const statusCounts = useMemo(() => {
-    const summary = (contractsResponse?.summary as { statusCounts?: Partial<Record<ContractStatus, number>> }) ?? {};
-    const counts = summary.statusCounts ?? {};
+    const counts = contractsResponse?.summary?.statusCounts ?? {};
     return {
       DRAFT: counts.DRAFT ?? 0,
       SENT: counts.SENT ?? 0,
@@ -174,7 +178,7 @@ export function ContractsPage() {
         "contratos.csv",
         exportData.map((contract) => ({
           Titulo: contract.title,
-          Cliente: contract.client.name,
+          Cliente: contract.client?.name ?? "",
           Status: contract.status,
           Atualizado: formatDateTime(contract.updatedAt),
         })),
@@ -202,7 +206,7 @@ export function ContractsPage() {
         ["Título", "Cliente", "Status", "Atualizado"],
         exportData.map((contract) => [
           contract.title,
-          contract.client.name,
+          contract.client?.name ?? "",
           contract.status,
           formatDateTime(contract.updatedAt),
         ]),
@@ -488,7 +492,7 @@ export function ContractsPage() {
                 <Th>Contrato</Th>
                 <Th>Cliente</Th>
                 <Th>Status</Th>
-                <Th>Atualizado</Th>
+                <Th display={{ base: "none", md: "table-cell" }}>Atualizado</Th>
                 <Th textAlign="right">Ações</Th>
               </Tr>
             </Thead>
@@ -514,15 +518,18 @@ export function ContractsPage() {
                   <Td>
                     <VStack align="start" spacing={0.5}>
                       <Text fontWeight="semibold">{contract.title}</Text>
+                      <Text display={{ base: "block", md: "none" }} fontSize="sm" color={mutedText}>
+                        Atualizado: {formatDateTime(contract.updatedAt)}
+                      </Text>
                       {contract.template && (
                         <Badge colorScheme="purple">{contract.template.name}</Badge>
                       )}
                     </VStack>
                   </Td>
                   <Td>
-                    <Text fontWeight="medium">{contract.client.name}</Text>
+                    <Text fontWeight="medium">{contract.client?.name ?? "—"}</Text>
                     <Text fontSize="sm" color="gray.500">
-                      {contract.client.document}
+                      {contract.client?.document ?? "—"}
                     </Text>
                   </Td>
                   <Td>
@@ -530,7 +537,7 @@ export function ContractsPage() {
                       {contract.status}
                     </Badge>
                   </Td>
-                  <Td>{formatDateTime(contract.updatedAt)}</Td>
+                  <Td display={{ base: "none", md: "table-cell" }}>{formatDateTime(contract.updatedAt)}</Td>
                   <Td textAlign="right">
                     <IconButton
                       aria-label="Visualizar"

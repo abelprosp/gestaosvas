@@ -464,7 +464,7 @@ export function ServicesPage() {
             <Thead>
               <Tr>
                 <Th>Serviço</Th>
-                <Th>Descrição</Th>
+                <Th display={{ base: "none", md: "table-cell" }}>Descrição</Th>
                 <Th>Valor</Th>
                 <Th textAlign="right">Ações</Th>
               </Tr>
@@ -490,12 +490,15 @@ export function ServicesPage() {
                   <Td>
                     <Stack spacing={1} align="flex-start">
                       <Text fontWeight="semibold">{service.name}</Text>
+                      <Text display={{ base: "block", md: "none" }} fontSize="sm" color={mutedText} noOfLines={2}>
+                        {service.description ?? "—"}
+                      </Text>
                       <Badge colorScheme="purple" fontSize="0.75rem">
                         Última atualização: {new Date(service.updatedAt).toLocaleDateString("pt-BR")}
                       </Badge>
                     </Stack>
                   </Td>
-                  <Td maxW="320px">
+                  <Td display={{ base: "none", md: "table-cell" }} maxW="320px">
                     <Text noOfLines={3} color={mutedText}>
                       {service.description ?? "—"}
                     </Text>

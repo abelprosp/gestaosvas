@@ -1324,7 +1324,7 @@ export function UsersPage() {
                     Status
                   </Button>
                 </Th>
-                <Th>Senha</Th>
+                <Th display={{ base: "none", md: "table-cell" }}>Senha</Th>
                 <Th textAlign="right">Detalhes</Th>
               </Tr>
             </Thead>
@@ -1433,8 +1433,15 @@ export function UsersPage() {
                   <Fragment key={record.id}>
                     <Tr>
                       <Td>
-                        <HStack spacing={2}>
-                        <Text fontWeight="semibold">{record.email}</Text>
+                        <HStack spacing={2} flexWrap="wrap">
+                        <Text
+                          fontWeight="semibold"
+                          maxW={{ base: "240px", md: "unset" }}
+                          isTruncated
+                          title={record.email}
+                        >
+                          {record.email}
+                        </Text>
                         {isAdmin && record.accountId && (
                           <Tooltip label="Editar e-mail">
                             <IconButton
@@ -1497,7 +1504,7 @@ export function UsersPage() {
                       <Td>
                         <Badge colorScheme={STATUS_COLOR[record.status]}>{STATUS_LABEL[record.status]}</Badge>
                       </Td>
-                      <Td>
+                      <Td display={{ base: "none", md: "table-cell" }}>
                         <HStack spacing={2} align="center">
                           <Text fontFamily="mono">{record.password}</Text>
                           <Tooltip label="Gerar nova senha">
@@ -1566,7 +1573,7 @@ export function UsersPage() {
                       </Td>
                     </Tr>
                     <Tr>
-                      <Td colSpan={8} p={0} border="none">
+                      <Td colSpan={7} p={0} border="none">
                         <Collapse in={isExpanded} animateOpacity>
                           <Box
                             mt={-1}
@@ -1791,7 +1798,7 @@ export function UsersPage() {
               })}
               {!filteredRecords.length && (
                 <Tr>
-                  <Td colSpan={8}>
+                  <Td colSpan={7}>
                     <Text textAlign="center" color="gray.500">
                       Nenhum registro encontrado com os filtros atuais.
                     </Text>

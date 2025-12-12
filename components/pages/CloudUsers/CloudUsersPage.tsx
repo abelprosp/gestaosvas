@@ -314,14 +314,14 @@ export function CloudUsersPage({ title = "Usuários Cloud", serviceFilter }: Clo
             onChange={(event) => setExportDocument(event.target.value)}
           />
         </FormControl>
-        <HStack spacing={3}>
-          <Button variant="outline" onClick={handleExportDocument}>
+        <Stack direction={{ base: "column", md: "row" }} spacing={3} w={{ base: "full", md: "auto" }}>
+          <Button variant="outline" onClick={handleExportDocument} w={{ base: "full", md: "auto" }}>
             Exportar documento
           </Button>
-          <Button colorScheme="brand" onClick={handleExportFiltered}>
+          <Button colorScheme="brand" onClick={handleExportFiltered} w={{ base: "full", md: "auto" }}>
             Exportar filtrados
           </Button>
-        </HStack>
+        </Stack>
       </Stack>
 
       <Box
@@ -337,8 +337,8 @@ export function CloudUsersPage({ title = "Usuários Cloud", serviceFilter }: Clo
             <Thead>
               <Tr>
                 <Th>Cliente</Th>
-                <Th>Documento</Th>
-                <Th>E-mail</Th>
+                <Th display={{ base: "none", md: "table-cell" }}>Documento</Th>
+                <Th display={{ base: "none", lg: "table-cell" }}>E-mail</Th>
                 <Th>Serviço</Th>
                 <Th>Vencimento</Th>
                 <Th>Status</Th>
@@ -367,9 +367,15 @@ export function CloudUsersPage({ title = "Usuários Cloud", serviceFilter }: Clo
                   <Tr key={record.id}>
                     <Td>
                       <Text fontWeight="semibold">{record.client?.name ?? "—"}</Text>
+                      <Text display={{ base: "block", md: "none" }} fontSize="sm" color={mutedText}>
+                        {record.client?.document ?? "—"}
+                      </Text>
+                      <Text display={{ base: "block", lg: "none" }} fontSize="sm" color={mutedText}>
+                        {record.client?.email ?? "—"}
+                      </Text>
                     </Td>
-                    <Td>{record.client?.document ?? "—"}</Td>
-                    <Td>{record.client?.email ?? "—"}</Td>
+                    <Td display={{ base: "none", md: "table-cell" }}>{record.client?.document ?? "—"}</Td>
+                    <Td display={{ base: "none", lg: "table-cell" }}>{record.client?.email ?? "—"}</Td>
                     <Td>{record.service?.name ?? "Cloud"}</Td>
                     <Td>
                       <HStack spacing={2}>

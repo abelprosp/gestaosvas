@@ -8,7 +8,6 @@ import {
   Heading,
   HStack,
   Input,
-  Select,
   Stack,
   Table,
   Tbody,
@@ -44,18 +43,6 @@ const CATEGORY_COLORS: Record<ServiceReportRow["category"], string> = {
   TELE: "pink",
   SERVICE: "gray",
 };
-
-const QUICK_FILTERS: Array<{
-  label: string;
-  service: string;
-  category: ServiceReportCategory | "ALL";
-}> = [
-  { label: "Cloud 150GB", service: "Cloud 150GB", category: "CLOUD" },
-  { label: "HubPlay Premium", service: "HubPlay Premium", category: "HUB" },
-  { label: "Telemedicina e Telepet", service: "Telemedicina e Telepet", category: "TELE" },
-  { label: "TV Essencial", service: "TV ESSENCIAL", category: "TV" },
-  { label: "TV Premium", service: "TV PREMIUM", category: "TV" },
-];
 
 function formatDate(value?: string | null) {
   if (!value) return "-";
@@ -234,14 +221,31 @@ export function ServiceReportsPage() {
           minW="220px"
           h="40px"
         />
-        <HStack spacing={3} align="flex-start" h="40px">
-          <Button colorScheme="brand" onClick={handleApplyFilters} isLoading={isFetching} h="40px">
+        <Stack
+          direction={{ base: "column", md: "row" }}
+          spacing={3}
+          align={{ base: "stretch", md: "flex-start" }}
+          w={{ base: "full", lg: "auto" }}
+        >
+          <Button
+            colorScheme="brand"
+            onClick={handleApplyFilters}
+            isLoading={isFetching}
+            h="40px"
+            w={{ base: "full", md: "auto" }}
+          >
             Aplicar filtros
           </Button>
-          <Button variant="outline" onClick={handleExport} isDisabled={!rows.length} h="40px">
+          <Button
+            variant="outline"
+            onClick={handleExport}
+            isDisabled={!rows.length}
+            h="40px"
+            w={{ base: "full", md: "auto" }}
+          >
             Exportar CSV
           </Button>
-        </HStack>
+        </Stack>
       </Stack>
 
       <HStack spacing={3} justify="flex-start">
@@ -283,11 +287,11 @@ export function ServiceReportsPage() {
             <Thead>
               <Tr>
                 <Th>Cliente</Th>
-                <Th>Documento</Th>
+                <Th display={{ base: "none", md: "table-cell" }}>Documento</Th>
                 <Th>Categoria</Th>
                 <Th>Serviço</Th>
-                <Th>Identificador</Th>
-                <Th>Responsável</Th>
+                <Th display={{ base: "none", lg: "table-cell" }}>Identificador</Th>
+                <Th display={{ base: "none", lg: "table-cell" }}>Responsável</Th>
                 <Th>Vencimento</Th>
                 <Th>Status</Th>
               </Tr>
@@ -307,14 +311,17 @@ export function ServiceReportsPage() {
                     <Text fontSize="sm" color="gray.500">
                       {row.clientEmail ?? "-"}
                     </Text>
+                    <Text display={{ base: "block", md: "none" }} fontSize="sm" color="gray.500">
+                      {row.clientDocument}
+                    </Text>
                   </Td>
-                  <Td>{row.clientDocument}</Td>
+                  <Td display={{ base: "none", md: "table-cell" }}>{row.clientDocument}</Td>
                   <Td>
                 <Badge colorScheme={CATEGORY_COLORS[row.category]}>{CATEGORY_LABELS[row.category]}</Badge>
                   </Td>
                   <Td>{row.serviceName}</Td>
-                  <Td>{row.identifier}</Td>
-                  <Td>{row.responsible ?? "-"}</Td>
+                  <Td display={{ base: "none", lg: "table-cell" }}>{row.identifier}</Td>
+                  <Td display={{ base: "none", lg: "table-cell" }}>{row.responsible ?? "-"}</Td>
                   <Td>{formatDate(row.expiresAt)}</Td>
                   <Td>{row.status ?? "-"}</Td>
                 </Tr>
