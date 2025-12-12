@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createApiHandler } from "@/lib/utils/apiHandler";
 import { createServerClient } from "@/lib/supabase/server";
+import { buildSystemMapText, matchHowTo } from "@/lib/assistant/systemGuide";
 
 export interface ChatMessage {
   sender: "assistant" | "user";
@@ -39,6 +40,7 @@ function getNullableBoolean(row: Row, key: string): boolean | null {
 }
 
 function buildSystemPrompt(nowPtBr: string) {
+  const systemMap = buildSystemMapText();
   return `Você é um especialista (“doutor”) no Sistema de Gestão de Serviços (telefonia, TV e serviços digitais) desta empresa.
 
 Data/hora atual (referência confiável): ${nowPtBr}. Use isso quando o usuário perguntar por data/hora, "hoje", "amanhã" etc.
@@ -55,15 +57,7 @@ Data/hora atual (referência confiável): ${nowPtBr}. Use isso quando o usuário
 - Se a pergunta for ambígua, faça 1-2 perguntas de clarificação.
 
 ### Mapa do sistema (telas / menus)
-- Dashboard: visão geral, métricas e atalhos.
-- Clientes: cadastro, edição, observações do cliente, serviços vinculados, valores, exportação.
-- Serviços: catálogo de serviços e preços (inclusive preços personalizados).
-- Contratos: criação/edição/envio/assinatura e status.
-- Templates: modelos de contrato (conteúdo e ativação).
-- Usuários TV: gestão de acessos/slots, plano (Essencial/Premium), vencimentos, observações por acesso e nomes (usernames).
-- Usuários Cloud / Hub / Tele: gestão de acessos por serviço, vencimentos, observações.
-- Relatórios: relatórios de serviços e exportação (CSV).
-- Guia: documentação interna de uso.
+${systemMap}
 
 ### Regras e conceitos importantes (como o sistema funciona)
 - “Observações do cliente” (cliente.notes) são diferentes de “observações do acesso/serviço” (ex.: TV slot notes). Nunca misture.
@@ -189,6 +183,18 @@ function isLikelyServicesQuery(text: string) {
   return /(servi[cç]o|servi[cç]os|cat[aá]logo|pre[cç]o|valores|negoci[aá]vel)/i.test(text);
 }
 
+function isLikelyLinesQuery(text: string) {
+  return /(linha|linhas|telefonia|n[uú]mero|chip|titular|dependente)/i.test(text);
+}
+
+function isLikelyTemplatesQuery(text: string) {
+  return /(template|modelo|modelos|contrato.*modelo)/i.test(text);
+}
+
+function isLikelyRequestsQuery(text: string) {
+  return /(solicita[cç][aã]o|solicita[cç][oõ]es|pend[eê]ncia|pendente|aprova[cç][aã]o|request)/i.test(text);
+}
+
 type AssistantQueryContext = {
   nowPtBr: string;
   intent: {
@@ -197,11 +203,15 @@ type AssistantQueryContext = {
     expiring: boolean;
     tv: boolean;
     services: boolean;
+    lines: boolean;
+    templates: boolean;
+    requests: boolean;
   };
   extracted: {
     cpfCnpj?: string | null;
     days?: number;
     emailLike?: boolean;
+    phoneLike?: boolean;
   };
   data: {
     stats?: { clients: number; contracts: number; tvActive: number; services: number };
@@ -216,6 +226,20 @@ type AssistantQueryContext = {
       costCenter: string | null;
       notes: string | null;
       createdAt: string | null;
+      services?: Array<{
+        id: string;
+        name: string;
+        basePrice: number;
+        customPrice: number | null;
+        allowCustomPrice: boolean;
+      }>;
+      lines?: Array<{
+        id: string;
+        phoneNumber: string;
+        type: string | null;
+        nickname: string | null;
+        notes: string | null;
+      }>;
       tv?: {
         essencial: number;
         premium: number;
@@ -243,6 +267,9 @@ type AssistantQueryContext = {
     expiring?: Array<{ type: "cloud" | "tv"; expiresAt: string; clientName: string; serviceName: string }>;
     tvAvailable?: number;
     servicesList?: Array<{ id: string; name: string; price: number; allowCustomPrice: boolean }>;
+    templates?: Array<{ id: string; name: string; active: boolean; updatedAt: string | null }>;
+    pendingRequests?: Array<{ id: string; action: string; status: string; createdAt: string | null }>;
+    linesSearch?: Array<{ id: string; phoneNumber: string; type: string; clientName: string; clientDocument: string }>;
   };
 };
 
@@ -251,6 +278,8 @@ async function buildAssistantContext(question: string): Promise<AssistantQueryCo
   const q = question.trim();
   const days = extractDays(q, 30);
   const cpfCnpj = extractCpfCnpjDigits(q);
+  const phoneDigits = normalizeDigits(q);
+  const phoneLike = phoneDigits.length >= 10 && phoneDigits.length <= 13;
 
   const intent = {
     clients: isLikelyClientQuery(q),
@@ -258,6 +287,9 @@ async function buildAssistantContext(question: string): Promise<AssistantQueryCo
     expiring: isLikelyExpiringQuery(q),
     tv: isLikelyTvQuery(q),
     services: isLikelyServicesQuery(q),
+    lines: isLikelyLinesQuery(q),
+    templates: isLikelyTemplatesQuery(q),
+    requests: isLikelyRequestsQuery(q),
   };
 
   let supabase: ReturnType<typeof createServerClient> | null = null;
@@ -273,24 +305,28 @@ async function buildAssistantContext(question: string): Promise<AssistantQueryCo
   const context: AssistantQueryContext = {
     nowPtBr,
     intent,
-    extracted: { cpfCnpj, days, emailLike: looksLikeEmail(q) },
+    extracted: { cpfCnpj, days, emailLike: looksLikeEmail(q), phoneLike },
     data: {},
   };
 
   const tasks: Array<Promise<void>> = [
     (async () => {
-      const [clientsCount, contractsCount, tvSlotsCount, servicesCount] = await Promise.all([
-        supabase.from("clients").select("id", { count: "exact", head: true }),
-        supabase.from("contracts").select("id", { count: "exact", head: true }),
-        supabase.from("tv_slots").select("id", { count: "exact", head: true }).eq("status", "ASSIGNED"),
-        supabase.from("services").select("id", { count: "exact", head: true }),
-      ]);
-      context.data.stats = {
-        clients: clientsCount.count ?? 0,
-        contracts: contractsCount.count ?? 0,
-        tvActive: tvSlotsCount.count ?? 0,
-        services: servicesCount.count ?? 0,
-      };
+      try {
+        const [clientsCount, contractsCount, tvSlotsCount, servicesCount] = await Promise.all([
+          supabase.from("clients").select("id", { count: "exact", head: true }),
+          supabase.from("contracts").select("id", { count: "exact", head: true }),
+          supabase.from("tv_slots").select("id", { count: "exact", head: true }).eq("status", "ASSIGNED"),
+          supabase.from("services").select("id", { count: "exact", head: true }),
+        ]);
+        context.data.stats = {
+          clients: clientsCount.count ?? 0,
+          contracts: contractsCount.count ?? 0,
+          tvActive: tvSlotsCount.count ?? 0,
+          services: servicesCount.count ?? 0,
+        };
+      } catch (e) {
+        console.error("[assistant/chat] Falha ao buscar stats:", e);
+      }
     })(),
   ];
 
@@ -299,11 +335,17 @@ async function buildAssistantContext(question: string): Promise<AssistantQueryCo
       (async () => {
         const query = cpfCnpj ? cpfCnpj : q;
         const ilike = `%${query}%`;
-        const { data } = await supabase
-          .from("clients")
-          .select("id, name, document, email, phone, company_name, cost_center, notes, created_at")
-          .or(`name.ilike.${ilike},document.ilike.${ilike},email.ilike.${ilike}`)
-          .limit(10);
+        let data: unknown[] = [];
+        try {
+          const result = await supabase
+            .from("clients")
+            .select("id, name, document, email, phone, company_name, cost_center, notes, created_at")
+            .or(`name.ilike.${ilike},document.ilike.${ilike},email.ilike.${ilike},phone.ilike.${ilike}`)
+            .limit(10);
+          data = asArray(result.data);
+        } catch (e) {
+          console.error("[assistant/chat] Falha ao buscar clientes:", e);
+        }
 
         context.data.clientsSearch = asArray(data).map((raw) => {
           const c = asRow(raw) ?? {};
@@ -336,6 +378,51 @@ async function buildAssistantContext(question: string): Promise<AssistantQueryCo
               notes: getNullableString(exactRow, "notes"),
               createdAt: getNullableString(exactRow, "created_at"),
             };
+
+            // Serviços vinculados (com preço base + preço customizado)
+            try {
+              const cs = await supabase
+                .from("client_services")
+                .select("custom_price, service:services(id, name, price, allow_custom_price)")
+                .eq("client_id", clientId)
+                .limit(50);
+              context.data.clientDetail.services = asArray(cs.data).map((rawCs) => {
+                const r = asRow(rawCs) ?? {};
+                const svc = asRow(r["service"]) ?? {};
+                const base = typeof svc["price"] === "number" ? (svc["price"] as number) : 0;
+                const custom = typeof r["custom_price"] === "number" ? (r["custom_price"] as number) : null;
+                return {
+                  id: getString(svc, "id"),
+                  name: getString(svc, "name"),
+                  basePrice: base,
+                  customPrice: custom,
+                  allowCustomPrice: Boolean(svc["allow_custom_price"]),
+                };
+              });
+            } catch (e) {
+              console.error("[assistant/chat] Falha ao buscar client_services:", e);
+            }
+
+            // Linhas (telefonia)
+            try {
+              const lines = await supabase
+                .from("lines")
+                .select("id, phone_number, type, nickname, notes")
+                .eq("client_id", clientId)
+                .limit(50);
+              context.data.clientDetail.lines = asArray(lines.data).map((rawLine) => {
+                const l = asRow(rawLine) ?? {};
+                return {
+                  id: getString(l, "id"),
+                  phoneNumber: getString(l, "phone_number"),
+                  type: getNullableString(l, "type"),
+                  nickname: getNullableString(l, "nickname"),
+                  notes: getNullableString(l, "notes"),
+                };
+              });
+            } catch (e) {
+              console.error("[assistant/chat] Falha ao buscar linhas:", e);
+            }
 
             const tvSlots = await supabase
               .from("tv_slots")
@@ -389,22 +476,26 @@ async function buildAssistantContext(question: string): Promise<AssistantQueryCo
   if (intent.contracts) {
     tasks.push(
       (async () => {
-        const { data } = await supabase
-          .from("contracts")
-          .select("id, title, status, client:clients(name)")
-          .in("status", ["DRAFT", "SENT"])
-          .limit(15)
-          .order("created_at", { ascending: false });
-        context.data.pendingContracts = asArray(data).map((raw) => {
-          const c = asRow(raw) ?? {};
-          const client = asRow(c["client"]);
-          return {
-            id: getString(c, "id"),
-            title: getString(c, "title"),
-            status: getString(c, "status"),
-            clientName: client ? getString(client, "name") || "-" : "-",
-          };
-        });
+        try {
+          const { data } = await supabase
+            .from("contracts")
+            .select("id, title, status, client:clients(name)")
+            .in("status", ["DRAFT", "SENT"])
+            .limit(15)
+            .order("created_at", { ascending: false });
+          context.data.pendingContracts = asArray(data).map((raw) => {
+            const c = asRow(raw) ?? {};
+            const client = asRow(c["client"]);
+            return {
+              id: getString(c, "id"),
+              title: getString(c, "title"),
+              status: getString(c, "status"),
+              clientName: client ? getString(client, "name") || "-" : "-",
+            };
+          });
+        } catch (e) {
+          console.error("[assistant/chat] Falha ao buscar contratos pendentes:", e);
+        }
       })(),
     );
   }
@@ -412,50 +503,54 @@ async function buildAssistantContext(question: string): Promise<AssistantQueryCo
   if (intent.expiring) {
     tasks.push(
       (async () => {
-        const targetDate = new Date();
-        targetDate.setDate(targetDate.getDate() + days);
-        const targetDateStr = targetDate.toISOString().slice(0, 10);
-        const todayStr = new Date().toISOString().slice(0, 10);
+        try {
+          const targetDate = new Date();
+          targetDate.setDate(targetDate.getDate() + days);
+          const targetDateStr = targetDate.toISOString().slice(0, 10);
+          const todayStr = new Date().toISOString().slice(0, 10);
 
-        const [cloudExpiring, tvExpiring] = await Promise.all([
-          supabase
-            .from("cloud_accesses")
-            .select("id, expires_at, client:clients(name), service:services(name)")
-            .lte("expires_at", targetDateStr)
-            .gte("expires_at", todayStr)
-            .limit(25),
-          supabase
-            .from("tv_slots")
-            .select("id, expires_at, client:clients(name)")
-            .lte("expires_at", targetDateStr)
-            .gte("expires_at", todayStr)
-            .eq("status", "ASSIGNED")
-            .not("expires_at", "is", null)
-            .limit(25),
-        ]);
+          const [cloudExpiring, tvExpiring] = await Promise.all([
+            supabase
+              .from("cloud_accesses")
+              .select("id, expires_at, client:clients(name), service:services(name)")
+              .lte("expires_at", targetDateStr)
+              .gte("expires_at", todayStr)
+              .limit(25),
+            supabase
+              .from("tv_slots")
+              .select("id, expires_at, client:clients(name)")
+              .lte("expires_at", targetDateStr)
+              .gte("expires_at", todayStr)
+              .eq("status", "ASSIGNED")
+              .not("expires_at", "is", null)
+              .limit(25),
+          ]);
 
-        const cloudResults = asArray(cloudExpiring.data).map((rawAccess) => {
-          const access = asRow(rawAccess) ?? {};
-          const client = asRow(access["client"]);
-          const service = asRow(access["service"]);
-          return {
-            type: "cloud" as const,
-            expiresAt: getString(access, "expires_at"),
-            clientName: client ? getString(client, "name") || "-" : "-",
-            serviceName: service ? getString(service, "name") || "-" : "-",
-          };
-        });
-        const tvResults = asArray(tvExpiring.data).map((rawSlot) => {
-          const slot = asRow(rawSlot) ?? {};
-          const client = asRow(slot["client"]);
-          return {
-            type: "tv" as const,
-            expiresAt: getString(slot, "expires_at"),
-            clientName: client ? getString(client, "name") || "-" : "-",
-            serviceName: "TV",
-          };
-        });
-        context.data.expiring = [...cloudResults, ...tvResults].slice(0, 25);
+          const cloudResults = asArray(cloudExpiring.data).map((rawAccess) => {
+            const access = asRow(rawAccess) ?? {};
+            const client = asRow(access["client"]);
+            const service = asRow(access["service"]);
+            return {
+              type: "cloud" as const,
+              expiresAt: getString(access, "expires_at"),
+              clientName: client ? getString(client, "name") || "-" : "-",
+              serviceName: service ? getString(service, "name") || "-" : "-",
+            };
+          });
+          const tvResults = asArray(tvExpiring.data).map((rawSlot) => {
+            const slot = asRow(rawSlot) ?? {};
+            const client = asRow(slot["client"]);
+            return {
+              type: "tv" as const,
+              expiresAt: getString(slot, "expires_at"),
+              clientName: client ? getString(client, "name") || "-" : "-",
+              serviceName: "TV",
+            };
+          });
+          context.data.expiring = [...cloudResults, ...tvResults].slice(0, 25);
+        } catch (e) {
+          console.error("[assistant/chat] Falha ao buscar vencimentos:", e);
+        }
       })(),
     );
   }
@@ -463,13 +558,17 @@ async function buildAssistantContext(question: string): Promise<AssistantQueryCo
   if (intent.tv) {
     tasks.push(
       (async () => {
-        const { data } = await supabase
-          .from("tv_slots")
-          .select("id")
-          .eq("status", "AVAILABLE")
-          .is("client_id", null)
-          .limit(2000);
-        context.data.tvAvailable = (data ?? []).length;
+        try {
+          const { data } = await supabase
+            .from("tv_slots")
+            .select("id")
+            .eq("status", "AVAILABLE")
+            .is("client_id", null)
+            .limit(2000);
+          context.data.tvAvailable = (data ?? []).length;
+        } catch (e) {
+          console.error("[assistant/chat] Falha ao buscar TV disponíveis:", e);
+        }
       })(),
     );
   }
@@ -477,22 +576,105 @@ async function buildAssistantContext(question: string): Promise<AssistantQueryCo
   if (intent.services) {
     tasks.push(
       (async () => {
-        const { data } = await supabase
-          .from("services")
-          .select("id, name, price, allow_custom_price")
-          .limit(50)
-          .order("name", { ascending: true });
-        context.data.servicesList = asArray(data).map((raw) => {
-          const s = asRow(raw) ?? {};
-          const priceRaw = s["price"];
-          const price = typeof priceRaw === "number" ? priceRaw : 0;
-          return {
-            id: getString(s, "id"),
-            name: getString(s, "name"),
-            price,
-            allowCustomPrice: Boolean(s["allow_custom_price"]),
-          };
-        });
+        try {
+          const { data } = await supabase
+            .from("services")
+            .select("id, name, price, allow_custom_price")
+            .limit(50)
+            .order("name", { ascending: true });
+          context.data.servicesList = asArray(data).map((raw) => {
+            const s = asRow(raw) ?? {};
+            const priceRaw = s["price"];
+            const price = typeof priceRaw === "number" ? priceRaw : 0;
+            return {
+              id: getString(s, "id"),
+              name: getString(s, "name"),
+              price,
+              allowCustomPrice: Boolean(s["allow_custom_price"]),
+            };
+          });
+        } catch (e) {
+          console.error("[assistant/chat] Falha ao listar serviços:", e);
+        }
+      })(),
+    );
+  }
+
+  if (intent.templates) {
+    tasks.push(
+      (async () => {
+        try {
+          const { data } = await supabase
+            .from("contract_templates")
+            .select("id, name, active, updated_at")
+            .limit(25)
+            .order("updated_at", { ascending: false });
+          context.data.templates = asArray(data).map((raw) => {
+            const t = asRow(raw) ?? {};
+            return {
+              id: getString(t, "id"),
+              name: getString(t, "name"),
+              active: Boolean(t["active"]),
+              updatedAt: getNullableString(t, "updated_at"),
+            };
+          });
+        } catch (e) {
+          console.error("[assistant/chat] Falha ao listar templates:", e);
+        }
+      })(),
+    );
+  }
+
+  if (intent.requests) {
+    tasks.push(
+      (async () => {
+        try {
+          const { data } = await supabase
+            .from("action_requests")
+            .select("id, action, status, created_at")
+            .eq("status", "PENDING")
+            .limit(20)
+            .order("created_at", { ascending: false });
+          context.data.pendingRequests = asArray(data).map((raw) => {
+            const r = asRow(raw) ?? {};
+            return {
+              id: getString(r, "id"),
+              action: getString(r, "action"),
+              status: getString(r, "status"),
+              createdAt: getNullableString(r, "created_at"),
+            };
+          });
+        } catch (e) {
+          console.error("[assistant/chat] Falha ao listar action_requests:", e);
+        }
+      })(),
+    );
+  }
+
+  if (intent.lines && phoneLike) {
+    tasks.push(
+      (async () => {
+        try {
+          const ilike = `%${phoneDigits}%`;
+          const { data } = await supabase
+            .from("lines")
+            .select("id, phone_number, type, client:clients(name, document)")
+            .or(`phone_number.ilike.${ilike},document.ilike.${ilike}`)
+            .limit(20);
+          context.data.linesSearch = asArray(data).map((raw) => {
+            const l = asRow(raw) ?? {};
+            const client = asRow(l["client"]) ?? {};
+            return {
+              id: getString(l, "id"),
+              phoneNumber: getString(l, "phone_number"),
+              type: getString(l, "type"),
+              clientName: getString(client, "name"),
+              clientDocument: getString(client, "document"),
+            };
+          });
+        } catch (e) {
+          console.error("[assistant/chat] Falha ao buscar linhas por número:", e);
+        }
       })(),
     );
   }
@@ -925,6 +1107,15 @@ export const POST = createApiHandler(async (req: NextRequest) => {
       });
     }
 
+    // Responder "como fazer" de forma determinística (economiza cota e é mais consistente)
+    const howto = matchHowTo(message);
+    if (howto) {
+      return NextResponse.json({
+        response: `${howto.title}\n\n${howto.steps.join("\n")}`,
+        model: "system-howto",
+      });
+    }
+
     // Tentar obter resposta de alguma API de IA
     const result = await getAIResponse(message, history || []);
 
@@ -951,4 +1142,7 @@ export const POST = createApiHandler(async (req: NextRequest) => {
       { status: 500 }
     );
   }
+}, {
+  // Mais restrito para não estourar cota do Gemini. Usa IP + prefixo do token (ver rateLimit.ts).
+  rateLimit: { windowMs: 60 * 1000, maxRequests: 15 },
 });
