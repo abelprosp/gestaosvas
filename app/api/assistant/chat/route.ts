@@ -215,7 +215,15 @@ async function buildAssistantContext(question: string): Promise<AssistantQueryCo
     services: isLikelyServicesQuery(q),
   };
 
-  const supabase = createServerClient();
+  let supabase: ReturnType<typeof createServerClient> | null = null;
+  try {
+    // Para consultas do “cérebro”, preferimos Service Role (não depende de RLS do usuário).
+    // Se não existir no ambiente, fazemos fallback para ANON.
+    supabase = createServerClient(true);
+  } catch (e) {
+    console.warn("[assistant/chat] Service role indisponível, usando anon key para contexto:", e);
+    supabase = createServerClient(false);
+  }
 
   const context: AssistantQueryContext = {
     nowPtBr,
@@ -444,7 +452,11 @@ async function buildAssistantContext(question: string): Promise<AssistantQueryCo
     );
   }
 
-  await Promise.allSettled(tasks);
+  try {
+    await Promise.allSettled(tasks);
+  } catch (e) {
+    console.error("[assistant/chat] Falha ao montar contexto (continuando sem contexto):", e);
+  }
   return context;
 }
 
@@ -522,7 +534,12 @@ async function callGoogleGemini(
 ): Promise<{ response: string; model: string } | null> {
   const nowPtBr = formatNowPtBr();
   const SYSTEM_PROMPT = buildSystemPrompt(nowPtBr);
-  const assistantContext = await buildAssistantContext(message);
+  let assistantContext: AssistantQueryContext | null = null;
+  try {
+    assistantContext = await buildAssistantContext(message);
+  } catch (e) {
+    console.error("[assistant/chat] Erro ao montar contexto (Gemini). Continuando sem contexto:", e);
+  }
 
   const apiKey = process.env.GOOGLE_API_KEY;
   
@@ -538,7 +555,9 @@ async function callGoogleGemini(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
 
-    const contextBlock = `\n\n### CONTEXTO (DADOS REAIS DO SISTEMA)\n${JSON.stringify(assistantContext, null, 2)}\n\nRegras:\n- Use o CONTEXTO para responder com precisão.\n- Nunca invente dados.\n- Nunca inclua senhas ou credenciais.\n- Se faltar dado no contexto, diga como o usuário pode consultar no sistema (tela/botão) ou peça um critério.\n`;
+    const contextBlock = assistantContext
+      ? `\n\n### CONTEXTO (DADOS REAIS DO SISTEMA)\n${JSON.stringify(assistantContext, null, 2)}\n\nRegras:\n- Use o CONTEXTO para responder com precisão.\n- Nunca invente dados.\n- Nunca inclua senhas ou credenciais.\n- Se faltar dado no contexto, diga como o usuário pode consultar no sistema (tela/botão) ou peça um critério.\n`
+      : `\n\nObservação: contexto do banco indisponível nesta requisição; responda apenas com conhecimento de uso do sistema.\n`;
 
     // Construir histórico de conversa de forma mais simples
     const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
@@ -670,7 +689,12 @@ async function callOpenAI(
 ): Promise<{ response: string; model: string } | null> {
   const nowPtBr = formatNowPtBr();
   const SYSTEM_PROMPT = buildSystemPrompt(nowPtBr);
-  const assistantContext = await buildAssistantContext(message);
+  let assistantContext: AssistantQueryContext | null = null;
+  try {
+    assistantContext = await buildAssistantContext(message);
+  } catch (e) {
+    console.error("[assistant/chat] Erro ao montar contexto (OpenAI). Continuando sem contexto:", e);
+  }
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
@@ -679,7 +703,9 @@ async function callOpenAI(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
 
-    const contextBlock = `\n\n### CONTEXTO (DADOS REAIS DO SISTEMA)\n${JSON.stringify(assistantContext, null, 2)}\n\nRegras:\n- Use o CONTEXTO para responder com precisão.\n- Nunca invente dados.\n- Nunca inclua senhas ou credenciais.\n- Se faltar dado no contexto, diga como o usuário pode consultar no sistema (tela/botão) ou peça um critério.\n`;
+    const contextBlock = assistantContext
+      ? `\n\n### CONTEXTO (DADOS REAIS DO SISTEMA)\n${JSON.stringify(assistantContext, null, 2)}\n\nRegras:\n- Use o CONTEXTO para responder com precisão.\n- Nunca invente dados.\n- Nunca inclua senhas ou credenciais.\n- Se faltar dado no contexto, diga como o usuário pode consultar no sistema (tela/botão) ou peça um critério.\n`
+      : `\n\nObservação: contexto do banco indisponível nesta requisição; responda apenas com conhecimento de uso do sistema.\n`;
 
     const messages = [
       { role: "system", content: `${SYSTEM_PROMPT}${contextBlock}` },
