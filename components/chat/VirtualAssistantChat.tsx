@@ -19,9 +19,9 @@ import {
   useToast,
 } from "@chakra-ui/react";
 import { useState, useEffect, useRef } from "react";
-import { FiMessageCircle, FiSend, FiX, FiUsers, FiFileText, FiMonitor, FiSettings, FiArrowRight, FiTrendingUp, FiLightbulb, FiTrash2, FiBarChart2 } from "react-icons/fi";
+import { FiMessageCircle, FiSend, FiX, FiFileText, FiArrowRight, FiTrash2 } from "react-icons/fi";
 import NextLink from "next/link";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   getAssistantStats,
   searchClients,
@@ -117,7 +117,6 @@ export function VirtualAssistantChat() {
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const pathname = usePathname();
   const toast = useToast();
 
   const panelBg = useColorModeValue("rgba(255,255,255,0.95)", "rgba(13, 18, 34, 0.95)");
@@ -155,6 +154,34 @@ export function VirtualAssistantChat() {
   }, [hasLoadedHistory]);
 
   const processMessage = async (question: string): Promise<Message> => {
+    // Sempre responder via IA (sem respostas pré-prontas)
+    try {
+      const history: ChatMessage[] = messages
+        .slice(-10) // últimas 10 mensagens para contexto
+        .map((msg) => ({
+          sender: msg.sender,
+          content: msg.content,
+        }));
+
+      const aiResponse = await chatWithAI(question, history);
+      if (aiResponse !== null) {
+        return {
+          sender: "assistant",
+          content: aiResponse ?? "",
+          type: "text",
+        };
+      }
+    } catch (error) {
+      console.error("Erro ao chamar IA:", error);
+    }
+
+    // Fallback apenas se a IA estiver indisponível
+    return {
+      sender: "assistant",
+      content: "A IA está indisponível no momento. Tente novamente em alguns instantes.",
+      type: "text",
+    };
+
     const lowerQuestion = question.toLowerCase().trim();
 
     // ========== SAUDAÇÕES E INTERAÇÕES SOCIAIS ==========
@@ -1219,11 +1246,11 @@ Exemplos de perguntas:
         }));
 
       const aiResponse = await chatWithAI(question, history);
-      
-      if (aiResponse) {
+
+      if (aiResponse !== null) {
         return {
           sender: "assistant",
-          content: aiResponse,
+          content: aiResponse ?? "",
           type: "text",
         };
       }
