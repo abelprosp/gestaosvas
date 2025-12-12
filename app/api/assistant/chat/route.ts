@@ -28,80 +28,111 @@ async function callGoogleGemini(
   history: ChatMessage[]
 ): Promise<{ response: string; model: string } | null> {
   const apiKey = process.env.GOOGLE_API_KEY;
-  if (!apiKey) return null;
+  
+  // Log para debug (sem expor a chave completa)
+  console.log("[Gemini] API Key presente:", apiKey ? `SIM (${apiKey.substring(0, 10)}...)` : "NÃO");
+  
+  if (!apiKey) {
+    console.log("[Gemini] ❌ API Key não encontrada nas variáveis de ambiente");
+    return null;
+  }
 
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
 
-    // Preparar mensagens para Gemini
-    // Gemini usa um formato de contents com role e parts
-    const conversationHistory = history.slice(-10).map((msg) => ({
-      role: msg.sender === "user" ? "user" : "model",
-      parts: [{ text: msg.content }],
-    }));
-
-    // Adicionar prompt do sistema como primeira mensagem do usuário
-    const contents = [
-      {
-        role: "user" as const,
-        parts: [{ text: SYSTEM_PROMPT }],
-      },
-      {
-        role: "model" as const,
-        parts: [{ text: "Entendido! Estou pronto para ajudar com o sistema de gestão de serviços." }],
-      },
-      ...conversationHistory,
-      {
-        role: "user" as const,
+    // Usar modelo mais recente do Gemini (gemini-1.5-flash é mais rápido e gratuito)
+    const model = process.env.GOOGLE_MODEL || "gemini-1.5-flash";
+    
+    // Construir histórico de conversa de forma mais simples
+    const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
+    
+    // Se não houver histórico, começar com o prompt do sistema + mensagem
+    if (history.length === 0) {
+      contents.push({
+        role: "user",
+        parts: [{ text: `${SYSTEM_PROMPT}\n\n${message}` }],
+      });
+    } else {
+      // Adicionar histórico de conversa
+      history.slice(-10).forEach((msg) => {
+        contents.push({
+          role: msg.sender === "user" ? "user" : "model",
+          parts: [{ text: msg.content }],
+        });
+      });
+      // Adicionar mensagem atual
+      contents.push({
+        role: "user",
         parts: [{ text: message }],
-      },
-    ];
+      });
+    }
 
-    const model = process.env.GOOGLE_MODEL || "gemini-pro";
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    
+    console.log("[Gemini] Chamando API com modelo:", model);
+    console.log("[Gemini] URL (sem key):", url.split("key=")[0] + "key=***");
+    console.log("[Gemini] Contents count:", contents.length);
+    
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents,
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 500,
         },
-        body: JSON.stringify({
-          contents,
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 500,
-          },
-        }),
-        signal: controller.signal,
-      }
-    );
+      }),
+      signal: controller.signal,
+    });
 
     clearTimeout(timeout);
 
+    const responseText = await response.text();
+    console.log("[Gemini] Status:", response.status);
+    
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      console.error("[Gemini] Erro:", response.status, error);
+      let error;
+      try {
+        error = JSON.parse(responseText);
+      } catch {
+        error = { error: responseText };
+      }
+      console.error("[Gemini] ❌ Erro da API:", JSON.stringify(error, null, 2));
       return null;
     }
 
-    const data = await response.json();
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error("[Gemini] ❌ Erro ao parsear resposta:", parseError);
+      console.error("[Gemini] Resposta recebida:", responseText.substring(0, 500));
+      return null;
+    }
+
+    console.log("[Gemini] ✅ Resposta recebida da API");
+    
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
     
     if (!text) {
-      console.error("[Gemini] Resposta sem texto:", data);
+      console.error("[Gemini] ❌ Resposta sem texto. Estrutura:", JSON.stringify(data, null, 2));
       return null;
     }
 
+    console.log("[Gemini] ✅ Texto extraído:", text.substring(0, 100) + "...");
     return {
       response: text,
-      model: "gemini-pro",
+      model: model,
     };
   } catch (error) {
     if ((error as Error)?.name === "AbortError") {
-      console.error("[Gemini] Timeout");
+      console.error("[Gemini] ❌ Timeout após 15 segundos");
     } else {
-      console.error("[Gemini] Erro:", error);
+      console.error("[Gemini] ❌ Erro:", error);
     }
     return null;
   }
