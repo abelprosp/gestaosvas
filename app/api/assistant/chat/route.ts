@@ -507,67 +507,116 @@ async function buildAssistantContext(question: string): Promise<AssistantQueryCo
 
 type GeminiModelPick = { version: "v1" | "v1beta"; model: string };
 
-// Função auxiliar para descobrir modelo disponível e validar o modelo preferido
-async function pickAvailableGeminiModel(apiKey: string, preferredModel?: string | null): Promise<GeminiModelPick | null> {
-  const versions = ["v1", "v1beta"];
-  
-  for (const version of versions) {
-    try {
-      // Tentar listar modelos disponíveis
-      const listUrl = `https://generativelanguage.googleapis.com/${version}/models?key=${apiKey}`;
-      console.log("[Gemini] Listando modelos da versão", version);
-      
-      const response = await fetch(listUrl, {
-        signal: AbortSignal.timeout(5000),
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        const models = data.models || [];
-        console.log("[Gemini] Modelos encontrados:", models.length);
+type GeminiModelsList = {
+  version: "v1" | "v1beta";
+  models: string[];
+};
 
-        const supportedModels: string[] = asArray(models)
-          .map((raw) => asRow(raw))
-          .filter((m): m is Row => Boolean(m))
-          .filter((m) => {
-            const name = getString(m, "name");
-            const methodsVal = m["supportedGenerationMethods"];
-            const methods = Array.isArray(methodsVal) ? methodsVal : [];
-            const supportsGenerate = methods.some((x) => typeof x === "string" && x === "generateContent");
-            const isGemini = name.includes("gemini");
-            return isGemini && supportsGenerate;
-          })
-          .map((m) => getString(m, "name").replace("models/", ""))
-          .filter(Boolean);
+let geminiModelsCache: { fetchedAt: number; lists: GeminiModelsList[] } | null = null;
 
-        // Logs resumidos (não spam)
-        console.log("[Gemini] Modelos com generateContent:", supportedModels.slice(0, 10));
-
-        // Se o usuário definiu um modelo, validar contra a lista
-        const preferred = preferredModel?.trim();
-        if (preferred) {
-          if (supportedModels.includes(preferred)) {
-            console.log("[Gemini] ✅ Modelo preferido é válido:", preferred, "na versão", version);
-            return { version: version as "v1" | "v1beta", model: preferred };
-          }
-          console.warn("[Gemini] ⚠️ Modelo preferido NÃO está disponível:", preferred);
-        }
-
-        // Caso contrário, usar o primeiro modelo disponível
-        const first = supportedModels[0];
-        if (first) {
-          console.log("[Gemini] ✅ Modelo selecionado automaticamente:", first, "na versão", version);
-          return { version: version as "v1" | "v1beta", model: first };
-        }
-      } else {
-        const errorText = await response.text();
-        console.log("[Gemini] Erro ao listar modelos na versão", version, ":", response.status, errorText.substring(0, 200));
-      }
-    } catch (error) {
-      console.log("[Gemini] Erro ao listar modelos na versão", version, ":", error);
+function parseRetryDelaySeconds(errorObj: unknown): number | null {
+  const row = asRow(errorObj);
+  if (!row) return null;
+  const err = asRow(row["error"]);
+  if (!err) return null;
+  const details = asArray(err["details"]);
+  for (const d of details) {
+    const dr = asRow(d);
+    if (!dr) continue;
+    if (getString(dr, "@type").includes("RetryInfo")) {
+      const retryDelay = getString(dr, "retryDelay"); // ex: "45s"
+      const m = retryDelay.match(/(\d+)\s*s/i);
+      if (m) return Number(m[1]);
     }
   }
-  
+  // fallback: tentar extrair do message
+  const msg = getString(err, "message");
+  const mm = msg.match(/retry in\s+([\d.]+)s/i);
+  if (mm) return Math.ceil(Number(mm[1]));
+  return null;
+}
+
+function isQuota429(errorObj: unknown): boolean {
+  const row = asRow(errorObj);
+  const err = row ? asRow(row["error"]) : null;
+  const code = err ? err["code"] : null;
+  const status = err ? err["status"] : null;
+  return code === 429 || status === "RESOURCE_EXHAUSTED";
+}
+
+async function listSupportedGeminiModels(apiKey: string): Promise<GeminiModelsList[]> {
+  const now = Date.now();
+  if (geminiModelsCache && now - geminiModelsCache.fetchedAt < 5 * 60 * 1000) {
+    return geminiModelsCache.lists;
+  }
+
+  const versions: Array<"v1" | "v1beta"> = ["v1", "v1beta"];
+  const lists: GeminiModelsList[] = [];
+
+  for (const version of versions) {
+    try {
+      const listUrl = `https://generativelanguage.googleapis.com/${version}/models?key=${apiKey}`;
+      const response = await fetch(listUrl, { signal: AbortSignal.timeout(5000) });
+      if (!response.ok) continue;
+      const data = await response.json();
+      const models = asArray(asRow(data)?.["models"]);
+      const supportedModels: string[] = models
+        .map((raw) => asRow(raw))
+        .filter((m): m is Row => Boolean(m))
+        .filter((m) => {
+          const name = getString(m, "name");
+          const methodsVal = m["supportedGenerationMethods"];
+          const methods = Array.isArray(methodsVal) ? methodsVal : [];
+          const supportsGenerate = methods.some((x) => typeof x === "string" && x === "generateContent");
+          return name.includes("gemini") && supportsGenerate;
+        })
+        .map((m) => getString(m, "name").replace("models/", ""))
+        .filter(Boolean);
+      lists.push({ version, models: supportedModels });
+    } catch {
+      // ignore
+    }
+  }
+
+  geminiModelsCache = { fetchedAt: now, lists };
+  return lists;
+}
+
+function rankGeminiModels(models: string[]): string[] {
+  // Preferir modelos "lite" para reduzir chance de quota do modelo principal estourar.
+  // Depois flash, depois pro.
+  const score = (m: string) => {
+    const s = m.toLowerCase();
+    if (s.includes("lite")) return 0;
+    if (s.includes("flash")) return 1;
+    if (s.includes("pro")) return 2;
+    return 3;
+  };
+  return [...models].sort((a, b) => score(a) - score(b));
+}
+
+// Função auxiliar para descobrir modelo disponível e validar o modelo preferido
+async function pickAvailableGeminiModel(apiKey: string, preferredModel?: string | null): Promise<GeminiModelPick | null> {
+  const lists = await listSupportedGeminiModels(apiKey);
+  for (const list of lists) {
+    const supportedModels = rankGeminiModels(list.models);
+    console.log("[Gemini] Modelos com generateContent:", supportedModels.slice(0, 10));
+
+    const preferred = preferredModel?.trim();
+    if (preferred) {
+      if (supportedModels.includes(preferred)) {
+        console.log("[Gemini] ✅ Modelo preferido é válido:", preferred, "na versão", list.version);
+        return { version: list.version, model: preferred };
+      }
+      console.warn("[Gemini] ⚠️ Modelo preferido NÃO está disponível:", preferred);
+    }
+
+    const first = supportedModels[0];
+    if (first) {
+      console.log("[Gemini] ✅ Modelo selecionado automaticamente:", first, "na versão", list.version);
+      return { version: list.version, model: first };
+    }
+  }
   console.log("[Gemini] ❌ Nenhum modelo encontrado na listagem");
   return null;
 }
@@ -628,9 +677,10 @@ async function callGoogleGemini(
       });
     }
 
-    // Descobrir modelo disponível primeiro (e validar GOOGLE_MODEL se estiver setado)
+    // Descobrir modelo disponível (e validar GOOGLE_MODEL se estiver setado).
+    // Por padrão, preferimos um modelo "lite" (menos chance de estourar cota do free tier).
     console.log("[Gemini] Descobrindo modelos disponíveis...");
-    const preferredModel = process.env.GOOGLE_MODEL;
+    const preferredModel = process.env.GOOGLE_MODEL ?? "gemini-2.5-flash-lite";
     const pick = await pickAvailableGeminiModel(apiKey, preferredModel);
     
     if (!pick) {
@@ -638,16 +688,19 @@ async function callGoogleGemini(
       return null;
     }
     
-    console.log("[Gemini] Usando modelo:", pick.model, "na versão", pick.version);
-
-    // Tentar diferentes endpoints
+    // Se o modelo estourar quota, tentamos automaticamente alternativas (principalmente "lite").
+    const allLists = await listSupportedGeminiModels(apiKey);
+    const sameVersion = allLists.find((l) => l.version === pick.version)?.models ?? [];
+    const candidates = rankGeminiModels([pick.model, ...sameVersion]).filter((v, i, a) => a.indexOf(v) === i);
     const endpoints = [
-      { version: pick.version, model: pick.model },
-      // fallback de versão (caso alguma key tenha diferenças)
-      { version: pick.version === "v1" ? "v1beta" : "v1", model: pick.model },
+      // sempre tentar na versão principal primeiro
+      ...candidates.map((m) => ({ version: pick.version, model: m })),
+      // fallback para outra versão
+      ...candidates.map((m) => ({ version: pick.version === "v1" ? "v1beta" : "v1", model: m })),
     ];
 
     let lastError: unknown = null;
+    let lastRetrySeconds: number | null = null;
     
     for (const endpoint of endpoints) {
       const url = `https://generativelanguage.googleapis.com/${endpoint.version}/models/${endpoint.model}:generateContent?key=${apiKey}`;
@@ -703,7 +756,14 @@ async function callGoogleGemini(
             error = { error: responseText };
           }
           lastError = error;
-          console.log("[Gemini] ❌ Erro com", endpoint.model, ":", error.error?.message || error.error);
+          const retrySeconds = parseRetryDelaySeconds(error);
+          if (retrySeconds) lastRetrySeconds = retrySeconds;
+          console.log("[Gemini] ❌ Erro com", endpoint.model, ":", (asRow(error)?.["error"] as any)?.message || error);
+
+          // Se foi quota 429, tentar próximo modelo automaticamente
+          if (isQuota429(error)) {
+            continue;
+          }
         }
       } catch (fetchError) {
         console.log("[Gemini] ❌ Erro de fetch com", endpoint.model);
@@ -715,6 +775,12 @@ async function callGoogleGemini(
     
     if (lastError) {
       console.error("[Gemini] ❌ Todos os endpoints falharam. Último erro:", JSON.stringify(lastError, null, 2));
+    }
+    // Se foi quota, devolve mensagem amigável sem quebrar o frontend
+    if (lastError && isQuota429(lastError)) {
+      const wait = lastRetrySeconds ?? 60;
+      const msg = `Limite de requisições da IA gratuito atingido. Tente novamente em ~${wait}s.`;
+      return { response: msg, model: "gemini-rate-limit" };
     }
     return null;
 
@@ -863,14 +929,12 @@ export const POST = createApiHandler(async (req: NextRequest) => {
     const result = await getAIResponse(message, history || []);
 
     if (!result) {
-      // Nenhuma API disponível - retornar fallback
-      return NextResponse.json(
-        {
-          error: "API de IA não configurada ou indisponível",
-          fallback: true,
-        },
-        { status: 503 }
-      );
+      // Não retornar 503 para não quebrar o chat no frontend; resposta controlada.
+      return NextResponse.json({
+        response: "A IA está indisponível no momento. Tente novamente em alguns instantes.",
+        model: "unavailable",
+        fallback: true,
+      });
     }
 
     return NextResponse.json({
