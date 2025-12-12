@@ -115,6 +115,9 @@ export function VirtualAssistantChat() {
     return history.length > 0 ? history : [initialMessage];
   });
   const [isTyping, setIsTyping] = useState(false);
+  const [rateLimitUntil, setRateLimitUntil] = useState<number | null>(null);
+  const [rateLimitSecondsLeft, setRateLimitSecondsLeft] = useState(0);
+  const queuedQuestionRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const toast = useToast();
@@ -133,6 +136,46 @@ export function VirtualAssistantChat() {
       scrollToBottom();
     }
   }, [messages, open]);
+
+  // Contagem regressiva do rate limit + reenvio automático (respeitando o limite)
+  useEffect(() => {
+    if (!rateLimitUntil) {
+      setRateLimitSecondsLeft(0);
+      return;
+    }
+
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((rateLimitUntil - Date.now()) / 1000));
+      setRateLimitSecondsLeft(remaining);
+      if (remaining <= 0) {
+        setRateLimitUntil(null);
+      }
+    };
+
+    tick();
+    const interval = window.setInterval(tick, 500);
+    return () => window.clearInterval(interval);
+  }, [rateLimitUntil]);
+
+  useEffect(() => {
+    const queued = queuedQuestionRef.current;
+    if (!queued) return;
+    if (rateLimitSecondsLeft > 0) return;
+    if (!open) return;
+    if (isTyping) return;
+
+    queuedQuestionRef.current = null;
+    setIsTyping(true);
+
+    (async () => {
+      try {
+        const reply = await processMessage(queued);
+        setMessages((prev) => [...prev, reply]);
+      } finally {
+        setIsTyping(false);
+      }
+    })();
+  }, [rateLimitSecondsLeft, open, isTyping]);
 
   // Salvar histórico sempre que mensagens mudarem
   useEffect(() => {
@@ -171,8 +214,24 @@ export function VirtualAssistantChat() {
           type: "text",
         };
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao chamar IA:", error);
+
+      // Rate limit (429) -> avisar tempo de espera e agendar reenvio
+      if (error?.response?.status === 429) {
+        const retryAfterRaw =
+          error?.response?.data?.retryAfter ??
+          error?.response?.headers?.["retry-after"] ??
+          error?.response?.headers?.["Retry-After"];
+        const retryAfter = Math.max(1, Math.min(300, Number(retryAfterRaw) || 30));
+        setRateLimitUntil(Date.now() + retryAfter * 1000);
+        queuedQuestionRef.current = question;
+        return {
+          sender: "assistant",
+          content: `Você enviou muitas mensagens em pouco tempo. Aguarde ${retryAfter}s que eu tento novamente automaticamente.`,
+          type: "text",
+        };
+      }
     }
 
     // Fallback apenas se a IA estiver indisponível
@@ -1288,6 +1347,20 @@ Digite "ajuda" para ver todos os comandos disponíveis ou faça uma pergunta esp
     if (!input.trim() || isTyping) return;
 
     const question = input.trim();
+    if (rateLimitSecondsLeft > 0) {
+      queuedQuestionRef.current = question;
+      setInput("");
+      setMessages((prev) => [
+        ...prev,
+        { sender: "user", content: question },
+        {
+          sender: "assistant",
+          content: `Estou em limite de envio no momento. Aguarde ${rateLimitSecondsLeft}s — vou enviar automaticamente quando liberar.`,
+          type: "text",
+        },
+      ]);
+      return;
+    }
     setMessages((prev) => [...prev, { sender: "user", content: question }]);
     setInput("");
     setIsTyping(true);
@@ -1686,6 +1759,7 @@ Digite "ajuda" para ver todos os comandos disponíveis ou faça uma pergunta esp
               placeholder="Digite sua dúvida ou comando..."
               value={input}
               onChange={(event) => setInput(event.target.value)}
+              isDisabled={isTyping || rateLimitSecondsLeft > 0}
               onKeyPress={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -1698,10 +1772,15 @@ Digite "ajuda" para ver todos os comandos disponíveis ou faça uma pergunta esp
               icon={<FiSend />}
               colorScheme="brand"
               onClick={handleSend}
-              isDisabled={!input.trim() || isTyping}
+              isDisabled={!input.trim() || isTyping || rateLimitSecondsLeft > 0}
               isLoading={isTyping}
             />
           </Flex>
+          {rateLimitSecondsLeft > 0 && (
+            <Text mt={2} fontSize="xs" color="gray.500">
+              Limite de envio: aguarde {rateLimitSecondsLeft}s para enviar novamente.
+            </Text>
+          )}
         </Box>
       )}
 
