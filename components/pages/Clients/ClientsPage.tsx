@@ -923,6 +923,13 @@ const getSortIcon = (key: string): ReactElement | undefined => {
                                             {assignment.profileLabel ??
                                               (assignment.planType === "PREMIUM" ? "TV Premium" : "TV Essencial")}
                                           </Badge>
+                                          {assignment.username && 
+                                           assignment.username !== `#${assignment.slotNumber}` && 
+                                           !assignment.username.startsWith("#") && (
+                                            <Badge colorScheme="blue" ml={2}>
+                                              {assignment.username}
+                                            </Badge>
+                                          )}
                                           <Stack spacing={0}>
                                             <Text fontSize="sm" color={mutedText}>
                                               {assignment.email} • #{assignment.slotNumber}
