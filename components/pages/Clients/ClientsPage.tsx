@@ -10,6 +10,10 @@ import {
   Input,
   InputGroup,
   InputLeftElement,
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuList,
   SimpleGrid,
   Skeleton,
   Table,
@@ -39,6 +43,7 @@ import {
   FiDollarSign,
   FiEdit,
   FiFilePlus,
+  FiMoreVertical,
   FiPlus,
   FiSearch,
   FiTrash,
@@ -574,6 +579,7 @@ const getSortIcon = (key: string): ReactElement | undefined => {
         </InputGroup>
         <Select
           maxW={{ base: "full", md: "220px" }}
+          w={{ base: "full", md: "auto" }}
           value={documentTypeFilter}
           onChange={(event) => setDocumentTypeFilter(event.target.value as "ALL" | "CPF" | "CNPJ")}
         >
@@ -586,6 +592,7 @@ const getSortIcon = (key: string): ReactElement | undefined => {
           onChange={(event) => setTelephonyFilter(event.target.checked)}
           colorScheme="brand"
           size="md"
+          w={{ base: "full", md: "auto" }}
         >
           <HStack spacing={2}>
             <Box as={FiPhone} />
@@ -676,7 +683,7 @@ const getSortIcon = (key: string): ReactElement | undefined => {
                     Cliente
                   </Button>
                 </Th>
-                <Th>
+                <Th display={{ base: "none", md: "table-cell" }}>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -724,54 +731,111 @@ const getSortIcon = (key: string): ReactElement | undefined => {
                   <Fragment key={client.id}>
                     <Tr>
                       <Td>
-                        <HStack spacing={2}>
-                          <Text fontWeight="semibold">{client.name}</Text>
+                        <Stack spacing={1}>
+                          <HStack spacing={2} flexWrap="wrap">
+                            <Text fontWeight="semibold">{client.name}</Text>
+                            {hasTelephony && (
+                              <Box as={FiPhone} color="brand.500" title="Cliente possui telefonia" />
+                            )}
+                          </HStack>
+                          <Text display={{ base: "block", md: "none" }} fontSize="sm" color={mutedText}>
+                            {client.document}
+                          </Text>
                           {hasTelephony && (
-                            <Box as={FiPhone} color="brand.500" title="Cliente possui telefonia" />
+                            <Box display={{ base: "none", md: "block" }} as={FiPhone} color="brand.500" title="Cliente possui telefonia" />
                           )}
-                        </HStack>
+                        </Stack>
                       </Td>
-                      <Td>{client.document}</Td>
+                      <Td display={{ base: "none", md: "table-cell" }}>{client.document}</Td>
                       <Td>
-                        <HStack spacing={2} flexWrap="wrap" align="start">
-                          {(client.services ?? []).length === 0 && assignments.length === 0 ? (
-                            <Badge colorScheme="gray">Sem serviços</Badge>
-                          ) : (
-                            <>
-                            {client.services?.map((service) => (
-                              <Badge key={service.id} colorScheme="blue">
-                                {service.name}
-                                {service.customPrice !== null && service.customPrice !== undefined
-                                  ? ` · ${currencyFormatter.format(service.customPrice ?? 0)}`
-                                  : service.allowCustomPrice
-                                    ? " · negociável"
-                                    : ""}
-                              </Badge>
-                            ))}
-                          {assignments.length > 0 && (() => {
-                            const essencialCount = assignments.filter((a) => (a.planType ?? "ESSENCIAL") === "ESSENCIAL").length;
-                            const premiumCount = assignments.filter((a) => a.planType === "PREMIUM").length;
-                            return (
+                        {/* Mobile: resumo (sem estourar a linha). Desktop: lista completa */}
+                        <Stack spacing={1}>
+                          <HStack display={{ base: "flex", md: "none" }} spacing={2} flexWrap="wrap" align="start">
+                            {(client.services ?? []).length === 0 && assignments.length === 0 ? (
+                              <Badge colorScheme="gray">Sem serviços</Badge>
+                            ) : (
                               <>
-                                {essencialCount > 0 && (
-                                  <Badge colorScheme="teal">
-                                    Essencial: {essencialCount}
-                                  </Badge>
+                                {(client.services ?? []).length > 0 && (
+                                  <Badge colorScheme="blue">Serviços: {(client.services ?? []).length}</Badge>
                                 )}
-                                {premiumCount > 0 && (
-                                  <Badge colorScheme="pink">
-                                    Premium: {premiumCount}
-                                  </Badge>
-                                )}
+                                {assignments.length > 0 && (() => {
+                                  const essencialCount = assignments.filter((a) => (a.planType ?? "ESSENCIAL") === "ESSENCIAL").length;
+                                  const premiumCount = assignments.filter((a) => a.planType === "PREMIUM").length;
+                                  return (
+                                    <>
+                                      {essencialCount > 0 && <Badge colorScheme="teal">Essencial: {essencialCount}</Badge>}
+                                      {premiumCount > 0 && <Badge colorScheme="pink">Premium: {premiumCount}</Badge>}
+                                    </>
+                                  );
+                                })()}
                               </>
-                            );
-                          })()}
-                            </>
-                          )}
-                        </HStack>
+                            )}
+                          </HStack>
+
+                          <HStack display={{ base: "none", md: "flex" }} spacing={2} flexWrap="wrap" align="start">
+                            {(client.services ?? []).length === 0 && assignments.length === 0 ? (
+                              <Badge colorScheme="gray">Sem serviços</Badge>
+                            ) : (
+                              <>
+                                {client.services?.map((service) => (
+                                  <Badge key={service.id} colorScheme="blue">
+                                    {service.name}
+                                    {service.customPrice !== null && service.customPrice !== undefined
+                                      ? ` · ${currencyFormatter.format(service.customPrice ?? 0)}`
+                                      : service.allowCustomPrice
+                                        ? " · negociável"
+                                        : ""}
+                                  </Badge>
+                                ))}
+                                {assignments.length > 0 && (() => {
+                                  const essencialCount = assignments.filter((a) => (a.planType ?? "ESSENCIAL") === "ESSENCIAL").length;
+                                  const premiumCount = assignments.filter((a) => a.planType === "PREMIUM").length;
+                                  return (
+                                    <>
+                                      {essencialCount > 0 && <Badge colorScheme="teal">Essencial: {essencialCount}</Badge>}
+                                      {premiumCount > 0 && <Badge colorScheme="pink">Premium: {premiumCount}</Badge>}
+                                    </>
+                                  );
+                                })()}
+                              </>
+                            )}
+                          </HStack>
+                        </Stack>
                       </Td>
                       <Td textAlign="right">
-                        <HStack justify="flex-end" spacing={2}>
+                        {/* Mobile: menu compacto. Desktop: botões */}
+                        <Box display={{ base: "inline-block", md: "none" }}>
+                          <Menu placement="bottom-end">
+                            <MenuButton
+                              as={IconButton}
+                              aria-label="Ações do cliente"
+                              icon={<FiMoreVertical />}
+                              variant="ghost"
+                            />
+                            <MenuList>
+                              <MenuItem icon={<FiEdit />} onClick={() => openEditModal(client)}>
+                                Editar
+                              </MenuItem>
+                              <MenuItem icon={<FiDollarSign />} onClick={() => openValuesModal(client)}>
+                                Valores
+                              </MenuItem>
+                              <MenuItem icon={<FiFilePlus />} onClick={() => openServicesModal(client)}>
+                                Serviços
+                              </MenuItem>
+                              <MenuItem icon={<FiTrash />} onClick={() => handleDelete(client)}>
+                                Excluir
+                              </MenuItem>
+                              <MenuItem
+                                icon={isExpanded ? <FiChevronUp /> : <FiChevronDown />}
+                                onClick={() => toggleClientDetails(client.id)}
+                              >
+                                {isExpanded ? "Ocultar detalhes" : "Ver detalhes"}
+                              </MenuItem>
+                            </MenuList>
+                          </Menu>
+                        </Box>
+
+                        <HStack display={{ base: "none", md: "flex" }} justify="flex-end" spacing={2} flexWrap="wrap">
                           <Button
                             size="sm"
                             leftIcon={<FiEdit />}
