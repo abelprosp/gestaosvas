@@ -807,7 +807,11 @@ async function pickAvailableGeminiModel(apiKey: string, preferredModel?: string 
 async function callGoogleGemini(
   message: string,
   history: ChatMessage[]
-): Promise<{ response: string; model: string } | null> {
+): Promise<
+  | { ok: true; response: string; model: string }
+  | { ok: false; status: 429 | 502 | 503; code: "GEMINI_RATE_LIMIT" | "GEMINI_UNAVAILABLE"; retryAfterSec: number }
+  | null
+> {
   const nowPtBr = formatNowPtBr();
   const SYSTEM_PROMPT = buildSystemPrompt(nowPtBr);
   let assistantContext: AssistantQueryContext | null = null;
@@ -926,6 +930,7 @@ async function callGoogleGemini(
             console.log("[Gemini] ✅ Texto extraído:", text.substring(0, 100) + "...");
             const finalText = isGreetingQuestion(message) ? text : stripLeadingGreeting(text);
             return {
+              ok: true,
               response: finalText,
               model: endpoint.model,
             };
@@ -961,10 +966,9 @@ async function callGoogleGemini(
     // Se foi quota, devolve mensagem amigável sem quebrar o frontend
     if (lastError && isQuota429(lastError)) {
       const wait = lastRetrySeconds ?? 60;
-      const msg = `Limite de requisições da IA gratuito atingido. Tente novamente em ~${wait}s.`;
-      return { response: msg, model: "gemini-rate-limit" };
+      return { ok: false, status: 429, code: "GEMINI_RATE_LIMIT", retryAfterSec: wait };
     }
-    return null;
+    return { ok: false, status: 503, code: "GEMINI_UNAVAILABLE", retryAfterSec: 60 };
 
   } catch (error) {
     if ((error as Error)?.name === "AbortError") {
@@ -972,7 +976,7 @@ async function callGoogleGemini(
     } else {
       console.error("[Gemini] ❌ Erro:", error);
     }
-    return null;
+    return { ok: false, status: 503, code: "GEMINI_UNAVAILABLE", retryAfterSec: 60 };
   }
 }
 
@@ -1060,11 +1064,18 @@ async function callOpenAI(
 async function getAIResponse(
   message: string,
   history: ChatMessage[]
-): Promise<{ response: string; model: string } | null> {
+): Promise<
+  | { ok: true; response: string; model: string }
+  | { ok: false; status: 429 | 502 | 503; code: "GEMINI_RATE_LIMIT" | "GEMINI_UNAVAILABLE"; retryAfterSec: number }
+  | null
+> {
   // Ordem de tentativa (da mais gratuita para a menos)
   // 1. Google Gemini (GRATUITO - 6M tokens/dia)
   const geminiResult = await callGoogleGemini(message, history);
-  if (geminiResult) {
+  if (geminiResult && "ok" in geminiResult) {
+    if (!geminiResult.ok) {
+      return geminiResult;
+    }
     console.log("[AI Chat] ✅ Resposta do Gemini");
     return geminiResult;
   }
@@ -1073,7 +1084,7 @@ async function getAIResponse(
   const openaiResult = await callOpenAI(message, history);
   if (openaiResult) {
     console.log("[AI Chat] ✅ Resposta do OpenAI");
-    return openaiResult;
+    return { ok: true, response: openaiResult.response, model: openaiResult.model };
   }
 
   // Se nenhuma API funcionou
@@ -1119,13 +1130,22 @@ export const POST = createApiHandler(async (req: NextRequest) => {
     // Tentar obter resposta de alguma API de IA
     const result = await getAIResponse(message, history || []);
 
+    if (result && "ok" in result && !result.ok) {
+      // O frontend fará fallback automático para modo local e seguirá respondendo.
+      return NextResponse.json(
+        { code: result.code, retryAfterSec: result.retryAfterSec },
+        {
+          status: result.status,
+          headers: { "Retry-After": String(result.retryAfterSec) },
+        }
+      );
+    }
+
     if (!result) {
-      // Não retornar 503 para não quebrar o chat no frontend; resposta controlada.
-      return NextResponse.json({
-        response: "A IA está indisponível no momento. Tente novamente em alguns instantes.",
-        model: "unavailable",
-        fallback: true,
-      });
+      return NextResponse.json(
+        { code: "GEMINI_UNAVAILABLE", retryAfterSec: 60 },
+        { status: 503, headers: { "Retry-After": "60" } }
+      );
     }
 
     return NextResponse.json({

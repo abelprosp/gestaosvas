@@ -22,6 +22,7 @@ import { useState, useEffect, useRef } from "react";
 import { FiMessageCircle, FiSend, FiX, FiFileText, FiArrowRight, FiTrash2 } from "react-icons/fi";
 import NextLink from "next/link";
 import { useRouter } from "next/navigation";
+import { buildSystemMapText, matchHowTo } from "@/lib/assistant/systemGuide";
 import {
   getAssistantStats,
   searchClients,
@@ -107,6 +108,41 @@ const initialMessage: Message = {
   data: {},
 };
 
+function formatNowPtBrLocal() {
+  const dt = new Date();
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    dateStyle: "full",
+    timeStyle: "medium",
+  }).format(dt);
+}
+
+function handleLocalDateTimeQuestion(message: string): string | null {
+  const q = message.toLowerCase();
+  if (
+    /(que horas|qual.*hora|horas\s*s[aã]o|hora atual)/i.test(q) ||
+    /(qual.*data|que dia|data de hoje|hoje\s*(é|eh)\s*que\s*dia|dia de hoje)/i.test(q) ||
+    /(que dia.*hoje|hoje.*que dia)/i.test(q)
+  ) {
+    return formatNowPtBrLocal();
+  }
+  return null;
+}
+
+function buildLocalAnswer(question: string): string {
+  const dt = handleLocalDateTimeQuestion(question);
+  if (dt) return dt;
+
+  const howto = matchHowTo(question);
+  if (howto) return `${howto.title}\n\n${howto.steps.join("\n")}`;
+
+  if (/(ajuda|help|comandos|o que voc[eê] pode|o que posso)/i.test(question)) {
+    return `Posso te ajudar com o uso do sistema (passo a passo) e onde encontrar cada função.\n\nMapa do sistema:\n${buildSystemMapText()}\n\nExemplos:\n- "Como cadastrar cliente"\n- "Como adicionar serviços"\n- "Como criar contrato"\n- "Como renovar TV"\n- "Como exportar relatório"`;
+  }
+
+  return `Estou em modo local (sem Gemini) no momento.\n\nMe diga o que você quer fazer e eu te passo o passo a passo (tela/botão/campos). Ex.: "cadastrar cliente", "editar cliente", "adicionar serviços", "renovar TV", "exportar relatório".`;
+}
+
 export function VirtualAssistantChat() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
@@ -117,7 +153,6 @@ export function VirtualAssistantChat() {
   const [isTyping, setIsTyping] = useState(false);
   const [rateLimitUntil, setRateLimitUntil] = useState<number | null>(null);
   const [rateLimitSecondsLeft, setRateLimitSecondsLeft] = useState(0);
-  const queuedQuestionRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const toast = useToast();
@@ -157,26 +192,6 @@ export function VirtualAssistantChat() {
     return () => window.clearInterval(interval);
   }, [rateLimitUntil]);
 
-  useEffect(() => {
-    const queued = queuedQuestionRef.current;
-    if (!queued) return;
-    if (rateLimitSecondsLeft > 0) return;
-    if (!open) return;
-    if (isTyping) return;
-
-    queuedQuestionRef.current = null;
-    setIsTyping(true);
-
-    (async () => {
-      try {
-        const reply = await processMessage(queued);
-        setMessages((prev) => [...prev, reply]);
-      } finally {
-        setIsTyping(false);
-      }
-    })();
-  }, [rateLimitSecondsLeft, open, isTyping]);
-
   // Salvar histórico sempre que mensagens mudarem
   useEffect(() => {
     if (messages.length > 1 || (messages.length === 1 && messages[0] !== initialMessage)) {
@@ -197,6 +212,15 @@ export function VirtualAssistantChat() {
   }, [hasLoadedHistory]);
 
   const processMessage = async (question: string): Promise<Message> => {
+    // Se o Gemini estiver em cooldown (rate limit/indisponível), responder localmente.
+    if (rateLimitUntil && Date.now() < rateLimitUntil) {
+      return {
+        sender: "assistant",
+        content: buildLocalAnswer(question),
+        type: "text",
+      };
+    }
+
     // Sempre responder via IA (sem respostas pré-prontas)
     try {
       const history: ChatMessage[] = messages
@@ -207,39 +231,38 @@ export function VirtualAssistantChat() {
         }));
 
       const aiResponse = await chatWithAI(question, history);
-      if (aiResponse !== null) {
-        return {
-          sender: "assistant",
-          content: aiResponse ?? "",
-          type: "text",
-        };
-      }
+      return {
+        sender: "assistant",
+        content: aiResponse.response ?? "",
+        type: "text",
+      };
     } catch (error: any) {
       console.error("Erro ao chamar IA:", error);
 
-      // Rate limit (429) -> avisar tempo de espera e agendar reenvio
-      if (error?.response?.status === 429) {
-        const retryAfterRaw =
-          error?.response?.data?.retryAfter ??
-          error?.response?.headers?.["retry-after"] ??
-          error?.response?.headers?.["Retry-After"];
-        const retryAfter = Math.max(1, Math.min(300, Number(retryAfterRaw) || 30));
+      const status = error?.response?.status;
+      const data = error?.response?.data ?? {};
+      const retryAfterRaw =
+        data?.retryAfterSec ?? error?.response?.headers?.["retry-after"] ?? error?.response?.headers?.["Retry-After"];
+      const retryAfter = Math.max(1, Math.min(300, Number(retryAfterRaw) || 60));
+
+      // Se Gemini bater limite ou ficar indisponível, cair para modo local por ~60s
+      if (status === 429 || status === 502 || status === 503) {
         setRateLimitUntil(Date.now() + retryAfter * 1000);
-        queuedQuestionRef.current = question;
+        const local = buildLocalAnswer(question);
         return {
           sender: "assistant",
-          content: `Você enviou muitas mensagens em pouco tempo. Aguarde ${retryAfter}s que eu tento novamente automaticamente.`,
+          content: `${local}\n\n(Obs.: Gemini indisponível/limitado. Vou voltar a tentar automaticamente em ~${retryAfter}s.)`,
           type: "text",
         };
       }
-    }
 
-    // Fallback apenas se a IA estiver indisponível
-    return {
-      sender: "assistant",
-      content: "A IA está indisponível no momento. Tente novamente em alguns instantes.",
-      type: "text",
-    };
+      // Fallback final: responder localmente (sem travar o chat)
+      return {
+        sender: "assistant",
+        content: buildLocalAnswer(question),
+        type: "text",
+      };
+    }
 
     const lowerQuestion = question.toLowerCase().trim();
 
@@ -1347,20 +1370,6 @@ Digite "ajuda" para ver todos os comandos disponíveis ou faça uma pergunta esp
     if (!input.trim() || isTyping) return;
 
     const question = input.trim();
-    if (rateLimitSecondsLeft > 0) {
-      queuedQuestionRef.current = question;
-      setInput("");
-      setMessages((prev) => [
-        ...prev,
-        { sender: "user", content: question },
-        {
-          sender: "assistant",
-          content: `Estou em limite de envio no momento. Aguarde ${rateLimitSecondsLeft}s — vou enviar automaticamente quando liberar.`,
-          type: "text",
-        },
-      ]);
-      return;
-    }
     setMessages((prev) => [...prev, { sender: "user", content: question }]);
     setInput("");
     setIsTyping(true);
@@ -1759,7 +1768,7 @@ Digite "ajuda" para ver todos os comandos disponíveis ou faça uma pergunta esp
               placeholder="Digite sua dúvida ou comando..."
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              isDisabled={isTyping || rateLimitSecondsLeft > 0}
+              isDisabled={isTyping}
               onKeyPress={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -1772,13 +1781,13 @@ Digite "ajuda" para ver todos os comandos disponíveis ou faça uma pergunta esp
               icon={<FiSend />}
               colorScheme="brand"
               onClick={handleSend}
-              isDisabled={!input.trim() || isTyping || rateLimitSecondsLeft > 0}
+              isDisabled={!input.trim() || isTyping}
               isLoading={isTyping}
             />
           </Flex>
           {rateLimitSecondsLeft > 0 && (
             <Text mt={2} fontSize="xs" color="gray.500">
-              Limite de envio: aguarde {rateLimitSecondsLeft}s para enviar novamente.
+              Modo local ativo (Gemini em cooldown). Vou voltar a tentar automaticamente em ~{rateLimitSecondsLeft}s.
             </Text>
           )}
         </Box>

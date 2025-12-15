@@ -100,28 +100,16 @@ export interface ChatMessage {
   content: string;
 }
 
+export type AssistantChatErrorPayload = {
+  code?: string;
+  retryAfterSec?: number;
+};
+
 export async function chatWithAI(
   message: string,
   history: ChatMessage[] = []
-): Promise<string | null> {
-  try {
-    const response = await api.post<{ response: string; model?: string; fallback?: boolean }>(
-      "/assistant/chat",
-      { message, history }
-    );
-    
-    // Se a API retornou fallback, significa que não está configurada
-    if (response.data.fallback) {
-      return null;
-    }
-    
-    return response.data.response;
-  } catch (error: any) {
-    // Se a API não estiver configurada ou houver erro, retornar null para usar fallback
-    if (error?.response?.status === 503 || error?.response?.status === 500) {
-      return null; // Retornar null para indicar que deve usar fallback
-    }
-    throw error;
-  }
+): Promise<{ response: string; model?: string }> {
+  const response = await api.post<{ response: string; model?: string }>("/assistant/chat", { message, history });
+  return response.data;
 }
 
