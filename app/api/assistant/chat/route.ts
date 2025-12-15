@@ -9,6 +9,7 @@ export interface ChatMessage {
 }
 
 type Row = Record<string, unknown>;
+type AssistantErrorCode = "GEMINI_RATE_LIMIT" | "GEMINI_UNAVAILABLE" | "GEMINI_COOLDOWN";
 
 function asRow(value: unknown): Row | null {
   if (!value || typeof value !== "object") return null;
@@ -139,6 +140,22 @@ function handleDateTimeQuestion(message: string): string | null {
     return formatNowPtBr();
   }
   return null;
+}
+
+function buildLocalFallbackAnswer(message: string) {
+  const dt = handleDateTimeQuestion(message);
+  if (dt) return dt;
+
+  const howto = matchHowTo(message);
+  if (howto) {
+    return `${howto.title}\n\n${howto.steps.join("\n")}`;
+  }
+
+  if (/(ajuda|help|comandos|o que voc[eê] pode|o que posso)/i.test(message)) {
+    return `Posso te ajudar com o uso do sistema (passo a passo) e onde encontrar cada função.\n\nMapa do sistema:\n${buildSystemMapText()}\n\nExemplos:\n- "Como cadastrar cliente"\n- "Como adicionar serviços"\n- "Como criar contrato"\n- "Como renovar TV"\n- "Como exportar relatório"`;
+  }
+
+  return `Estou em modo local (sem Gemini) no momento.\n\nMe diga o que você quer fazer e eu te passo o passo a passo (tela/botão/campos). Ex.: "cadastrar cliente", "editar cliente", "adicionar serviços", "renovar TV", "exportar relatório".`;
 }
 
 function normalizeDigits(value: string) {
@@ -696,6 +713,51 @@ type GeminiModelsList = {
 
 let geminiModelsCache: { fetchedAt: number; lists: GeminiModelsList[] } | null = null;
 
+// Cache simples em memória (por instância) para reduzir custo/latência e evitar 429.
+// Em ambientes serverless, isso é "best effort" (pode resetar em cold start).
+type CacheEntry<T> = { value: T; expiresAt: number };
+const chatCache = new Map<string, CacheEntry<{ response: string; model: string }>>();
+
+function getCache<T>(key: string, store: Map<string, CacheEntry<T>>): T | null {
+  const e = store.get(key);
+  if (!e) return null;
+  if (Date.now() > e.expiresAt) {
+    store.delete(key);
+    return null;
+  }
+  return e.value;
+}
+
+function setCache<T>(key: string, value: T, ttlMs: number, store: Map<string, CacheEntry<T>>) {
+  store.set(key, { value, expiresAt: Date.now() + ttlMs });
+}
+
+// Circuit breaker para Gemini (por instância)
+const geminiBreaker = {
+  openUntil: 0,
+  failures: 0,
+  lastCode: null as AssistantErrorCode | null,
+};
+
+function isBreakerOpen() {
+  return Date.now() < geminiBreaker.openUntil;
+}
+
+function openBreaker(code: AssistantErrorCode, retryAfterSec: number) {
+  geminiBreaker.failures = Math.min(geminiBreaker.failures + 1, 10);
+  geminiBreaker.lastCode = code;
+  const base = Math.max(1, retryAfterSec);
+  const backoff = Math.min(300, Math.ceil(base * Math.pow(2, Math.max(0, geminiBreaker.failures - 1))));
+  geminiBreaker.openUntil = Date.now() + backoff * 1000;
+  return backoff;
+}
+
+function closeBreaker() {
+  geminiBreaker.failures = 0;
+  geminiBreaker.lastCode = null;
+  geminiBreaker.openUntil = 0;
+}
+
 function parseRetryDelaySeconds(errorObj: unknown): number | null {
   const row = asRow(errorObj);
   if (!row) return null;
@@ -809,9 +871,15 @@ async function callGoogleGemini(
   history: ChatMessage[]
 ): Promise<
   | { ok: true; response: string; model: string }
-  | { ok: false; status: 429 | 502 | 503; code: "GEMINI_RATE_LIMIT" | "GEMINI_UNAVAILABLE"; retryAfterSec: number }
+  | { ok: false; status: 429 | 502 | 503; code: AssistantErrorCode; retryAfterSec: number }
   | null
 > {
+  // Respeitar circuit breaker (evita martelar API e estourar cota)
+  if (isBreakerOpen()) {
+    const remaining = Math.max(1, Math.ceil((geminiBreaker.openUntil - Date.now()) / 1000));
+    return { ok: false, status: 503, code: "GEMINI_COOLDOWN", retryAfterSec: remaining };
+  }
+
   const nowPtBr = formatNowPtBr();
   const SYSTEM_PROMPT = buildSystemPrompt(nowPtBr);
   let assistantContext: AssistantQueryContext | null = null;
@@ -832,6 +900,12 @@ async function callGoogleGemini(
   }
 
   try {
+    const cacheKey = `gemini:${message.trim().toLowerCase()}`;
+    const cached = getCache(cacheKey, chatCache);
+    if (cached) {
+      return { ok: true, response: cached.response, model: cached.model };
+    }
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
 
@@ -929,6 +1003,9 @@ async function callGoogleGemini(
           if (text) {
             console.log("[Gemini] ✅ Texto extraído:", text.substring(0, 100) + "...");
             const finalText = isGreetingQuestion(message) ? text : stripLeadingGreeting(text);
+            // sucesso => fechar breaker e cachear
+            closeBreaker();
+            setCache(cacheKey, { response: finalText, model: endpoint.model }, 5 * 60 * 1000, chatCache);
             return {
               ok: true,
               response: finalText,
@@ -966,9 +1043,11 @@ async function callGoogleGemini(
     // Se foi quota, devolve mensagem amigável sem quebrar o frontend
     if (lastError && isQuota429(lastError)) {
       const wait = lastRetrySeconds ?? 60;
-      return { ok: false, status: 429, code: "GEMINI_RATE_LIMIT", retryAfterSec: wait };
+      const backoff = openBreaker("GEMINI_RATE_LIMIT", wait);
+      return { ok: false, status: 429, code: "GEMINI_RATE_LIMIT", retryAfterSec: backoff };
     }
-    return { ok: false, status: 503, code: "GEMINI_UNAVAILABLE", retryAfterSec: 60 };
+    const backoff = openBreaker("GEMINI_UNAVAILABLE", 60);
+    return { ok: false, status: 503, code: "GEMINI_UNAVAILABLE", retryAfterSec: backoff };
 
   } catch (error) {
     if ((error as Error)?.name === "AbortError") {
@@ -976,7 +1055,8 @@ async function callGoogleGemini(
     } else {
       console.error("[Gemini] ❌ Erro:", error);
     }
-    return { ok: false, status: 503, code: "GEMINI_UNAVAILABLE", retryAfterSec: 60 };
+    const backoff = openBreaker("GEMINI_UNAVAILABLE", 60);
+    return { ok: false, status: 503, code: "GEMINI_UNAVAILABLE", retryAfterSec: backoff };
   }
 }
 
@@ -1066,7 +1146,7 @@ async function getAIResponse(
   history: ChatMessage[]
 ): Promise<
   | { ok: true; response: string; model: string }
-  | { ok: false; status: 429 | 502 | 503; code: "GEMINI_RATE_LIMIT" | "GEMINI_UNAVAILABLE"; retryAfterSec: number }
+  | { ok: false; status: 429 | 502 | 503; code: AssistantErrorCode; retryAfterSec: number }
   | null
 > {
   // Ordem de tentativa (da mais gratuita para a menos)
@@ -1133,7 +1213,7 @@ export const POST = createApiHandler(async (req: NextRequest) => {
     if (result && "ok" in result && !result.ok) {
       // O frontend fará fallback automático para modo local e seguirá respondendo.
       return NextResponse.json(
-        { code: result.code, retryAfterSec: result.retryAfterSec },
+        { code: result.code, retryAfterSec: result.retryAfterSec, fallbackResponse: buildLocalFallbackAnswer(message) },
         {
           status: result.status,
           headers: { "Retry-After": String(result.retryAfterSec) },
@@ -1143,7 +1223,7 @@ export const POST = createApiHandler(async (req: NextRequest) => {
 
     if (!result) {
       return NextResponse.json(
-        { code: "GEMINI_UNAVAILABLE", retryAfterSec: 60 },
+        { code: "GEMINI_UNAVAILABLE", retryAfterSec: 60, fallbackResponse: buildLocalFallbackAnswer(message) },
         { status: 503, headers: { "Retry-After": "60" } }
       );
     }

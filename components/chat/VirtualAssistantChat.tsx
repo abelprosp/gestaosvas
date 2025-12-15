@@ -241,6 +241,7 @@ export function VirtualAssistantChat() {
 
       const status = error?.response?.status;
       const data = error?.response?.data ?? {};
+      const serverFallback = typeof data?.fallbackResponse === "string" ? data.fallbackResponse : null;
       const retryAfterRaw =
         data?.retryAfterSec ?? error?.response?.headers?.["retry-after"] ?? error?.response?.headers?.["Retry-After"];
       const retryAfter = Math.max(1, Math.min(300, Number(retryAfterRaw) || 60));
@@ -248,7 +249,7 @@ export function VirtualAssistantChat() {
       // Se Gemini bater limite ou ficar indisponível, cair para modo local por ~60s
       if (status === 429 || status === 502 || status === 503) {
         setRateLimitUntil(Date.now() + retryAfter * 1000);
-        const local = buildLocalAnswer(question);
+        const local = serverFallback ?? buildLocalAnswer(question);
         return {
           sender: "assistant",
           content: `${local}\n\n(Obs.: Gemini indisponível/limitado. Vou voltar a tentar automaticamente em ~${retryAfter}s.)`,
@@ -259,7 +260,7 @@ export function VirtualAssistantChat() {
       // Fallback final: responder localmente (sem travar o chat)
       return {
         sender: "assistant",
-        content: buildLocalAnswer(question),
+        content: serverFallback ?? buildLocalAnswer(question),
         type: "text",
       };
     }
