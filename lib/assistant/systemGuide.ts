@@ -89,6 +89,8 @@ type HowToKey =
   | "criar-template"
   | "vincular-tv"
   | "renovar-tv"
+  | "gerar-senha-tv"
+  | "definir-senha-tv"
   | "exportar-relatorio-servicos";
 
 type HowTo = {
@@ -186,6 +188,29 @@ export const HOW_TOS: HowTo[] = [
     title: "Como renovar um acesso de TV",
     triggers: [/renovar\s+tv/i, /renova[cç][aã]o\s+tv/i, /vencendo\s+tv/i],
     steps: ["1) Menu **Usuários TV**", "2) Encontre o acesso (busca/filtros)", "3) Abra **Detalhes**", "4) Clique em **Renovar** e informe a nova data"],
+  },
+  {
+    key: "gerar-senha-tv",
+    title: "Como gerar uma nova senha de TV",
+    triggers: [/gerar\s+senha/i, /nova\s+senha/i, /resetar\s+senha/i, /redefinir\s+senha/i],
+    steps: [
+      "1) Menu **Usuários TV**",
+      "2) Encontre o acesso (busca por cliente/e-mail/CPF/CNPJ)",
+      "3) Abra **Detalhes**",
+      "4) Clique em **Gerar senha**",
+      "Obs.: a senha é numérica e pode ser definida manualmente também.",
+    ],
+  },
+  {
+    key: "definir-senha-tv",
+    title: "Como definir uma senha manualmente (TV)",
+    triggers: [/definir\s+senha/i, /senha\s+manual/i, /colocar\s+senha/i],
+    steps: [
+      "1) Menu **Usuários TV**",
+      "2) Encontre o acesso",
+      "3) Abra **Detalhes**",
+      "4) Clique em **Definir senha** e informe a senha desejada",
+    ],
   },
   {
     key: "exportar-relatorio-servicos",

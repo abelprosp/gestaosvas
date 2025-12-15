@@ -125,14 +125,53 @@ export type AssistantRequestAction = {
   successMessage?: string;
 };
 
+export type AssistantPromptField = {
+  key: string;
+  label: string;
+  placeholder?: string;
+};
+
+export type AssistantExecuteAction = {
+  type: "execute";
+  label: string;
+  key:
+    | "VENDOR_CREATE_REQUEST"
+    | "TV_RENEW"
+    | "TV_REGENERATE_PASSWORD"
+    | "TV_SET_PASSWORD"
+    | "CLIENT_CREATE"
+    | "CLIENT_ADD_SERVICES";
+  args?: Record<string, unknown>;
+  prompts?: AssistantPromptField[];
+  confirm?: boolean;
+  confirmMessage?: string;
+  successMessage?: string;
+};
+
+export async function executeAssistantAction(payload: {
+  key: AssistantExecuteAction["key"];
+  args: Record<string, unknown>;
+}): Promise<{ message: string; mode: "executed" | "request"; clientId?: string | null }> {
+  const response = await api.post<{ message: string; mode: "executed" | "request"; clientId?: string | null }>(
+    "/assistant/actions",
+    payload,
+  );
+  return response.data;
+}
+
 export async function chatWithAI(
   message: string,
   history: ChatMessage[] = []
-): Promise<{ response: string; model?: string; actions?: Array<AssistantAction | AssistantRequestAction>; sources?: string[] }> {
+): Promise<{
+  response: string;
+  model?: string;
+  actions?: Array<AssistantAction | AssistantRequestAction | AssistantExecuteAction>;
+  sources?: string[];
+}> {
   const response = await api.post<{
     response: string;
     model?: string;
-    actions?: Array<AssistantAction | AssistantRequestAction>;
+    actions?: Array<AssistantAction | AssistantRequestAction | AssistantExecuteAction>;
     sources?: string[];
   }>(
     "/assistant/chat",

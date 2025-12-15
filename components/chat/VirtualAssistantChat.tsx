@@ -34,6 +34,9 @@ import {
   chatWithAI,
   type AssistantAction,
   type AssistantRequestAction,
+  type AssistantExecuteAction,
+  type AssistantPromptField,
+  executeAssistantAction,
   type ClientSearchResult,
   type PendingContract,
   type ExpiringService,
@@ -56,7 +59,7 @@ interface Message {
     route?: string;
     sales?: SalesAnalysis;
     suggestions?: ProactiveSuggestion[];
-    actions?: Array<AssistantAction | AssistantRequestAction>;
+    actions?: Array<AssistantAction | AssistantRequestAction | AssistantExecuteAction>;
     sources?: string[];
   };
 }
@@ -1817,6 +1820,75 @@ Digite "ajuda" para ver todos os comandos disponíveis ou faça uma pergunta esp
                                         content: action.successMessage ?? "Solicitação enviada.",
                                         type: "text",
                                         data: { sources: ["action-request"] },
+                                      },
+                                    ]);
+                                    return;
+                                  }
+
+                                  if (action.type === "execute") {
+                                    let args: Record<string, unknown> = { ...(action.args ?? {}) };
+                                    const prompts: AssistantPromptField[] = Array.isArray(action.prompts) ? action.prompts : [];
+                                    for (const p of prompts) {
+                                      const val = window.prompt(p.label, p.placeholder ?? "");
+                                      if (val === null) return;
+                                      const trimmed = val.trim();
+                                      if (!trimmed) return;
+                                      // inferir number quando parecer número inteiro
+                                      const n = Number(trimmed);
+                                      args[p.key] = Number.isFinite(n) && /^\d+(\.\d+)?$/.test(trimmed) ? n : trimmed;
+                                    }
+
+                                    // Normalizações específicas
+                                    if (typeof args.serviceNamesCsv === "string") {
+                                      const names = (args.serviceNamesCsv as string)
+                                        .split(",")
+                                        .map((s) => s.trim())
+                                        .filter(Boolean);
+                                      delete args.serviceNamesCsv;
+                                      args.serviceNames = names;
+                                    }
+                                    if (typeof args.hasTelephony === "string") {
+                                      const v = (args.hasTelephony as string).toLowerCase();
+                                      if (v === "true" || v === "1" || v === "sim") args.hasTelephony = true;
+                                      else if (v === "false" || v === "0" || v === "nao" || v === "não") args.hasTelephony = false;
+                                    }
+                                    // Mapear campos TV quando a action espera args.tv
+                                    if (
+                                      action.key === "CLIENT_ADD_SERVICES" &&
+                                      (args.quantityEssencial !== undefined ||
+                                        args.quantityPremium !== undefined ||
+                                        args.expiresAt !== undefined ||
+                                        args.hasTelephony !== undefined)
+                                    ) {
+                                      args = {
+                                        ...args,
+                                        tv: {
+                                          quantityEssencial: Number(args.quantityEssencial ?? 0) || 0,
+                                          quantityPremium: Number(args.quantityPremium ?? 0) || 0,
+                                          expiresAt: typeof args.expiresAt === "string" ? args.expiresAt : undefined,
+                                          hasTelephony: typeof args.hasTelephony === "boolean" ? args.hasTelephony : undefined,
+                                        },
+                                      };
+                                      delete (args as any).quantityEssencial;
+                                      delete (args as any).quantityPremium;
+                                      delete (args as any).expiresAt;
+                                      delete (args as any).hasTelephony;
+                                    }
+
+                                    const result = await executeAssistantAction({ key: action.key, args });
+                                    toast({
+                                      title: result.mode === "executed" ? "Ação executada" : "Solicitação enviada",
+                                      description: result.message,
+                                      status: "success",
+                                      duration: 4000,
+                                    });
+                                    setMessages((prev) => [
+                                      ...prev,
+                                      {
+                                        sender: "assistant",
+                                        content: result.message,
+                                        type: "text",
+                                        data: { sources: [result.mode === "executed" ? "action-executed" : "action-request"] },
                                       },
                                     ]);
                                     return;

@@ -27,6 +27,22 @@ type AssistantRequestAction = {
   confirmMessage?: string;
   successMessage?: string;
 };
+type AssistantExecuteAction = {
+  type: "execute";
+  label: string;
+  key:
+    | "VENDOR_CREATE_REQUEST"
+    | "TV_RENEW"
+    | "TV_REGENERATE_PASSWORD"
+    | "TV_SET_PASSWORD"
+    | "CLIENT_CREATE"
+    | "CLIENT_ADD_SERVICES";
+  args?: Record<string, unknown>;
+  prompts?: Array<{ key: string; label: string; placeholder?: string }>;
+  confirm?: boolean;
+  confirmMessage?: string;
+  successMessage?: string;
+};
 type AnyAssistantAction = AssistantAction | AssistantRequestAction;
 
 function asRow(value: unknown): Row | null {
@@ -176,7 +192,7 @@ function buildLocalFallbackAnswer(message: string) {
   return `Estou em modo local (sem Gemini) no momento.\n\nMe diga o que você quer fazer e eu te passo o passo a passo (tela/botão/campos). Ex.: "cadastrar cliente", "editar cliente", "adicionar serviços", "renovar TV", "exportar relatório".`;
 }
 
-function actionsForHowToKey(key: string, isAdminUser: boolean): AnyAssistantAction[] {
+function actionsForHowToKey(key: string, isAdminUser: boolean): Array<AnyAssistantAction | AssistantExecuteAction> {
   const map: Record<string, AssistantAction[]> = {
     "cadastrar-cliente": [{ type: "navigate", label: "Novo cliente", route: "/clientes?action=new" }],
     "editar-cliente": [{ type: "navigate", label: "Abrir Clientes", route: "/clientes" }],
@@ -205,6 +221,122 @@ function actionsForHowToKey(key: string, isAdminUser: boolean): AnyAssistantActi
       },
     ];
   }
+
+  if (key === "renovar-tv") {
+    return [
+      ...map[key],
+      {
+        type: "execute",
+        key: "TV_RENEW",
+        label: "Renovar TV (executar)",
+        confirm: true,
+        confirmMessage: "Você confirma que deseja atualizar o vencimento do acesso de TV?",
+        prompts: [
+          { key: "email", label: "E-mail do acesso (tv account)", placeholder: "ex: 1a8@nexusrs.com.br" },
+          { key: "slotNumber", label: "Número do slot", placeholder: "ex: 1" },
+          { key: "expiresAt", label: "Nova data de vencimento (YYYY-MM-DD)", placeholder: "ex: 2026-01-15" },
+        ],
+      },
+    ];
+  }
+
+  if (key === "gerar-senha-tv") {
+    return [
+      { type: "navigate", label: "Abrir Usuários TV", route: "/usuarios" },
+      {
+        type: "execute",
+        key: "TV_REGENERATE_PASSWORD",
+        label: "Gerar nova senha (executar)",
+        confirm: true,
+        confirmMessage: "Você confirma que deseja gerar uma nova senha para este acesso?",
+        prompts: [
+          { key: "email", label: "E-mail do acesso (tv account)", placeholder: "ex: 1a8@nexusrs.com.br" },
+          { key: "slotNumber", label: "Número do slot", placeholder: "ex: 1" },
+        ],
+      },
+    ];
+  }
+
+  if (key === "definir-senha-tv") {
+    return [
+      { type: "navigate", label: "Abrir Usuários TV", route: "/usuarios" },
+      {
+        type: "execute",
+        key: "TV_SET_PASSWORD",
+        label: "Definir senha (executar)",
+        confirm: true,
+        confirmMessage: "Você confirma que deseja definir uma senha manual para este acesso?",
+        prompts: [
+          { key: "email", label: "E-mail do acesso (tv account)", placeholder: "ex: 1a8@nexusrs.com.br" },
+          { key: "slotNumber", label: "Número do slot", placeholder: "ex: 1" },
+          { key: "password", label: "Senha", placeholder: "ex: 1234" },
+        ],
+      },
+    ];
+  }
+
+  if (key === "vincular-tv") {
+    return [
+      ...map[key],
+      {
+        type: "execute",
+        key: "CLIENT_ADD_SERVICES",
+        label: "Vincular TV a cliente (executar)",
+        confirm: true,
+        confirmMessage: "Você confirma que deseja vincular TV a um cliente agora?",
+        prompts: [
+          { key: "clientDocument", label: "Documento do cliente (CPF/CNPJ)", placeholder: "ex: 123.456.789-00" },
+          { key: "quantityEssencial", label: "Qtd TV Essencial", placeholder: "ex: 1" },
+          { key: "quantityPremium", label: "Qtd TV Premium", placeholder: "ex: 0" },
+          { key: "expiresAt", label: "Vencimento (YYYY-MM-DD) (opcional)", placeholder: "ex: 2026-01-15" },
+          { key: "hasTelephony", label: "Inclui telefonia? (true/false) (opcional)", placeholder: "ex: false" },
+        ],
+        args: { serviceNames: [] },
+      },
+    ];
+  }
+
+  if (key === "cadastrar-cliente") {
+    return [
+      ...map[key],
+      {
+        type: "execute",
+        key: "CLIENT_CREATE",
+        label: "Criar cliente (executar)",
+        confirm: true,
+        confirmMessage: "Você confirma que deseja criar o cliente agora?",
+        prompts: [
+          { key: "name", label: "Nome do cliente", placeholder: "ex: João Silva" },
+          { key: "email", label: "E-mail", placeholder: "ex: joao@email.com" },
+          { key: "document", label: "CPF/CNPJ", placeholder: "ex: 123.456.789-00" },
+          { key: "costCenter", label: "Centro de custo (LUXUS ou NEXUS)", placeholder: "ex: NEXUS" },
+        ],
+      },
+    ];
+  }
+
+  if (key === "adicionar-servicos-cliente") {
+    return [
+      ...map[key],
+      {
+        type: "execute",
+        key: "CLIENT_ADD_SERVICES",
+        label: "Adicionar serviços (executar)",
+        confirm: true,
+        confirmMessage: "Você confirma que deseja atualizar os serviços do cliente agora?",
+        prompts: [
+          { key: "clientDocument", label: "Documento do cliente (CPF/CNPJ)", placeholder: "ex: 123.456.789-00" },
+          { key: "serviceNamesCsv", label: "Serviços (separados por vírgula)", placeholder: "ex: Hub, Telemed" },
+          { key: "cloudExpiresAt", label: "Vencimento dos serviços Cloud/Hub/Tele (YYYY-MM-DD) (opcional)", placeholder: "ex: 2026-01-15" },
+          { key: "quantityEssencial", label: "Qtd TV Essencial (0 para não)", placeholder: "ex: 0" },
+          { key: "quantityPremium", label: "Qtd TV Premium (0 para não)", placeholder: "ex: 0" },
+          { key: "expiresAt", label: "Vencimento TV (YYYY-MM-DD) (opcional)", placeholder: "ex: 2026-01-15" },
+          { key: "hasTelephony", label: "Inclui telefonia? (true/false) (opcional)", placeholder: "ex: false" },
+        ],
+      },
+    ];
+  }
+
   return map[key] ?? [];
 }
 
