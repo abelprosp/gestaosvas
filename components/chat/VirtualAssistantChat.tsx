@@ -32,6 +32,7 @@ import {
   getSalesAnalysis,
   getProactiveSuggestions,
   chatWithAI,
+  type AssistantAction,
   type ClientSearchResult,
   type PendingContract,
   type ExpiringService,
@@ -53,6 +54,8 @@ interface Message {
     route?: string;
     sales?: SalesAnalysis;
     suggestions?: ProactiveSuggestion[];
+    actions?: AssistantAction[];
+    sources?: string[];
   };
 }
 
@@ -218,6 +221,7 @@ export function VirtualAssistantChat() {
         sender: "assistant",
         content: buildLocalAnswer(question),
         type: "text",
+        data: { sources: ["local-fallback"] },
       };
     }
 
@@ -235,6 +239,10 @@ export function VirtualAssistantChat() {
         sender: "assistant",
         content: aiResponse.response ?? "",
         type: "text",
+        data: {
+          actions: aiResponse.actions ?? [],
+          sources: aiResponse.sources ?? [],
+        },
       };
     } catch (error: any) {
       console.error("Erro ao chamar IA:", error);
@@ -242,6 +250,9 @@ export function VirtualAssistantChat() {
       const status = error?.response?.status;
       const data = error?.response?.data ?? {};
       const serverFallback = typeof data?.fallbackResponse === "string" ? data.fallbackResponse : null;
+      const serverSources = Array.isArray(data?.sources)
+        ? (data.sources.filter((x: any) => typeof x === "string") as string[])
+        : [];
       const retryAfterRaw =
         data?.retryAfterSec ?? error?.response?.headers?.["retry-after"] ?? error?.response?.headers?.["Retry-After"];
       const retryAfter = Math.max(1, Math.min(300, Number(retryAfterRaw) || 60));
@@ -254,6 +265,9 @@ export function VirtualAssistantChat() {
           sender: "assistant",
           content: `${local}\n\n(Obs.: Gemini indisponível/limitado. Vou voltar a tentar automaticamente em ~${retryAfter}s.)`,
           type: "text",
+          data: {
+            sources: serverSources.length ? serverSources : ["local-fallback"],
+          },
         };
       }
 
@@ -262,6 +276,9 @@ export function VirtualAssistantChat() {
         sender: "assistant",
         content: serverFallback ?? buildLocalAnswer(question),
         type: "text",
+        data: {
+          sources: serverSources.length ? serverSources : ["local-fallback"],
+        },
       };
     }
 
@@ -1747,9 +1764,39 @@ Digite "ajuda" para ver todos os comandos disponíveis ou faça uma pergunta esp
                     borderRadius="lg"
                     maxW="80%"
                   >
-                    <Text fontSize="sm" whiteSpace="pre-wrap">
-                      {message.content}
-                    </Text>
+                    <Stack spacing={2}>
+                      <Text fontSize="sm" whiteSpace="pre-wrap">
+                        {message.content}
+                      </Text>
+
+                      {message.sender === "assistant" && (message.data?.actions?.length ?? 0) > 0 && (
+                        <Flex wrap="wrap" gap={2}>
+                          {message.data?.actions?.map((action, idx) => (
+                            <Button
+                              key={`${action.type}-${idx}`}
+                              size="xs"
+                              variant="outline"
+                              colorScheme="brand"
+                              onClick={() => {
+                                if (action.confirm) {
+                                  const ok = window.confirm("Confirmar ação?");
+                                  if (!ok) return;
+                                }
+                                router.push(action.route);
+                              }}
+                            >
+                              {action.label}
+                            </Button>
+                          ))}
+                        </Flex>
+                      )}
+
+                      {message.sender === "assistant" && (message.data?.sources?.length ?? 0) > 0 && (
+                        <Text fontSize="xs" color="gray.500">
+                          Fontes: {message.data?.sources?.join(" • ")}
+                        </Text>
+                      )}
+                    </Stack>
                   </Box>
                 )}
               </Box>

@@ -10,6 +10,13 @@ export interface ChatMessage {
 
 type Row = Record<string, unknown>;
 type AssistantErrorCode = "GEMINI_RATE_LIMIT" | "GEMINI_UNAVAILABLE" | "GEMINI_COOLDOWN";
+type AssistantAction =
+  | {
+      type: "navigate";
+      label: string;
+      route: string;
+      confirm?: boolean;
+    };
 
 function asRow(value: unknown): Row | null {
   if (!value || typeof value !== "object") return null;
@@ -156,6 +163,38 @@ function buildLocalFallbackAnswer(message: string) {
   }
 
   return `Estou em modo local (sem Gemini) no momento.\n\nMe diga o que você quer fazer e eu te passo o passo a passo (tela/botão/campos). Ex.: "cadastrar cliente", "editar cliente", "adicionar serviços", "renovar TV", "exportar relatório".`;
+}
+
+function actionsForHowToKey(key: string): AssistantAction[] {
+  const map: Record<string, AssistantAction[]> = {
+    "cadastrar-cliente": [{ type: "navigate", label: "Novo cliente", route: "/clientes?action=new" }],
+    "editar-cliente": [{ type: "navigate", label: "Abrir Clientes", route: "/clientes" }],
+    "adicionar-servicos-cliente": [{ type: "navigate", label: "Abrir Clientes", route: "/clientes" }],
+    "ver-valores-cliente": [{ type: "navigate", label: "Abrir Clientes", route: "/clientes" }],
+    "cadastrar-servico": [{ type: "navigate", label: "Abrir Serviços", route: "/servicos" }],
+    "cadastrar-contrato": [{ type: "navigate", label: "Novo contrato", route: "/contratos?action=new" }],
+    "criar-template": [{ type: "navigate", label: "Abrir Templates", route: "/templates" }],
+    "vincular-tv": [{ type: "navigate", label: "Abrir Clientes", route: "/clientes" }],
+    "renovar-tv": [{ type: "navigate", label: "Abrir Usuários TV", route: "/usuarios" }],
+    "exportar-relatorio-servicos": [{ type: "navigate", label: "Abrir Relatórios", route: "/relatorios/servicos" }],
+  };
+  return map[key] ?? [];
+}
+
+function sourcesFromContext(ctx: AssistantQueryContext | null): string[] {
+  if (!ctx) return [];
+  const s: string[] = [];
+  const d = ctx.data ?? {};
+  if (d.stats) s.push("Supabase: contagens (clientes/contratos/tv_slots/serviços)");
+  if (d.clientsSearch || d.clientDetail) s.push("Supabase: clientes");
+  if (d.pendingContracts) s.push("Supabase: contratos");
+  if (d.expiring) s.push("Supabase: vencimentos");
+  if (d.tvAvailable || d.clientDetail?.tv) s.push("Supabase: tv_slots");
+  if (d.servicesList || d.clientDetail?.services) s.push("Supabase: services/client_services");
+  if (d.templates) s.push("Supabase: contract_templates");
+  if (d.pendingRequests) s.push("Supabase: action_requests");
+  if (d.linesSearch || d.clientDetail?.lines) s.push("Supabase: lines");
+  return s;
 }
 
 function normalizeDigits(value: string) {
@@ -716,7 +755,7 @@ let geminiModelsCache: { fetchedAt: number; lists: GeminiModelsList[] } | null =
 // Cache simples em memória (por instância) para reduzir custo/latência e evitar 429.
 // Em ambientes serverless, isso é "best effort" (pode resetar em cold start).
 type CacheEntry<T> = { value: T; expiresAt: number };
-const chatCache = new Map<string, CacheEntry<{ response: string; model: string }>>();
+const chatCache = new Map<string, CacheEntry<{ response: string; model: string; sources?: string[] }>>();
 
 function getCache<T>(key: string, store: Map<string, CacheEntry<T>>): T | null {
   const e = store.get(key);
@@ -870,7 +909,7 @@ async function callGoogleGemini(
   message: string,
   history: ChatMessage[]
 ): Promise<
-  | { ok: true; response: string; model: string }
+  | { ok: true; response: string; model: string; sources?: string[] }
   | { ok: false; status: 429 | 502 | 503; code: AssistantErrorCode; retryAfterSec: number }
   | null
 > {
@@ -903,7 +942,7 @@ async function callGoogleGemini(
     const cacheKey = `gemini:${message.trim().toLowerCase()}`;
     const cached = getCache(cacheKey, chatCache);
     if (cached) {
-      return { ok: true, response: cached.response, model: cached.model };
+      return { ok: true, response: cached.response, model: cached.model, sources: cached.sources };
     }
 
     const controller = new AbortController();
@@ -1005,11 +1044,13 @@ async function callGoogleGemini(
             const finalText = isGreetingQuestion(message) ? text : stripLeadingGreeting(text);
             // sucesso => fechar breaker e cachear
             closeBreaker();
-            setCache(cacheKey, { response: finalText, model: endpoint.model }, 5 * 60 * 1000, chatCache);
+            const sources = sourcesFromContext(assistantContext);
+            setCache(cacheKey, { response: finalText, model: endpoint.model, sources }, 5 * 60 * 1000, chatCache);
             return {
               ok: true,
               response: finalText,
               model: endpoint.model,
+              sources,
             };
           }
         } else {
@@ -1064,7 +1105,7 @@ async function callGoogleGemini(
 async function callOpenAI(
   message: string,
   history: ChatMessage[]
-): Promise<{ response: string; model: string } | null> {
+): Promise<{ response: string; model: string; sources?: string[] } | null> {
   const nowPtBr = formatNowPtBr();
   const SYSTEM_PROMPT = buildSystemPrompt(nowPtBr);
   let assistantContext: AssistantQueryContext | null = null;
@@ -1126,9 +1167,11 @@ async function callOpenAI(
     }
 
     const finalText = isGreetingQuestion(message) ? text : stripLeadingGreeting(text);
+    const sources = sourcesFromContext(assistantContext);
     return {
       response: finalText,
       model: data.model || "gpt-3.5-turbo",
+      sources,
     };
   } catch (error) {
     if ((error as Error)?.name === "AbortError") {
@@ -1145,7 +1188,7 @@ async function getAIResponse(
   message: string,
   history: ChatMessage[]
 ): Promise<
-  | { ok: true; response: string; model: string }
+  | { ok: true; response: string; model: string; sources?: string[] }
   | { ok: false; status: 429 | 502 | 503; code: AssistantErrorCode; retryAfterSec: number }
   | null
 > {
@@ -1164,7 +1207,7 @@ async function getAIResponse(
   const openaiResult = await callOpenAI(message, history);
   if (openaiResult) {
     console.log("[AI Chat] ✅ Resposta do OpenAI");
-    return { ok: true, response: openaiResult.response, model: openaiResult.model };
+    return { ok: true, response: openaiResult.response, model: openaiResult.model, sources: openaiResult.sources };
   }
 
   // Se nenhuma API funcionou
@@ -1195,6 +1238,7 @@ export const POST = createApiHandler(async (req: NextRequest) => {
       return NextResponse.json({
         response: dateTimeAnswer,
         model: "server-time",
+        sources: ["server-time"],
       });
     }
 
@@ -1204,6 +1248,8 @@ export const POST = createApiHandler(async (req: NextRequest) => {
       return NextResponse.json({
         response: `${howto.title}\n\n${howto.steps.join("\n")}`,
         model: "system-howto",
+        actions: actionsForHowToKey(howto.key),
+        sources: ["system-guide"],
       });
     }
 
@@ -1213,7 +1259,12 @@ export const POST = createApiHandler(async (req: NextRequest) => {
     if (result && "ok" in result && !result.ok) {
       // O frontend fará fallback automático para modo local e seguirá respondendo.
       return NextResponse.json(
-        { code: result.code, retryAfterSec: result.retryAfterSec, fallbackResponse: buildLocalFallbackAnswer(message) },
+        {
+          code: result.code,
+          retryAfterSec: result.retryAfterSec,
+          fallbackResponse: buildLocalFallbackAnswer(message),
+          sources: ["local-fallback"],
+        },
         {
           status: result.status,
           headers: { "Retry-After": String(result.retryAfterSec) },
@@ -1223,7 +1274,7 @@ export const POST = createApiHandler(async (req: NextRequest) => {
 
     if (!result) {
       return NextResponse.json(
-        { code: "GEMINI_UNAVAILABLE", retryAfterSec: 60, fallbackResponse: buildLocalFallbackAnswer(message) },
+        { code: "GEMINI_UNAVAILABLE", retryAfterSec: 60, fallbackResponse: buildLocalFallbackAnswer(message), sources: ["local-fallback"] },
         { status: 503, headers: { "Retry-After": "60" } }
       );
     }
@@ -1231,6 +1282,7 @@ export const POST = createApiHandler(async (req: NextRequest) => {
     return NextResponse.json({
       response: result.response,
       model: result.model,
+      sources: result.sources ?? [],
     });
   } catch (error) {
     console.error("[AI Chat] Erro:", error);

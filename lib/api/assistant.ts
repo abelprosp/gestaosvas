@@ -103,13 +103,26 @@ export interface ChatMessage {
 export type AssistantChatErrorPayload = {
   code?: string;
   retryAfterSec?: number;
+  fallbackResponse?: string;
+  sources?: string[];
 };
+
+export type AssistantAction =
+  | {
+      type: "navigate";
+      label: string;
+      route: string;
+      confirm?: boolean;
+    };
 
 export async function chatWithAI(
   message: string,
   history: ChatMessage[] = []
-): Promise<{ response: string; model?: string }> {
-  const response = await api.post<{ response: string; model?: string }>("/assistant/chat", { message, history });
+): Promise<{ response: string; model?: string; actions?: AssistantAction[]; sources?: string[] }> {
+  const response = await api.post<{ response: string; model?: string; actions?: AssistantAction[]; sources?: string[] }>(
+    "/assistant/chat",
+    { message, history }
+  );
   return response.data;
 }
 
