@@ -945,6 +945,9 @@ export function UsersPage() {
           <Badge colorScheme="pink" px={3} py={1} borderRadius="full">
             TV Premium: {serviceTotals?.tvPremium ?? 0}
           </Badge>
+          <Badge colorScheme="cyan" px={3} py={1} borderRadius="full">
+            Com telefonia: {serviceTotals?.tvTelephony ?? 0}
+          </Badge>
           <Badge colorScheme="purple" px={3} py={1} borderRadius="full">
             Hub TV: {serviceTotals?.hub ?? 0}
           </Badge>

@@ -25,6 +25,22 @@ async function countTvSlots(planType: "ESSENCIAL" | "PREMIUM") {
   return count ?? 0;
 }
 
+async function countTvTelephonySlots() {
+  const supabase = createServerClient();
+  const { count, error } = await supabase
+    .from("tv_slots")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "ASSIGNED")
+    .not("client_id", "is", null)
+    .eq("has_telephony", true);
+
+  const pgError = error as PostgrestError | null;
+  if (pgError && !isSchemaMissing(pgError)) {
+    throw pgError;
+  }
+  return count ?? 0;
+}
+
 async function findServiceIdsByNameLike(patterns: string[]) {
   const supabase = createServerClient();
   let query = supabase.from("services").select("id, name").limit(2000);
@@ -55,9 +71,10 @@ async function countCloudAccessesByServiceIds(serviceIds: string[]) {
 }
 
 export const GET = createApiHandler(async () => {
-  const [tvEssencial, tvPremium, hubServiceIds, teleServiceIds] = await Promise.all([
+  const [tvEssencial, tvPremium, tvTelephony, hubServiceIds, teleServiceIds] = await Promise.all([
     countTvSlots("ESSENCIAL"),
     countTvSlots("PREMIUM"),
+    countTvTelephonySlots(),
     // Nomes típicos: "Hub", "HubPlay", "Hub TV"
     findServiceIdsByNameLike(["hub", "hubplay"]),
     // Nomes típicos: "Tele", "Telemed", "Telepet"
@@ -72,6 +89,7 @@ export const GET = createApiHandler(async () => {
   return NextResponse.json({
     tvEssencial,
     tvPremium,
+    tvTelephony,
     hub,
     tele,
   });

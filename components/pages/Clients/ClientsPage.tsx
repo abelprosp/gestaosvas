@@ -686,9 +686,6 @@ const getSortIcon = (key: string): ReactElement | undefined => {
         >
           <Box>
             <Text fontWeight="semibold">Totais de serviços</Text>
-            <Text fontSize="sm" color={mutedText}>
-              Contagem total no sistema (não depende do filtro/busca).
-            </Text>
           </Box>
         </Flex>
 
@@ -698,6 +695,9 @@ const getSortIcon = (key: string): ReactElement | undefined => {
           </Badge>
           <Badge colorScheme="pink" px={3} py={1} borderRadius="full">
             TV Premium: {serviceTotals?.tvPremium ?? 0}
+          </Badge>
+          <Badge colorScheme="cyan" px={3} py={1} borderRadius="full">
+            Com telefonia: {serviceTotals?.tvTelephony ?? 0}
           </Badge>
           <Badge colorScheme="purple" px={3} py={1} borderRadius="full">
             Hub TV: {serviceTotals?.hub ?? 0}

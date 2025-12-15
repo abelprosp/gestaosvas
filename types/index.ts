@@ -231,6 +231,7 @@ export interface ServiceReportRow {
 export interface ServiceTotals {
   tvEssencial: number;
   tvPremium: number;
+  tvTelephony: number;
   hub: number;
   tele: number;
 }
