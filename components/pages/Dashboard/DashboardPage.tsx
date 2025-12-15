@@ -123,6 +123,22 @@ export function DashboardPage() {
   const [selectedServiceNames, setSelectedServiceNames] = useState<string[]>([]);
   const [isTvBreakdownOpen, setIsTvBreakdownOpen] = useState(false);
 
+  // O backend entende TV como dois serviços distintos: "TV Essencial" e "TV Premium".
+  // No UI mostramos uma opção agregada "TV (Essencial + Premium)"; aqui expandimos para filtrar corretamente.
+  const salesFilterNames = useMemo(() => {
+    if (!selectedServiceNames.length) return [];
+    const out: string[] = [];
+    for (const name of selectedServiceNames) {
+      if (name === "TV (Essencial + Premium)" || name.toLowerCase() === "tv") {
+        out.push("TV Essencial", "TV Premium");
+      } else {
+        out.push(name);
+      }
+    }
+    // unique + sort
+    return Array.from(new Set(out)).sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
+  }, [selectedServiceNames]);
+
   useEffect(() => {
     if (!segmentOptions.some((segment) => segment.key === selectedSegmentKey)) {
       setSelectedSegmentKey(segmentOptions[0]?.key ?? "all");
@@ -156,10 +172,10 @@ export function DashboardPage() {
       {
         startDate,
         endDate,
-        services: [...selectedServiceNames].sort(),
+        services: salesFilterNames,
       },
     ],
-    [startDate, endDate, selectedServiceNames],
+    [startDate, endDate, salesFilterNames],
   );
 
   const salesQuery = useQuery<SalesTimeseries>({
@@ -172,8 +188,8 @@ export function DashboardPage() {
       if (endDate) {
         params.set("endDate", endDate);
       }
-      if (selectedServiceNames.length > 0) {
-        params.set("services", selectedServiceNames.join(","));
+      if (salesFilterNames.length > 0) {
+        params.set("services", salesFilterNames.join(","));
       }
       const response = await api.get<SalesTimeseries>(`/stats/sales?${params.toString()}`);
       return response.data;

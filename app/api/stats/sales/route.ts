@@ -85,10 +85,20 @@ export const GET = createApiHandler(async (req) => {
   const { searchParams } = new URL(req.url);
   const startParam = parseDateParam(searchParams.get("startDate"));
   const endParam = parseDateParam(searchParams.get("endDate"));
-  const filterServices =
+  const rawFilterServices =
     typeof searchParams.get("services") === "string" && searchParams.get("services")?.length
       ? searchParams.get("services")!.split(",").map((item) => item.trim()).filter(Boolean)
       : [];
+
+  // Compatibilidade: o frontend pode enviar "TV (Essencial + Premium)". Internamente TV é "TV Essencial" e "TV Premium".
+  const filterServices = rawFilterServices.flatMap((name) => {
+    const n = name.trim();
+    if (!n) return [];
+    if (n === "TV (Essencial + Premium)" || n.toLowerCase() === "tv") {
+      return ["TV Essencial", "TV Premium"];
+    }
+    return [n];
+  });
 
   const { start: defaultStart, end: defaultEnd } = defaultSalesRange();
   const startDate = startParam ? startOfDay(startParam) : defaultStart;
