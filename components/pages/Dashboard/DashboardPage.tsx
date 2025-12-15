@@ -120,24 +120,22 @@ export function DashboardPage() {
   const [selectedSegmentKey, setSelectedSegmentKey] = useState<string>(segmentOptions[0]?.key ?? "all");
   const [startDate, setStartDate] = useState<string>(defaultRange.start);
   const [endDate, setEndDate] = useState<string>(defaultRange.end);
-  const [selectedServiceNames, setSelectedServiceNames] = useState<string[]>([]);
+  const [selectedServiceKeys, setSelectedServiceKeys] = useState<string[]>([]);
   const [isTvBreakdownOpen, setIsTvBreakdownOpen] = useState(false);
 
-  // O backend entende TV como dois serviços distintos: "TV Essencial" e "TV Premium".
-  // No UI mostramos uma opção agregada "TV (Essencial + Premium)"; aqui expandimos para filtrar corretamente.
-  const salesFilterNames = useMemo(() => {
-    if (!selectedServiceNames.length) return [];
+  // Preferimos filtrar por KEY (mais robusto que nome). O backend aceita keys e nomes.
+  const salesFilterKeys = useMemo(() => {
+    if (!selectedServiceKeys.length) return [];
     const out: string[] = [];
-    for (const name of selectedServiceNames) {
-      if (name === "TV (Essencial + Premium)" || name.toLowerCase() === "tv") {
-        out.push("TV Essencial", "TV Premium");
+    for (const key of selectedServiceKeys) {
+      if (key === "tv-total") {
+        out.push("tv-essencial", "tv-premium");
       } else {
-        out.push(name);
+        out.push(key);
       }
     }
-    // unique + sort
-    return Array.from(new Set(out)).sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
-  }, [selectedServiceNames]);
+    return Array.from(new Set(out)).sort((a, b) => a.localeCompare(b));
+  }, [selectedServiceKeys]);
 
   useEffect(() => {
     if (!segmentOptions.some((segment) => segment.key === selectedSegmentKey)) {
@@ -172,10 +170,10 @@ export function DashboardPage() {
       {
         startDate,
         endDate,
-        services: salesFilterNames,
+        services: salesFilterKeys,
       },
     ],
-    [startDate, endDate, salesFilterNames],
+    [startDate, endDate, salesFilterKeys],
   );
 
   const salesQuery = useQuery<SalesTimeseries>({
@@ -188,8 +186,8 @@ export function DashboardPage() {
       if (endDate) {
         params.set("endDate", endDate);
       }
-      if (salesFilterNames.length > 0) {
-        params.set("services", salesFilterNames.join(","));
+      if (salesFilterKeys.length > 0) {
+        params.set("services", salesFilterKeys.join(","));
       }
       const response = await api.get<SalesTimeseries>(`/stats/sales?${params.toString()}`);
       return response.data;
@@ -259,7 +257,7 @@ export function DashboardPage() {
     const services: SalesTimeseries["services"] = [];
     
     // Verificar se TV deve ser incluída (se não há filtro ou se foi explicitamente selecionada)
-    const shouldIncludeTV = !selectedServiceNames.length || selectedServiceNames.includes("TV (Essencial + Premium)");
+    const shouldIncludeTV = !selectedServiceKeys.length || selectedServiceKeys.includes("tv-total");
     
     // Adicionar serviço TV agregado (Essencial + Premium) se necessário
     if (shouldIncludeTV) {
@@ -277,17 +275,17 @@ export function DashboardPage() {
     // Adicionar outros serviços não-TV
     const nonTvServices = availableServices.filter((service) => service.group !== "TV");
     
-    if (!selectedServiceNames.length) {
+    if (!selectedServiceKeys.length) {
       // Se não há filtro, mostrar todos os serviços não-TV
       services.push(...nonTvServices);
     } else {
       // Filtrar apenas os serviços selecionados (exceto TV que já foi tratada acima)
-      const filtered = nonTvServices.filter((service) => selectedServiceNames.includes(service.name));
+      const filtered = nonTvServices.filter((service) => selectedServiceKeys.includes(service.key));
       services.push(...filtered);
     }
     
     return services;
-  }, [availableServices, selectedServiceNames, salesData.services]);
+  }, [availableServices, selectedServiceKeys, salesData.services]);
 
   const lineChartData = useMemo(() => {
     return salesData.points.map((point) => {
@@ -414,18 +412,18 @@ export function DashboardPage() {
           <Text fontSize="sm" color={mutedText} mb={2}>
             Filtrar tipos de serviço
           </Text>
-          <CheckboxGroup value={selectedServiceNames} onChange={(values) => setSelectedServiceNames(values as string[])}>
+          <CheckboxGroup value={selectedServiceKeys} onChange={(values) => setSelectedServiceKeys(values as string[])}>
             <Wrap spacing={3}>
               {/* Adicionar checkbox para TV agregada */}
               <WrapItem key="tv-total">
-                <Checkbox value="TV (Essencial + Premium)">TV (Essencial + Premium)</Checkbox>
+                <Checkbox value="tv-total">TV (Essencial + Premium)</Checkbox>
               </WrapItem>
               {/* Adicionar outros serviços */}
               {availableServices
                 .filter((service) => service.group !== "TV")
                 .map((service) => (
                   <WrapItem key={service.key}>
-                    <Checkbox value={service.name}>{service.name}</Checkbox>
+                    <Checkbox value={service.key}>{service.name}</Checkbox>
                   </WrapItem>
                 ))}
             </Wrap>

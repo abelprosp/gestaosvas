@@ -90,15 +90,20 @@ export const GET = createApiHandler(async (req) => {
       ? searchParams.get("services")!.split(",").map((item) => item.trim()).filter(Boolean)
       : [];
 
-  // Compatibilidade: o frontend pode enviar "TV (Essencial + Premium)". Internamente TV é "TV Essencial" e "TV Premium".
-  const filterServices = rawFilterServices.flatMap((name) => {
+  // Compatibilidade:
+  // - legado: filtra por NOME ("TV Essencial", "HubPlay Premium"...)
+  // - novo: filtra por KEY ("tv-essencial", "svc-<id>", "tv-total")
+  const expanded = rawFilterServices.flatMap((name) => {
     const n = name.trim();
     if (!n) return [];
-    if (n === "TV (Essencial + Premium)" || n.toLowerCase() === "tv") {
-      return ["TV Essencial", "TV Premium"];
+    if (n === "TV (Essencial + Premium)" || n.toLowerCase() === "tv" || n === "tv-total") {
+      return ["tv-essencial", "tv-premium", "TV Essencial", "TV Premium"];
     }
     return [n];
   });
+
+  const filterKeys = new Set(expanded.filter((v) => v.startsWith("tv-") || v.startsWith("svc-")));
+  const filterNames = new Set(expanded.filter((v) => !v.startsWith("tv-") && !v.startsWith("svc-")));
 
   const { start: defaultStart, end: defaultEnd } = defaultSalesRange();
   const startDate = startParam ? startOfDay(startParam) : defaultStart;
@@ -208,11 +213,13 @@ export const GET = createApiHandler(async (req) => {
     events.push({ serviceKey: key, occurredAt: occurredAt.toISOString() });
   });
 
+  const hasFilters = filterKeys.size > 0 || filterNames.size > 0;
   const effectiveEvents =
-    filterServices.length > 0
+    hasFilters
       ? events.filter((event) => {
+          if (filterKeys.has(event.serviceKey)) return true;
           const service = serviceCatalog.get(event.serviceKey);
-          return service ? filterServices.includes(service.name) : false;
+          return service ? filterNames.has(service.name) : false;
         })
       : events;
 
@@ -255,7 +262,7 @@ export const GET = createApiHandler(async (req) => {
       end: endDate.toISOString(),
     },
     services: Array.from(serviceCatalog.values()),
-    selectedServices: filterServices,
+    selectedServices: Array.from(filterNames),
     points,
     totalSales: effectiveEvents.length,
   });
