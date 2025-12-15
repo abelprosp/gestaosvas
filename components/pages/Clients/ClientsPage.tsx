@@ -50,7 +50,7 @@ import {
   FiUpload,
 } from "react-icons/fi";
 import { api } from "@/lib/api/client";
-import { Client, ClientTVAssignment, PaginatedResponse, Service, StatsOverview } from "@/types";
+import { Client, ClientTVAssignment, PaginatedResponse, Service, ServiceTotals, StatsOverview } from "@/types";
 import { ClientFormModal, ClientFormValues } from "@/components/forms/ClientFormModal";
 import { ClientServicesModal, ClientServicesFormValues } from "@/components/forms/ClientServicesModal";
 import { ClientValuesModal } from "@/components/forms/ClientValuesModal";
@@ -240,6 +240,15 @@ export function ClientsPage() {
       return response.data;
     },
     staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: serviceTotals } = useQuery<ServiceTotals>({
+    queryKey: ["serviceTotals"],
+    queryFn: async () => {
+      const response = await api.get<ServiceTotals>("/stats/service-totals");
+      return response.data;
+    },
+    staleTime: 60 * 1000,
   });
 
   const [page, setPage] = useState(1);
@@ -659,6 +668,45 @@ const getSortIcon = (key: string): ReactElement | undefined => {
           </Text>
         </Box>
       </SimpleGrid>
+
+      <Box
+        bg={sectionBg}
+        borderRadius="2xl"
+        p={{ base: 4, md: 6 }}
+        boxShadow="lg"
+        borderWidth={1}
+        borderColor={sectionBorder}
+      >
+        <Flex
+          direction={{ base: "column", md: "row" }}
+          align={{ base: "flex-start", md: "center" }}
+          justify="space-between"
+          gap={{ base: 2, md: 4 }}
+          mb={{ base: 3, md: 4 }}
+        >
+          <Box>
+            <Text fontWeight="semibold">Totais de serviços</Text>
+            <Text fontSize="sm" color={mutedText}>
+              Contagem total no sistema (não depende do filtro/busca).
+            </Text>
+          </Box>
+        </Flex>
+
+        <Flex wrap="wrap" gap={2}>
+          <Badge colorScheme="teal" px={3} py={1} borderRadius="full">
+            TV Essencial: {serviceTotals?.tvEssencial ?? 0}
+          </Badge>
+          <Badge colorScheme="pink" px={3} py={1} borderRadius="full">
+            TV Premium: {serviceTotals?.tvPremium ?? 0}
+          </Badge>
+          <Badge colorScheme="purple" px={3} py={1} borderRadius="full">
+            Hub TV: {serviceTotals?.hub ?? 0}
+          </Badge>
+          <Badge colorScheme="orange" px={3} py={1} borderRadius="full">
+            Tele med: {serviceTotals?.tele ?? 0}
+          </Badge>
+        </Flex>
+      </Box>
 
       <Box
         bg={sectionBg}

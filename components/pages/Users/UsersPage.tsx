@@ -56,10 +56,11 @@ import {
   FiTrash2,
 } from "react-icons/fi";
 import { fetchTVOverview, regenerateTVSlotPassword, releaseTVSlot, updateTVSlot, updateTVAccountEmail, updateTVAccountMaxSlots, updateTVSlotUsername, deleteTVAccount, getNextEmailInfo, listTVAccounts, TVAccountInfo, getTVAccountSlots, TVAccountSlot, fetchTVAccountUsage, deleteTVSlot, createTVAccount, migrateTVAccountSlots } from "@/lib/api/tv";
-import { PaginatedResponse, TVOverviewRecord, TVSlotStatus } from "@/types";
+import { PaginatedResponse, ServiceTotals, TVOverviewRecord, TVSlotStatus } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { createRequest } from "@/lib/api/requests";
 import { exportToCsv, exportToPdf } from "@/lib/utils/exporters";
+import { api } from "@/lib/api/client";
 
 const EXPIRATION_COLORS = {
   SAFE: "green.400",
@@ -217,6 +218,15 @@ export function UsersPage() {
   const tableBg = useColorModeValue("rgba(255,255,255,0.78)", "rgba(15, 23, 42, 0.7)");
   const borderColor = useColorModeValue("rgba(226,232,240,0.6)", "rgba(45,55,72,0.6)");
   const headerColor = useColorModeValue("gray.600", "gray.300");
+
+  const { data: serviceTotals } = useQuery<ServiceTotals>({
+    queryKey: ["serviceTotals"],
+    queryFn: async () => {
+      const response = await api.get<ServiceTotals>("/stats/service-totals");
+      return response.data;
+    },
+    staleTime: 60 * 1000,
+  });
 
   const handleAuthorizationRequest = async (action: string, payload: Record<string, unknown>) => {
     try {
@@ -923,6 +933,26 @@ export function UsersPage() {
           </Text>
         </Box>
       </Flex>
+
+      <Box bg={tableBg} borderRadius="md" borderWidth={1} borderColor={borderColor} p={{ base: 3, md: 4 }}>
+        <Text fontSize="sm" color={headerColor} mb={2}>
+          Totais de serviços
+        </Text>
+        <Flex wrap="wrap" gap={2}>
+          <Badge colorScheme="teal" px={3} py={1} borderRadius="full">
+            TV Essencial: {serviceTotals?.tvEssencial ?? 0}
+          </Badge>
+          <Badge colorScheme="pink" px={3} py={1} borderRadius="full">
+            TV Premium: {serviceTotals?.tvPremium ?? 0}
+          </Badge>
+          <Badge colorScheme="purple" px={3} py={1} borderRadius="full">
+            Hub TV: {serviceTotals?.hub ?? 0}
+          </Badge>
+          <Badge colorScheme="orange" px={3} py={1} borderRadius="full">
+            Tele med: {serviceTotals?.tele ?? 0}
+          </Badge>
+        </Flex>
+      </Box>
 
       {isAdmin && nextEmailInfo && (
         <Flex direction={{ base: "column", md: "row" }} gap={3} flexWrap="wrap">

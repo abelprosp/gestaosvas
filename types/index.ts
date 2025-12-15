@@ -228,3 +228,10 @@ export interface ServiceReportRow {
   hasTelephony?: boolean | null; // Se tem telefonia (apenas para TV)
 }
 
+export interface ServiceTotals {
+  tvEssencial: number;
+  tvPremium: number;
+  hub: number;
+  tele: number;
+}
+
