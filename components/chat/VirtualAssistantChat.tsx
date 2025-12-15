@@ -33,6 +33,7 @@ import {
   getProactiveSuggestions,
   chatWithAI,
   type AssistantAction,
+  type AssistantRequestAction,
   type ClientSearchResult,
   type PendingContract,
   type ExpiringService,
@@ -40,6 +41,7 @@ import {
   type ProactiveSuggestion,
   type ChatMessage,
 } from "@/lib/api/assistant";
+import { createRequest } from "@/lib/api/requests";
 
 interface Message {
   sender: "assistant" | "user";
@@ -54,7 +56,7 @@ interface Message {
     route?: string;
     sales?: SalesAnalysis;
     suggestions?: ProactiveSuggestion[];
-    actions?: AssistantAction[];
+    actions?: Array<AssistantAction | AssistantRequestAction>;
     sources?: string[];
   };
 }
@@ -1777,12 +1779,57 @@ Digite "ajuda" para ver todos os comandos disponíveis ou faça uma pergunta esp
                               size="xs"
                               variant="outline"
                               colorScheme="brand"
-                              onClick={() => {
-                                if (action.confirm) {
-                                  const ok = window.confirm("Confirmar ação?");
-                                  if (!ok) return;
+                              onClick={async () => {
+                                try {
+                                  if (action.confirm) {
+                                    const ok = window.confirm(
+                                      "confirmMessage" in action && action.confirmMessage
+                                        ? action.confirmMessage
+                                        : "Confirmar ação?",
+                                    );
+                                    if (!ok) return;
+                                  }
+
+                                  if (action.type === "navigate") {
+                                    router.push(action.route);
+                                    return;
+                                  }
+
+                                  if (action.type === "request") {
+                                    let payload: Record<string, unknown> = { ...(action.payload ?? {}) };
+                                    if (action.prompt?.key === "description") {
+                                      const desc = window.prompt(action.prompt.label, action.prompt.placeholder ?? "");
+                                      if (!desc) return;
+                                      payload = { ...payload, description: desc };
+                                    }
+                                    await createRequest(action.action, payload);
+                                    toast({
+                                      title: "Ação executada",
+                                      description: action.successMessage ?? "Solicitação enviada.",
+                                      status: "success",
+                                      duration: 3000,
+                                    });
+                                    // Registrar no chat
+                                    setMessages((prev) => [
+                                      ...prev,
+                                      {
+                                        sender: "assistant",
+                                        content: action.successMessage ?? "Solicitação enviada.",
+                                        type: "text",
+                                        data: { sources: ["action-request"] },
+                                      },
+                                    ]);
+                                    return;
+                                  }
+                                } catch (e) {
+                                  console.error(e);
+                                  toast({
+                                    title: "Falha ao executar ação",
+                                    description: "Não foi possível concluir a ação. Tente novamente.",
+                                    status: "error",
+                                    duration: 4000,
+                                  });
                                 }
-                                router.push(action.route);
                               }}
                             >
                               {action.label}

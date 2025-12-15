@@ -83,6 +83,7 @@ type HowToKey =
   | "editar-cliente"
   | "adicionar-servicos-cliente"
   | "ver-valores-cliente"
+  | "cadastrar-vendedor"
   | "cadastrar-servico"
   | "cadastrar-contrato"
   | "criar-template"
@@ -132,6 +133,18 @@ export const HOW_TOS: HowTo[] = [
     title: "Como ver os valores (quantidades e subtotais) de um cliente",
     triggers: [/ver\s+valores/i, /valores\s+do\s+cliente/i, /quantidade/i],
     steps: ["1) Menu **Clientes**", "2) Localize o cliente → clique em **Valores**", "3) Veja o produto + quantidade e totais"],
+  },
+  {
+    key: "cadastrar-vendedor",
+    title: "Como cadastrar um vendedor/usuário (admin)",
+    triggers: [/cadastrar\s+vendedor/i, /(cadastrar|criar)\s+usu[aá]rio/i, /novo\s+vendedor/i, /novo\s+usu[aá]rio/i],
+    steps: [
+      "1) Menu **Administração**",
+      "2) Clique em **Novo usuário**",
+      "3) Preencha nome/e-mail e defina o papel (admin/vendedor)",
+      "4) **Salvar**",
+      "Obs.: se você não for admin, use o botão **Solicitar novo vendedor** (o admin recebe a solicitação).",
+    ],
   },
   {
     key: "cadastrar-servico",

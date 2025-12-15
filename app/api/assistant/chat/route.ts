@@ -17,6 +17,17 @@ type AssistantAction =
       route: string;
       confirm?: boolean;
     };
+type AssistantRequestAction = {
+  type: "request";
+  label: string;
+  action: string;
+  payload?: Record<string, unknown>;
+  prompt?: { key: "description"; label: string; placeholder?: string };
+  confirm?: boolean;
+  confirmMessage?: string;
+  successMessage?: string;
+};
+type AnyAssistantAction = AssistantAction | AssistantRequestAction;
 
 function asRow(value: unknown): Row | null {
   if (!value || typeof value !== "object") return null;
@@ -165,7 +176,7 @@ function buildLocalFallbackAnswer(message: string) {
   return `Estou em modo local (sem Gemini) no momento.\n\nMe diga o que você quer fazer e eu te passo o passo a passo (tela/botão/campos). Ex.: "cadastrar cliente", "editar cliente", "adicionar serviços", "renovar TV", "exportar relatório".`;
 }
 
-function actionsForHowToKey(key: string): AssistantAction[] {
+function actionsForHowToKey(key: string, isAdminUser: boolean): AnyAssistantAction[] {
   const map: Record<string, AssistantAction[]> = {
     "cadastrar-cliente": [{ type: "navigate", label: "Novo cliente", route: "/clientes?action=new" }],
     "editar-cliente": [{ type: "navigate", label: "Abrir Clientes", route: "/clientes" }],
@@ -178,6 +189,22 @@ function actionsForHowToKey(key: string): AssistantAction[] {
     "renovar-tv": [{ type: "navigate", label: "Abrir Usuários TV", route: "/usuarios" }],
     "exportar-relatorio-servicos": [{ type: "navigate", label: "Abrir Relatórios", route: "/relatorios/servicos" }],
   };
+  if (key === "cadastrar-vendedor") {
+    if (isAdminUser) {
+      return [{ type: "navigate", label: "Abrir Administração", route: "/admin/usuarios" }];
+    }
+    return [
+      {
+        type: "request",
+        label: "Solicitar novo vendedor",
+        action: "VENDOR_CREATE_REQUEST",
+        prompt: { key: "description", label: "Descreva o vendedor", placeholder: "Nome, e-mail e observações" },
+        confirm: true,
+        confirmMessage: "Enviar solicitação para o admin cadastrar um novo vendedor?",
+        successMessage: "Solicitação enviada. O administrador foi notificado.",
+      },
+    ];
+  }
   return map[key] ?? [];
 }
 
@@ -1215,7 +1242,7 @@ async function getAIResponse(
   return null;
 }
 
-export const POST = createApiHandler(async (req: NextRequest) => {
+export const POST = createApiHandler(async (req: NextRequest, { user }) => {
   try {
     const { message, history } = await req.json();
 
@@ -1245,10 +1272,11 @@ export const POST = createApiHandler(async (req: NextRequest) => {
     // Responder "como fazer" de forma determinística (economiza cota e é mais consistente)
     const howto = matchHowTo(message);
     if (howto) {
+      const isAdminUser = user?.role === "admin";
       return NextResponse.json({
         response: `${howto.title}\n\n${howto.steps.join("\n")}`,
         model: "system-howto",
-        actions: actionsForHowToKey(howto.key),
+        actions: actionsForHowToKey(howto.key, Boolean(isAdminUser)),
         sources: ["system-guide"],
       });
     }

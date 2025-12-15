@@ -114,12 +114,27 @@ export type AssistantAction =
       route: string;
       confirm?: boolean;
     };
+export type AssistantRequestAction = {
+  type: "request";
+  label: string;
+  action: string;
+  payload?: Record<string, unknown>;
+  prompt?: { key: "description"; label: string; placeholder?: string };
+  confirm?: boolean;
+  confirmMessage?: string;
+  successMessage?: string;
+};
 
 export async function chatWithAI(
   message: string,
   history: ChatMessage[] = []
-): Promise<{ response: string; model?: string; actions?: AssistantAction[]; sources?: string[] }> {
-  const response = await api.post<{ response: string; model?: string; actions?: AssistantAction[]; sources?: string[] }>(
+): Promise<{ response: string; model?: string; actions?: Array<AssistantAction | AssistantRequestAction>; sources?: string[] }> {
+  const response = await api.post<{
+    response: string;
+    model?: string;
+    actions?: Array<AssistantAction | AssistantRequestAction>;
+    sources?: string[];
+  }>(
     "/assistant/chat",
     { message, history }
   );
