@@ -256,6 +256,12 @@ export const GET = createApiHandler(async (req) => {
     };
   });
 
+  // Calcular totalSales somando todas as vendas dos pontos do gráfico
+  // Isso garante consistência entre o gráfico e o total exibido
+  const totalSales = points.reduce((sum, point) => {
+    return sum + Object.values(point.totals).reduce((monthSum, value) => monthSum + value, 0);
+  }, 0);
+
   return NextResponse.json({
     range: {
       start: startDate.toISOString(),
@@ -264,7 +270,7 @@ export const GET = createApiHandler(async (req) => {
     services: Array.from(serviceCatalog.values()),
     selectedServices: Array.from(filterNames),
     points,
-    totalSales: effectiveEvents.length,
+    totalSales,
   });
 });
 

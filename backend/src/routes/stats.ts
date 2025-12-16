@@ -392,6 +392,12 @@ router.get("/sales", async (req, res, next) => {
       };
     });
 
+    // Calcular totalSales somando todas as vendas dos pontos do gráfico
+    // Isso garante consistência entre o gráfico e o total exibido
+    const totalSales = points.reduce((sum, point) => {
+      return sum + Object.values(point.totals).reduce((monthSum, value) => monthSum + value, 0);
+    }, 0);
+
     res.json({
       range: {
         start: startDate.toISOString(),
@@ -400,7 +406,7 @@ router.get("/sales", async (req, res, next) => {
       services: Array.from(serviceCatalog.values()),
       selectedServices: filterServices,
       points,
-      totalSales: effectiveEvents.length,
+      totalSales,
     });
   } catch (error) {
     next(error);
