@@ -152,7 +152,12 @@ export function ServiceReportsPage() {
         Status: row.status ?? "",
         Inicio: formatDate(row.startsAt),
         Vencimento: formatDate(row.expiresAt),
-        Notas: (row.notes ?? "").replace(/\n/g, " ").replace(/\r/g, ""), // Substituir quebras de linha por espaços
+        Notas: (row.notes ?? "")
+          .replace(/\r\n/g, " ") // Substituir quebras de linha Windows por espaço
+          .replace(/\n/g, " ") // Substituir quebras de linha Unix por espaço
+          .replace(/\r/g, " ") // Substituir quebras de linha Mac por espaço
+          .replace(/\s+/g, " ") // Substituir múltiplos espaços por um único espaço
+          .trim(), // Remover espaços no início e fim
       };
     });
 

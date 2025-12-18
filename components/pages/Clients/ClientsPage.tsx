@@ -59,6 +59,7 @@ import { exportToCsv, exportToPdf } from "@/lib/utils/exporters";
 import Papa from "papaparse";
 import { useAuth } from "@/context/AuthContext";
 import { createRequest } from "@/lib/api/requests";
+import { useRouter } from "next/navigation";
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -69,6 +70,7 @@ export function ClientsPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const { isAdmin } = useAuth();
+  const router = useRouter();
   const extractErrorMessage = (error: unknown) => {
     if (error && typeof error === "object") {
       if ("message" in error && typeof (error as { message?: unknown }).message === "string") {
@@ -996,6 +998,10 @@ const getSortIcon = (key: string): ReactElement | undefined => {
                                         px={3}
                                         py={2}
                                         bg={assignmentDetailBg}
+                                        cursor="pointer"
+                                        _hover={{ bg: assignmentDetailBg, opacity: 0.8 }}
+                                        onClick={() => router.push("/servicos")}
+                                        transition="background-color 0.2s"
                                       >
                                         <Badge colorScheme="blue">{service.name}</Badge>
                                         {service.customPrice !== null && service.customPrice !== undefined ? (
