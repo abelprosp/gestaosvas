@@ -32,6 +32,28 @@ export function exportToPdf(title: string, headers: string[], rows: (string | nu
 
 export function exportToXlsx(filename: string, data: Record<string, unknown>[]) {
   const worksheet = XLSXUtils.json_to_sheet(data);
+  
+  // Ajustar largura das colunas automaticamente
+  const colWidths: { wch: number }[] = [];
+  const range = XLSXUtils.decode_range(worksheet["!ref"] || "A1");
+  
+  for (let C = range.s.c; C <= range.e.c; ++C) {
+    let maxWidth = 10;
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+      const cellAddress = XLSXUtils.encode_cell({ c: C, r: R });
+      const cell = worksheet[cellAddress];
+      if (cell && cell.v) {
+        const cellValue = String(cell.v);
+        // Para a coluna de Notas, permitir largura maior
+        if (cellValue.length > maxWidth) {
+          maxWidth = Math.min(cellValue.length + 2, 100); // Máximo de 100 caracteres de largura
+        }
+      }
+    }
+    colWidths.push({ wch: maxWidth });
+  }
+  worksheet["!cols"] = colWidths;
+  
   const workbook = XLSXUtils.book_new();
   XLSXUtils.book_append_sheet(workbook, worksheet, "Dados");
   writeExcelFile(workbook, filename);

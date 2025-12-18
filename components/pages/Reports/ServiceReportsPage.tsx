@@ -25,7 +25,7 @@ import { useMemo, useState } from "react";
 import { fetchServiceReport } from "@/lib/api/reports";
 import { ServiceReportRow, Service } from "@/types";
 import { ServiceReportCategory } from "./types";
-import { exportToCsv } from "@/lib/utils/exporters";
+import { exportToCsv, exportToXlsx } from "@/lib/utils/exporters";
 import { api } from "@/lib/api/client";
 
 const CATEGORY_LABELS: Record<ServiceReportRow["category"], string> = {
@@ -153,15 +153,16 @@ export function ServiceReportsPage() {
         Inicio: formatDate(row.startsAt),
         Vencimento: formatDate(row.expiresAt),
         Notas: (row.notes ?? "")
-          .replace(/\r\n/g, " ") // Substituir quebras de linha Windows por espaço
-          .replace(/\n/g, " ") // Substituir quebras de linha Unix por espaço
-          .replace(/\r/g, " ") // Substituir quebras de linha Mac por espaço
+          .replace(/\r\n/g, " | ") // Substituir quebras de linha Windows por separador
+          .replace(/\n/g, " | ") // Substituir quebras de linha Unix por separador
+          .replace(/\r/g, " | ") // Substituir quebras de linha Mac por separador
           .replace(/\s+/g, " ") // Substituir múltiplos espaços por um único espaço
-          .trim(), // Remover espaços no início e fim
+          .trim(), // Remover espaços no início e fim - mantém conteúdo completo
       };
     });
 
-    exportToCsv("relatorio_servicos.csv", csvData);
+    // Usar XLSX ao invés de CSV para garantir que campos longos não sejam cortados
+    exportToXlsx("relatorio_servicos.xlsx", csvData);
     toast({ title: "Relatório exportado", status: "success" });
   };
 
@@ -248,7 +249,7 @@ export function ServiceReportsPage() {
             h="40px"
             w={{ base: "full", md: "auto" }}
           >
-            Exportar CSV
+            Exportar Excel
           </Button>
         </Stack>
       </Stack>

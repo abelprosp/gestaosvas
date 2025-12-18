@@ -22,7 +22,7 @@ import { useMemo, useState } from "react";
 import { fetchServiceReport } from "../../api/reports";
 import { ServiceReportRow } from "../../types";
 import { ServiceReportCategory } from "./types";
-import { exportToCsv } from "../../utils/exporters";
+import { exportToCsv, exportToXlsx } from "../../utils/exporters";
 
 const CATEGORY_LABELS: Record<ServiceReportRow["category"], string> = {
   TV: "TV",
@@ -101,28 +101,26 @@ export function ServiceReportsPage() {
       toast({ title: "Nenhum dado para exportar", status: "info" });
       return;
     }
-    exportToCsv(
-      "relatorio_servicos.csv",
-      rows.map((row) => ({
-        Cliente: row.clientName,
-        Documento: row.clientDocument,
-        Email: row.clientEmail ?? "",
-        Categoria: CATEGORY_LABELS[row.category],
-        Servico: row.serviceName,
-        Identificador: row.identifier,
-        Responsavel: row.responsible ?? "",
-        Plano: row.planType ?? "",
-        Status: row.status ?? "",
-        Inicio: formatDate(row.startsAt),
-        Vencimento: formatDate(row.expiresAt),
-        Notas: (row.notes ?? "")
-          .replace(/\r\n/g, " ") // Substituir quebras de linha Windows por espaço
-          .replace(/\n/g, " ") // Substituir quebras de linha Unix por espaço
-          .replace(/\r/g, " ") // Substituir quebras de linha Mac por espaço
-          .replace(/\s+/g, " ") // Substituir múltiplos espaços por um único espaço
-          .trim(), // Remover espaços no início e fim
-      })),
-    );
+    // Usar XLSX ao invés de CSV para garantir que campos longos não sejam cortados
+    exportToXlsx("relatorio_servicos.xlsx", rows.map((row) => ({
+      Cliente: row.clientName,
+      Documento: row.clientDocument,
+      Email: row.clientEmail ?? "",
+      Categoria: CATEGORY_LABELS[row.category],
+      Servico: row.serviceName,
+      Identificador: row.identifier,
+      Responsavel: row.responsible ?? "",
+      Plano: row.planType ?? "",
+      Status: row.status ?? "",
+      Inicio: formatDate(row.startsAt),
+      Vencimento: formatDate(row.expiresAt),
+      Notas: (row.notes ?? "")
+        .replace(/\r\n/g, " | ") // Substituir quebras de linha Windows por separador
+        .replace(/\n/g, " | ") // Substituir quebras de linha Unix por separador
+        .replace(/\r/g, " | ") // Substituir quebras de linha Mac por separador
+        .replace(/\s+/g, " ") // Substituir múltiplos espaços por um único espaço
+        .trim(), // Remover espaços no início e fim - mantém conteúdo completo
+    })));
     toast({ title: "Relatório exportado", status: "success" });
   };
 
@@ -174,7 +172,7 @@ export function ServiceReportsPage() {
             Aplicar filtros
           </Button>
           <Button variant="outline" onClick={handleExport} isDisabled={!rows.length}>
-            Exportar CSV
+            Exportar Excel
           </Button>
         </HStack>
       </Stack>
