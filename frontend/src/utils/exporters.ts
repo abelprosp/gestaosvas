@@ -4,7 +4,11 @@ import autoTable, { CellInput } from "jspdf-autotable";
 import Papa from "papaparse";
 
 export function exportToCsv(filename: string, data: Record<string, unknown>[]) {
-  const csv = Papa.unparse(data);
+  const csv = Papa.unparse(data, {
+    quotes: true, // Forçar aspas em todos os campos para garantir que campos longos não sejam cortados
+    escapeChar: '"',
+    delimiter: ',',
+  });
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);

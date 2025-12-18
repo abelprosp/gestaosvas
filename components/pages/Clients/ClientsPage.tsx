@@ -66,6 +66,24 @@ const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   currency: "BRL",
 });
 
+// Função para determinar a rota baseada no tipo de serviço
+function getServiceRoute(serviceName: string): string {
+  const name = serviceName.toLowerCase();
+  if (name.includes("tv")) {
+    return "/usuarios";
+  }
+  if (name.includes("cloud")) {
+    return "/usuarios-cloud";
+  }
+  if (name.includes("hub") || name.includes("hubplay")) {
+    return "/usuarios-hub";
+  }
+  if (name.includes("telemedicina") || name.includes("telepet") || name.includes("tele")) {
+    return "/usuarios-tele";
+  }
+  return "/servicos"; // Fallback para outros serviços
+}
+
 export function ClientsPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -1000,7 +1018,7 @@ const getSortIcon = (key: string): ReactElement | undefined => {
                                         bg={assignmentDetailBg}
                                         cursor="pointer"
                                         _hover={{ bg: assignmentDetailBg, opacity: 0.8 }}
-                                        onClick={() => router.push("/servicos")}
+                                        onClick={() => router.push(getServiceRoute(service.name))}
                                         transition="background-color 0.2s"
                                       >
                                         <Badge colorScheme="blue">{service.name}</Badge>

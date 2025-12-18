@@ -517,7 +517,12 @@ export function UsersPage() {
       Status: STATUS_LABEL[record.status],
       Vencimento: formatDate(record.expiresAt),
       Vendedor: record.soldBy ?? "",
-      Comentario: record.notes ?? "",
+      Comentario: (record.notes ?? "")
+        .replace(/\r\n/g, " ") // Substituir quebras de linha Windows por espaço
+        .replace(/\n/g, " ") // Substituir quebras de linha Unix por espaço
+        .replace(/\r/g, " ") // Substituir quebras de linha Mac por espaço
+        .replace(/\s+/g, " ") // Substituir múltiplos espaços por um único espaço
+        .trim(), // Remover espaços no início e fim - mantém conteúdo completo
     }));
 
   const handleExport = (format: "csv" | "pdf") => {
