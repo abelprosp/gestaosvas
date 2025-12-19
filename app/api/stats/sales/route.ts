@@ -200,16 +200,9 @@ export const GET = createApiHandler(async (req) => {
     events.push({ serviceKey: key, occurredAt: occurredAt.toISOString(), value });
   });
 
-  // Buscar preço padrão de TV dos serviços
-  let defaultTvPrice = 0;
-  const tvService = Array.from(servicePrices.entries()).find(([id, price]) => {
-    // Buscar serviço TV nos serviços cadastrados
-    const service = (allServices ?? []).find((s: any) => s.id === id && s.name?.toLowerCase().includes("tv"));
-    return service;
-  });
-  if (tvService) {
-    defaultTvPrice = tvService[1];
-  }
+  // Valores padrão de TV por acesso
+  const DEFAULT_TV_PREMIUM_PRICE = 39.99;
+  const DEFAULT_TV_ESSENCIAL_PRICE = 3.99;
 
   const tvSlotRows = (tvSlots ?? []) as unknown as TvSlotRow[];
   tvSlotRows.forEach((slot) => {
@@ -226,19 +219,25 @@ export const GET = createApiHandler(async (req) => {
       serviceCatalog.set(key, { key, name: plan, group: "TV" });
     }
     
-    // Calcular valor: buscar preço customizado do cliente se disponível
-    let value = defaultTvPrice;
+    // Calcular valor: buscar preço customizado do cliente se disponível, senão usar valores padrão
+    let value: number;
     if (slot.client?.client_services && slot.client.client_services.length > 0) {
       const tvServiceRelation = slot.client.client_services.find(
         (cs) => cs.service?.name?.toLowerCase().includes("tv")
       );
       if (tvServiceRelation) {
         if (slot.plan_type === "PREMIUM") {
-          value = tvServiceRelation.custom_price_premium ?? tvServiceRelation.custom_price ?? tvServiceRelation.service?.price ?? defaultTvPrice;
+          value = tvServiceRelation.custom_price_premium ?? tvServiceRelation.custom_price ?? DEFAULT_TV_PREMIUM_PRICE;
         } else {
-          value = tvServiceRelation.custom_price_essencial ?? tvServiceRelation.custom_price ?? tvServiceRelation.service?.price ?? defaultTvPrice;
+          value = tvServiceRelation.custom_price_essencial ?? tvServiceRelation.custom_price ?? DEFAULT_TV_ESSENCIAL_PRICE;
         }
+      } else {
+        // Se não encontrou relação de serviço TV, usar valores padrão
+        value = slot.plan_type === "PREMIUM" ? DEFAULT_TV_PREMIUM_PRICE : DEFAULT_TV_ESSENCIAL_PRICE;
       }
+    } else {
+      // Se não há client_services, usar valores padrão
+      value = slot.plan_type === "PREMIUM" ? DEFAULT_TV_PREMIUM_PRICE : DEFAULT_TV_ESSENCIAL_PRICE;
     }
     
     events.push({ serviceKey: key, occurredAt: occurredAt.toISOString(), value });
