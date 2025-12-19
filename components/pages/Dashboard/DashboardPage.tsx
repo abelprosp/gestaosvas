@@ -122,6 +122,25 @@ export function DashboardPage() {
   const [endDate, setEndDate] = useState<string>(defaultRange.end);
   const [selectedServiceKeys, setSelectedServiceKeys] = useState<string[]>([]);
   const [isTvBreakdownOpen, setIsTvBreakdownOpen] = useState(false);
+  
+  // Meta manual de arrecadação (salva no localStorage)
+  const [revenueGoal, setRevenueGoal] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("dashboard_revenue_goal");
+      return saved ? parseFloat(saved) || 0 : 0;
+    }
+    return 0;
+  });
+  
+  const [isEditingGoal, setIsEditingGoal] = useState(false);
+  
+  const handleGoalChange = (value: string) => {
+    const numValue = parseFloat(value) || 0;
+    setRevenueGoal(numValue);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("dashboard_revenue_goal", numValue.toString());
+    }
+  };
 
   // Preferimos filtrar por KEY (mais robusto que nome). O backend aceita keys e nomes.
   const salesFilterKeys = useMemo(() => {
@@ -154,6 +173,14 @@ export function DashboardPage() {
     ],
     [selectedMetrics],
   );
+
+  // Formatar valor monetário
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+  };
+
+  // Calcular progresso em relação à meta
+  const revenueProgress = revenueGoal > 0 ? Math.min((totalRevenue / revenueGoal) * 100, 100) : 0;
 
   const salesPlaceholder: SalesTimeseries = {
     range: { start: defaultRange.start, end: defaultRange.end },
@@ -287,6 +314,52 @@ export function DashboardPage() {
     return services;
   }, [availableServices, selectedServiceKeys, salesData.services]);
 
+  // Identificar serviços de Telemedicina e Hub
+  const telemedicinaKeywords = ["telemedicina", "tele", "telepet"];
+  const hubKeywords = ["hub", "hubplay"];
+  
+  const isTelemedicinaService = (serviceName: string): boolean => {
+    const name = serviceName.toLowerCase();
+    return telemedicinaKeywords.some(keyword => name.includes(keyword));
+  };
+  
+  const isHubService = (serviceName: string): boolean => {
+    const name = serviceName.toLowerCase();
+    return hubKeywords.some(keyword => name.includes(keyword));
+  };
+
+  // Calcular total arrecadado (TV Premium + TV Essencial + Telemedicina + Hub)
+  const totalRevenue = useMemo(() => {
+    if (!salesData.points || salesData.points.length === 0) return 0;
+    
+    let total = 0;
+    salesData.points.forEach((point) => {
+      // TV Essencial
+      const tvEssencialValue = point.values?.["tv-essencial"] ?? 0;
+      // TV Premium
+      const tvPremiumValue = point.values?.["tv-premium"] ?? 0;
+      
+      // Telemedicina e Hub (buscar por nome do serviço)
+      let telemedicinaValue = 0;
+      let hubValue = 0;
+      
+      salesData.services.forEach((service) => {
+        if (service.group === "SERVICO") {
+          const serviceValue = point.values?.[service.key] ?? 0;
+          if (isTelemedicinaService(service.name)) {
+            telemedicinaValue += serviceValue;
+          } else if (isHubService(service.name)) {
+            hubValue += serviceValue;
+          }
+        }
+      });
+      
+      total += tvEssencialValue + tvPremiumValue + telemedicinaValue + hubValue;
+    });
+    
+    return total;
+  }, [salesData.points, salesData.services]);
+
   const lineChartData = useMemo(() => {
     return salesData.points.map((point) => {
       const entry: Record<string, number | string> = {
@@ -295,7 +368,7 @@ export function DashboardPage() {
       
       activeServices.forEach((service) => {
         if (service.key === "tv-total") {
-          // Somar tv-essencial e tv-premium para a TV agregada
+          // Somar tv-essencial e tv-premium para a TV agregada (quantidade)
           const tvEssencialTotal = point.totals["tv-essencial"] ?? 0;
           const tvPremiumTotal = point.totals["tv-premium"] ?? 0;
           entry[service.key] = tvEssencialTotal + tvPremiumTotal;
@@ -304,9 +377,28 @@ export function DashboardPage() {
         }
       });
       
+      // Adicionar linha de total arrecadado (valores monetários)
+      const tvEssencialValue = point.values?.["tv-essencial"] ?? 0;
+      const tvPremiumValue = point.values?.["tv-premium"] ?? 0;
+      let telemedicinaValue = 0;
+      let hubValue = 0;
+      
+      salesData.services.forEach((service) => {
+        if (service.group === "SERVICO") {
+          const serviceValue = point.values?.[service.key] ?? 0;
+          if (isTelemedicinaService(service.name)) {
+            telemedicinaValue += serviceValue;
+          } else if (isHubService(service.name)) {
+            hubValue += serviceValue;
+          }
+        }
+      });
+      
+      entry["total-revenue"] = tvEssencialValue + tvPremiumValue + telemedicinaValue + hubValue;
+      
       return entry;
     });
-  }, [salesData.points, activeServices]);
+  }, [salesData.points, salesData.services, activeServices]);
 
   const handleStartDateChange = (value: string) => {
     setStartDate(value);
@@ -340,6 +432,85 @@ export function DashboardPage() {
           </>
         )}
           </SimpleGrid>
+
+          {/* Card de Total Arrecadado e Meta */}
+          <Box
+            bg={cardBg}
+            borderRadius="2xl"
+            p={6}
+            boxShadow="lg"
+            borderWidth={1}
+            borderColor={cardBorder}
+          >
+            <HStack justify="space-between" align={{ base: "stretch", md: "center" }} spacing={4} flexWrap="wrap" mb={4}>
+              <Box>
+                <Heading size="md">Total Arrecadado</Heading>
+                <Text fontSize="sm" color={mutedText}>
+                  Soma de valores: TV Premium + TV Essencial + Telemedicina + Hub
+                </Text>
+              </Box>
+              <FormControl maxW={{ base: "full", sm: "200px" }}>
+                <FormLabel fontSize="sm">Meta (R$)</FormLabel>
+                <Input
+                  type="number"
+                  value={revenueGoal || ""}
+                  onChange={(e) => handleGoalChange(e.target.value)}
+                  placeholder="0,00"
+                  step="0.01"
+                  min="0"
+                />
+              </FormControl>
+            </HStack>
+            
+            <VStack align="stretch" spacing={4}>
+              <HStack justify="space-between" align="center">
+                <Text fontSize="lg" color={mutedText}>Total Arrecadado</Text>
+                <Text fontSize="3xl" fontWeight="bold" color="#10b981">
+                  {formatCurrency(totalRevenue)}
+                </Text>
+              </HStack>
+              
+              {revenueGoal > 0 && (
+                <>
+                  <HStack justify="space-between" align="center">
+                    <Text fontSize="sm" color={mutedText}>Meta</Text>
+                    <Text fontSize="lg" fontWeight="semibold">
+                      {formatCurrency(revenueGoal)}
+                    </Text>
+                  </HStack>
+                  <Progress
+                    value={revenueProgress}
+                    colorScheme={revenueProgress >= 100 ? "green" : revenueProgress >= 75 ? "yellow" : "orange"}
+                    borderRadius="full"
+                    height="20px"
+                    backgroundColor={useColorModeValue("gray.100", "gray.700")}
+                  />
+                  <HStack justify="space-between" align="center">
+                    <Text fontSize="sm" color={mutedText}>Progresso</Text>
+                    <Badge
+                      colorScheme={revenueProgress >= 100 ? "green" : revenueProgress >= 75 ? "yellow" : "orange"}
+                      borderRadius="full"
+                      px={3}
+                      py={1}
+                      fontSize="sm"
+                    >
+                      {revenueProgress.toFixed(1)}%
+                    </Badge>
+                  </HStack>
+                  {totalRevenue < revenueGoal && (
+                    <Text fontSize="sm" color={mutedText} textAlign="center">
+                      Faltam {formatCurrency(revenueGoal - totalRevenue)} para atingir a meta
+                    </Text>
+                  )}
+                  {totalRevenue >= revenueGoal && (
+                    <Text fontSize="sm" color="green.500" textAlign="center" fontWeight="semibold">
+                      🎉 Meta atingida! Excedido em {formatCurrency(totalRevenue - revenueGoal)}
+                    </Text>
+                  )}
+                </>
+              )}
+            </VStack>
+          </Box>
 
           <Box
         bg={cardBg}
@@ -453,13 +624,38 @@ export function DashboardPage() {
                     isAnimationActive={!fetchingSales}
                   />
                 ))}
+                {/* Linha de total arrecadado (valores monetários) */}
+                <Line
+                  type="monotone"
+                  dataKey="total-revenue"
+                  name="Total Arrecadado (R$)"
+                  stroke="#10b981"
+                  strokeWidth={3}
+                  dot={false}
+                  isAnimationActive={!fetchingSales}
+                  strokeDasharray="5 5"
+                />
               </LineChart>
             </ResponsiveContainer>
           )}
         </Box>
-        <Text fontSize="sm" color={mutedText} mt={4}>
-          Total de vendas no período: <strong>{salesData.totalSales}</strong>
-        </Text>
+        <VStack align="stretch" spacing={3} mt={4}>
+          <Text fontSize="sm" color={mutedText}>
+            Total de vendas no período: <strong>{salesData.totalSales}</strong>
+          </Text>
+          <HStack justify="space-between" align="center" flexWrap="wrap">
+            <Text fontSize="sm" color={mutedText}>
+              Total arrecadado: <strong style={{ color: "#10b981", fontSize: "1.1em" }}>
+                {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalRevenue)}
+              </strong>
+            </Text>
+            {revenueGoal > 0 && (
+              <Badge colorScheme={totalRevenue >= revenueGoal ? "green" : "yellow"} borderRadius="full" px={3} py={1}>
+                {((totalRevenue / revenueGoal) * 100).toFixed(1)}% da meta
+              </Badge>
+            )}
+          </HStack>
+        </VStack>
           </Box>
 
           <Box

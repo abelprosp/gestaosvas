@@ -236,3 +236,30 @@ export interface ServiceTotals {
   tele: number;
 }
 
+export interface SalesTimeseriesService {
+  key: string;
+  name: string;
+  group: "TV" | "SERVICO";
+}
+
+export interface SalesTimeseriesPoint {
+  month: string;
+  label: string;
+  totals: Record<string, number>; // Quantidade de vendas
+  values: Record<string, number>; // Valores monetários (R$)
+  total: number; // Total de vendas (quantidade)
+  totalValue: number; // Total arrecadado (R$)
+}
+
+export interface SalesTimeseries {
+  range: {
+    start: string;
+    end: string;
+  };
+  services: SalesTimeseriesService[];
+  selectedServices: string[];
+  points: SalesTimeseriesPoint[];
+  totalSales: number; // Total de vendas (quantidade)
+  totalRevenue: number; // Total arrecadado (R$)
+}
+
