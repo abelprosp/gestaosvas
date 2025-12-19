@@ -377,25 +377,6 @@ export function DashboardPage() {
         }
       });
       
-      // Adicionar linha de total arrecadado (valores monetários)
-      const tvEssencialValue = point.values?.["tv-essencial"] ?? 0;
-      const tvPremiumValue = point.values?.["tv-premium"] ?? 0;
-      let telemedicinaValue = 0;
-      let hubValue = 0;
-      
-      salesData.services.forEach((service) => {
-        if (service.group === "SERVICO") {
-          const serviceValue = point.values?.[service.key] ?? 0;
-          if (isTelemedicinaService(service.name)) {
-            telemedicinaValue += serviceValue;
-          } else if (isHubService(service.name)) {
-            hubValue += serviceValue;
-          }
-        }
-      });
-      
-      entry["total-revenue"] = tvEssencialValue + tvPremiumValue + telemedicinaValue + hubValue;
-      
       return entry;
     });
   }, [salesData.points, salesData.services, activeServices]);
@@ -624,38 +605,13 @@ export function DashboardPage() {
                     isAnimationActive={!fetchingSales}
                   />
                 ))}
-                {/* Linha de total arrecadado (valores monetários) */}
-                <Line
-                  type="monotone"
-                  dataKey="total-revenue"
-                  name="Total Arrecadado (R$)"
-                  stroke="#10b981"
-                  strokeWidth={3}
-                  dot={false}
-                  isAnimationActive={!fetchingSales}
-                  strokeDasharray="5 5"
-                />
               </LineChart>
             </ResponsiveContainer>
           )}
         </Box>
-        <VStack align="stretch" spacing={3} mt={4}>
-          <Text fontSize="sm" color={mutedText}>
-            Total de vendas no período: <strong>{salesData.totalSales}</strong>
-          </Text>
-          <HStack justify="space-between" align="center" flexWrap="wrap">
-            <Text fontSize="sm" color={mutedText}>
-              Total arrecadado: <strong style={{ color: "#10b981", fontSize: "1.1em" }}>
-                {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalRevenue)}
-              </strong>
-            </Text>
-            {revenueGoal > 0 && (
-              <Badge colorScheme={totalRevenue >= revenueGoal ? "green" : "yellow"} borderRadius="full" px={3} py={1}>
-                {((totalRevenue / revenueGoal) * 100).toFixed(1)}% da meta
-              </Badge>
-            )}
-          </HStack>
-        </VStack>
+        <Text fontSize="sm" color={mutedText} mt={4}>
+          Total de vendas no período: <strong>{salesData.totalSales}</strong>
+        </Text>
           </Box>
 
           <Box
