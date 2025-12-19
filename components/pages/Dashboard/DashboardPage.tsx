@@ -179,9 +179,6 @@ export function DashboardPage() {
     return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
   };
 
-  // Calcular progresso em relação à meta
-  const revenueProgress = revenueGoal > 0 ? Math.min((totalRevenue / revenueGoal) * 100, 100) : 0;
-
   const salesPlaceholder: SalesTimeseries = {
     range: { start: defaultRange.start, end: defaultRange.end },
     services: [],
@@ -359,6 +356,9 @@ export function DashboardPage() {
     
     return total;
   }, [salesData.points, salesData.services]);
+
+  // Calcular progresso em relação à meta (depois de totalRevenue ser definido)
+  const revenueProgress = revenueGoal > 0 ? Math.min((totalRevenue / revenueGoal) * 100, 100) : 0;
 
   const lineChartData = useMemo(() => {
     return salesData.points.map((point) => {
