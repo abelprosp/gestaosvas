@@ -45,8 +45,7 @@ import { api } from "@/lib/api/client";
 import { Client, ClientTVAssignment, PaginatedResponse, Service, StatsOverview } from "@/types";
 import { ClientFormModal, ClientFormValues } from "@/components/forms/ClientFormModal";
 import { formatDate } from "@/lib/utils/format";
-import { exportToCsv, exportToPdf } from "@/lib/utils/exporters";
-import Papa from "papaparse";
+import { exportToExcel, exportToPdf, importFromExcel } from "@/lib/utils/exporters";
 import { useAuth } from "@/context/AuthContext";
 import { createRequest } from "@/lib/api/requests";
 
@@ -99,14 +98,14 @@ export function ClientsPage() {
   const [expandedAssignments, setExpandedAssignments] = useState<Record<string, boolean>>({});
   const [expandedClientId, setExpandedClientId] = useState<string | null>(null);
   const formModal = useDisclosure();
-  const handleExportCsv = () => {
+  const handleExportExcel = () => {
     if (!filteredClients.length) {
       toast({ title: "Nenhum cliente para exportar", status: "info" });
       return;
     }
 
-    exportToCsv(
-      "clientes.csv",
+    exportToExcel(
+      "clientes.xlsx",
       filteredClients.map((client: Client) => ({
         Nome: client.name,
         Email: client.email,
@@ -166,21 +165,17 @@ export function ClientsPage() {
     );
   };
 
-  const handleImportCsv = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportExcel = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setIsImporting(true);
-    Papa.parse<ClientFormValues>(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (results) => {
-        const { data, errors } = results;
-        if (errors.length) {
-          toast({ title: "CSV inválido", description: errors[0].message, status: "error" });
-          setIsImporting(false);
-          return;
-        }
+    importFromExcel<ClientFormValues>(file, async (data, errors) => {
+      if (errors.length) {
+        toast({ title: "Excel inválido", description: errors[0], status: "error" });
+        setIsImporting(false);
+        return;
+      }
 
         try {
           for (const row of data) {
@@ -206,7 +201,6 @@ export function ClientsPage() {
           const input = document.getElementById("clients-import-input") as HTMLInputElement | null;
           if (input) input.value = "";
         }
-      },
     });
   };
 
@@ -439,8 +433,8 @@ const getSortIcon = (key: string): ReactElement | undefined => {
           justifyContent="flex-end"
           w="full"
         >
-          <Button leftIcon={<FiDownload />} variant="outline" onClick={handleExportCsv} w={{ base: "full", lg: "auto" }}>
-            Exportar CSV
+          <Button leftIcon={<FiDownload />} variant="outline" onClick={handleExportExcel} w={{ base: "full", lg: "auto" }}>
+            Exportar Excel
           </Button>
           <Button leftIcon={<FiFilePlus />} variant="outline" onClick={handleExportPdf} w={{ base: "full", lg: "auto" }}>
             Exportar PDF
@@ -452,7 +446,7 @@ const getSortIcon = (key: string): ReactElement | undefined => {
             onClick={() => document.getElementById("clients-import-input")?.click()}
             w={{ base: "full", lg: "auto" }}
           >
-            Importar CSV
+            Importar Excel
           </Button>
           <Button
             leftIcon={<FiPlus />}
@@ -468,9 +462,9 @@ const getSortIcon = (key: string): ReactElement | undefined => {
         <input
           id="clients-import-input"
           type="file"
-          accept=".csv"
+          accept=".xlsx"
           style={{ display: "none" }}
-          onChange={handleImportCsv}
+          onChange={handleImportExcel}
         />
       </Flex>
 

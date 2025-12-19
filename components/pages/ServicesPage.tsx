@@ -34,10 +34,9 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { FiDownload, FiEdit, FiFilePlus, FiPlus, FiTrash, FiUpload } from "react-icons/fi";
-import Papa from "papaparse";
 import { api } from "@/lib/api/client";
 import { Service } from "@/types";
-import { exportToCsv, exportToPdf } from "@/lib/utils/exporters";
+import { exportToExcel, exportToPdf, importFromExcel } from "@/lib/utils/exporters";
 
 interface ServiceFormValues {
   name: string;
@@ -292,14 +291,14 @@ export function ServicesPage() {
     formModal.onOpen();
   };
 
-  const handleExportCsv = () => {
+  const handleExportExcel = () => {
     if (!services.length) {
       toast({ title: "Nenhum serviço para exportar", status: "info" });
       return;
     }
 
-    exportToCsv(
-      "servicos.csv",
+    exportToExcel(
+      "servicos.xlsx",
       services.map((service) => ({
         Nome: service.name,
         Descricao: service.description ?? "",
@@ -322,12 +321,12 @@ export function ServicesPage() {
     );
   };
 
-  const handleImportCsv = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportExcel = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setIsImporting(true);
-    type ServiceCsvRow = {
+    type ServiceExcelRow = {
       name?: string;
       description?: string;
       price?: string | number;
@@ -336,16 +335,12 @@ export function ServicesPage() {
       allowCustomPrice?: string | number | boolean;
     };
 
-    Papa.parse<ServiceCsvRow>(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (results) => {
-        const { data, errors } = results;
-        if (errors.length) {
-          toast({ title: "CSV inválido", description: errors[0].message, status: "error" });
-          setIsImporting(false);
-          return;
-        }
+    importFromExcel<ServiceExcelRow>(file, async (data, errors) => {
+      if (errors.length) {
+        toast({ title: "Excel inválido", description: errors[0], status: "error" });
+        setIsImporting(false);
+        return;
+      }
 
         try {
           for (const row of data) {
@@ -382,7 +377,6 @@ export function ServicesPage() {
           const input = document.getElementById("services-import-input") as HTMLInputElement | null;
           if (input) input.value = "";
         }
-      },
     });
   };
 
@@ -417,8 +411,8 @@ export function ServicesPage() {
           justifyContent="flex-end"
           w="full"
         >
-          <Button leftIcon={<FiDownload />} variant="outline" onClick={handleExportCsv} w={{ base: "full", lg: "auto" }}>
-            Exportar CSV
+          <Button leftIcon={<FiDownload />} variant="outline" onClick={handleExportExcel} w={{ base: "full", lg: "auto" }}>
+            Exportar Excel
           </Button>
           <Button leftIcon={<FiFilePlus />} variant="outline" onClick={handleExportPdf} w={{ base: "full", lg: "auto" }}>
             Exportar PDF
@@ -430,7 +424,7 @@ export function ServicesPage() {
             onClick={() => document.getElementById("services-import-input")?.click()}
             w={{ base: "full", lg: "auto" }}
           >
-            Importar CSV
+            Importar Excel
           </Button>
           <Button
             leftIcon={<FiPlus />}
@@ -443,9 +437,9 @@ export function ServicesPage() {
           <input
             id="services-import-input"
             type="file"
-            accept=".csv"
+            accept=".xlsx,.xls"
             style={{ display: "none" }}
-            onChange={handleImportCsv}
+            onChange={handleImportExcel}
           />
         </Stack>
       </Flex>

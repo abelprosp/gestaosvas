@@ -44,7 +44,7 @@ import { fetchTVOverview, regenerateTVSlotPassword, releaseTVSlot, updateTVSlot 
 import { PaginatedResponse, TVOverviewRecord, TVSlotStatus } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { createRequest } from "@/lib/api/requests";
-import { exportToCsv } from "@/lib/utils/exporters";
+import { exportToExcel } from "@/lib/utils/exporters";
 
 const EXPIRATION_COLORS = {
   SAFE: "green.400",
@@ -461,8 +461,8 @@ export function UsersPage() {
       toast({ title: "Nenhum registro para exportar", status: "info" });
       return;
     }
-    exportToCsv("usuarios_tv_filtrados.csv", buildExportRows(filteredRecords));
-    toast({ title: "Exportação iniciada", description: "Arquivo CSV gerado com o filtro atual.", status: "success" });
+    exportToExcel("usuarios_tv_filtrados.xlsx", buildExportRows(filteredRecords));
+    toast({ title: "Exportação iniciada", description: "Arquivo Excel gerado com o filtro atual.", status: "success" });
   };
 
   const handleExportDocument = () => {
@@ -485,7 +485,7 @@ export function UsersPage() {
       return;
     }
 
-    exportToCsv(`usuarios_tv_${digits}.csv`, buildExportRows(dataset));
+    exportToExcel(`usuarios_tv_${digits}.csv`, buildExportRows(dataset));
     toast({ title: "Exportação criada", status: "success" });
   };
 
