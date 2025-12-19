@@ -497,16 +497,6 @@ export function DashboardPage() {
                       {revenueProgress.toFixed(1)}%
                     </Badge>
                   </HStack>
-                  {totalRevenue < revenueGoal && (
-                    <Text fontSize="sm" color={mutedText} textAlign="center">
-                      Faltam {formatCurrency(revenueGoal - totalRevenue)} para atingir a meta
-                    </Text>
-                  )}
-                  {totalRevenue >= revenueGoal && (
-                    <Text fontSize="sm" color="green.500" textAlign="center" fontWeight="semibold">
-                      🎉 Meta atingida! Excedido em {formatCurrency(totalRevenue - revenueGoal)}
-                    </Text>
-                  )}
                 </>
               )}
             </VStack>
@@ -598,6 +588,21 @@ export function DashboardPage() {
             </BarChart>
           </ResponsiveContainer>
         </Box>
+
+        {/* Mensagem de meta (abaixo do gráfico de distribuição) */}
+        {revenueGoal > 0 && !loadingSales && (
+          <Box mt={4}>
+            {totalRevenue < revenueGoal ? (
+              <Text fontSize="sm" color={mutedText} textAlign="center">
+                Faltam {formatCurrency(revenueGoal - totalRevenue)} para atingir a meta
+              </Text>
+            ) : (
+              <Text fontSize="sm" color="green.500" textAlign="center" fontWeight="semibold">
+                🎉 Meta atingida! Excedido em {formatCurrency(totalRevenue - revenueGoal)}
+              </Text>
+            )}
+          </Box>
+        )}
           </Box>
 
           <Box
