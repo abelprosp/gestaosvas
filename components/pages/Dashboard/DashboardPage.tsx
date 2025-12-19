@@ -328,9 +328,10 @@ export function DashboardPage() {
     return services;
   }, [availableServices, selectedServiceKeys, salesData.services]);
 
-  // Identificar serviços de Telemedicina e Hub
+  // Identificar serviços de Telemedicina, Hub e Cloud (para o total arrecadado)
   const telemedicinaKeywords = ["telemedicina", "tele", "telepet"];
   const hubKeywords = ["hub", "hubplay"];
+  const cloudKeywords = ["cloud", "nuvem"];
   
   const isTelemedicinaService = (serviceName: string): boolean => {
     const name = serviceName.toLowerCase();
@@ -342,7 +343,14 @@ export function DashboardPage() {
     return hubKeywords.some(keyword => name.includes(keyword));
   };
 
-  // Calcular total arrecadado (TV Premium + TV Essencial + Telemedicina + Hub)
+  const isCloudService = (serviceName: string): boolean => {
+    const name = serviceName.toLowerCase();
+    // Cloud "genérico": evita duplicar Hub/Tele (que já entram separadamente)
+    if (isHubService(name) || isTelemedicinaService(name)) return false;
+    return cloudKeywords.some((keyword) => name.includes(keyword));
+  };
+
+  // Calcular total arrecadado (TV Premium + TV Essencial + Telemedicina + Hub + Cloud)
   const totalRevenue = useMemo(() => {
     if (!salesData.points || salesData.points.length === 0) return 0;
     
@@ -353,9 +361,10 @@ export function DashboardPage() {
       // TV Premium
       const tvPremiumValue = point.values?.["tv-premium"] ?? 0;
       
-      // Telemedicina e Hub (buscar por nome do serviço)
+      // Telemedicina, Hub e Cloud (buscar por nome do serviço)
       let telemedicinaValue = 0;
       let hubValue = 0;
+      let cloudValue = 0;
       
       salesData.services.forEach((service) => {
         if (service.group === "SERVICO") {
@@ -364,11 +373,13 @@ export function DashboardPage() {
             telemedicinaValue += serviceValue;
           } else if (isHubService(service.name)) {
             hubValue += serviceValue;
+          } else if (isCloudService(service.name)) {
+            cloudValue += serviceValue;
           }
         }
       });
       
-      total += tvEssencialValue + tvPremiumValue + telemedicinaValue + hubValue;
+      total += tvEssencialValue + tvPremiumValue + telemedicinaValue + hubValue + cloudValue;
     });
     
     return total;
@@ -431,7 +442,7 @@ export function DashboardPage() {
               <Box>
                 <Heading size="md">Total Arrecadado</Heading>
                 <Text fontSize="sm" color={mutedText}>
-                  Soma de valores: TV Premium + TV Essencial + Telemedicina + Hub
+                  Soma de valores: TV Premium + TV Essencial + Telemedicina + Hub + Cloud
                 </Text>
               </Box>
               <FormControl maxW={{ base: "full", sm: "200px" }}>
