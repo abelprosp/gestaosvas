@@ -363,7 +363,7 @@ export function ContractsPage() {
           justifyContent="flex-end"
           w="full"
         >
-          <Button leftIcon={<FiDownload />} variant="outline" onClick={handleExportCsv} w={{ base: "full", lg: "auto" }}>
+          <Button leftIcon={<FiDownload />} variant="outline" onClick={handleExportExcel} w={{ base: "full", lg: "auto" }}>
             Exportar Excel
           </Button>
           <Button leftIcon={<FiFilePlus />} variant="outline" onClick={handleExportPdf} w={{ base: "full", lg: "auto" }}>
