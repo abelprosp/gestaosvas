@@ -143,8 +143,29 @@ export const POST = createApiHandler(
     }
 
     const supabase = createServerClient(true); // Requer Service Role Key
-    const body = await req.json();
-    const payload = createUserSchema.parse(body);
+    
+    let body;
+    try {
+      body = await req.json();
+    } catch (error) {
+      console.error("[POST /api/admin/users] Erro ao fazer parse do JSON:", error);
+      throw new HttpError(400, "Corpo da requisição inválido ou malformado. Verifique o formato JSON.");
+    }
+    
+    let payload;
+    try {
+      payload = createUserSchema.parse(body);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const errorMessages = error.errors.map((e) => {
+          const path = e.path.length > 0 ? e.path.join(".") : "raiz";
+          return `${path}: ${e.message}`;
+        }).join(", ");
+        console.error("[POST /api/admin/users] Erro de validação:", error.errors);
+        throw new HttpError(400, `Dados inválidos: ${errorMessages}`);
+      }
+      throw error;
+    }
     const { data, error } = await supabase.auth.admin.createUser({
       email: payload.email,
       password: payload.password,

@@ -43,7 +43,7 @@ import { FiCalendar, FiEdit, FiSearch, FiTrash } from "react-icons/fi";
 import { CloudAccess, PaginatedResponse } from "@/types";
 import { deleteCloudAccess, fetchCloudUsers, updateCloudAccess } from "@/lib/api/cloud";
 import { useAuth } from "@/context/AuthContext";
-import { exportToCsv } from "@/lib/utils/exporters";
+import { exportToExcel } from "@/lib/utils/exporters";
 
 type CloudStatus = "ACTIVE" | "EXPIRING" | "EXPIRED" | "TEST";
 
@@ -232,7 +232,7 @@ export function CloudUsersPage({ title = "Usuários Cloud", serviceFilter }: Clo
       return;
     }
     const suffix = serviceFilter ? serviceFilter.toLowerCase().replace(/\s+/g, "_") : "cloud";
-    exportToCsv(`usuarios_${suffix}_filtrados.csv`, buildExportRows(filteredRecords));
+    exportToExcel(`usuarios_${suffix}_filtrados.xlsx`, buildExportRows(filteredRecords));
     toast({ title: "Exportação criada", status: "success" });
   };
 
@@ -251,7 +251,7 @@ export function CloudUsersPage({ title = "Usuários Cloud", serviceFilter }: Clo
     }
 
     const suffix = serviceFilter ? serviceFilter.toLowerCase().replace(/\s+/g, "_") : "cloud";
-    exportToCsv(`usuarios_${suffix}_${digits}.csv`, buildExportRows(dataset));
+    exportToExcel(`usuarios_${suffix}_${digits}.xlsx`, buildExportRows(dataset));
     toast({ title: "Relatório do documento exportado", status: "success" });
   };
 

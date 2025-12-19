@@ -706,7 +706,13 @@ export const GET = createApiHandler(async (req) => {
 });
 
 export const POST = createApiHandler(async (req) => {
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch (error) {
+    console.error("[POST /api/clients] Erro ao fazer parse do JSON:", error);
+    throw new HttpError(400, "Corpo da requisição inválido ou malformado. Verifique o formato JSON.");
+  }
   
   console.log("[POST /api/clients] Payload recebido:", {
     hasName: !!body.name,
@@ -718,7 +724,12 @@ export const POST = createApiHandler(async (req) => {
   const validation = clientCreateSchema.safeParse(body);
 
   if (!validation.success) {
-    throw new HttpError(400, "Dados inválidos: " + validation.error.message);
+    const errorMessages = validation.error.errors.map((e) => {
+      const path = e.path.length > 0 ? e.path.join(".") : "raiz";
+      return `${path}: ${e.message}`;
+    }).join(", ");
+    console.error("[POST /api/clients] Erro de validação:", validation.error.errors);
+    throw new HttpError(400, `Dados inválidos: ${errorMessages}`);
   }
 
   const data = validation.data;

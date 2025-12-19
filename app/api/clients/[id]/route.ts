@@ -721,8 +721,31 @@ export const PUT = createApiHandler(
     // Verificar se o usuário tem acesso ao recurso
     const { requireResourceAccess } = await import("@/lib/utils/resourceAuth");
     await requireResourceAccess("client", clientId, user, supabase);
-    const body = await req.json();
-    const payload = clientUpdateSchema.parse(body);
+    
+    // Parse do body com tratamento de erro
+    let body;
+    try {
+      body = await req.json();
+    } catch (error) {
+      console.error(`[PUT /api/clients/${clientId}] Erro ao fazer parse do JSON:`, error);
+      throw new HttpError(400, "Corpo da requisição inválido ou malformado. Verifique o formato JSON.");
+    }
+    
+    // Validação do schema com tratamento de erro do Zod
+    let payload;
+    try {
+      payload = clientUpdateSchema.parse(body);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const errorMessages = error.errors.map((e) => {
+          const path = e.path.length > 0 ? e.path.join(".") : "raiz";
+          return `${path}: ${e.message}`;
+        }).join(", ");
+        console.error(`[PUT /api/clients/${clientId}] Erro de validação:`, error.errors);
+        throw new HttpError(400, `Dados inválidos: ${errorMessages}`);
+      }
+      throw error;
+    }
     const { serviceIds, serviceSelections, tvSetup, cloudSetups, ...clientData } = payload;
     if (clientData.document !== undefined) {
       clientData.document = sanitizeDocument(clientData.document);

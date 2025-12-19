@@ -15,7 +15,7 @@ export const APP_PAGES: AppPage[] = [
     label: "Clientes",
     path: "/clientes",
     description: "Cadastro/edição de clientes, observações do cliente, serviços vinculados, valores e exportação.",
-    primaryActions: ["Novo cliente", "Editar", "Valores", "Serviços", "Exportar CSV", "Exportar PDF", "Importar CSV"],
+    primaryActions: ["Novo cliente", "Editar", "Valores", "Serviços", "Exportar Excel", "Exportar PDF", "Importar Excel"],
   },
   {
     label: "Usuários TV",
@@ -41,13 +41,13 @@ export const APP_PAGES: AppPage[] = [
   {
     label: "Relatórios",
     path: "/relatorios/servicos",
-    description: "Relatórios de serviços (filtros + exportação CSV).",
+    description: "Relatórios de serviços (filtros + exportação Excel).",
   },
   {
     label: "Serviços",
     path: "/servicos",
     description: "Catálogo de serviços, preço e se é negociável.",
-    primaryActions: ["Novo serviço", "Editar", "Excluir", "Importar CSV", "Exportar CSV", "Exportar PDF"],
+    primaryActions: ["Novo serviço", "Editar", "Excluir", "Importar Excel", "Exportar Excel", "Exportar PDF"],
   },
   {
     label: "Contratos",
@@ -215,8 +215,8 @@ export const HOW_TOS: HowTo[] = [
   {
     key: "exportar-relatorio-servicos",
     title: "Como exportar o relatório de serviços",
-    triggers: [/exportar\s+relat[oó]rio/i, /relat[oó]rios/i, /exportar\s+csv/i],
-    steps: ["1) Menu **Relatórios**", "2) Ajuste filtros (documento/categoria/serviço/busca)", "3) Clique **Aplicar filtros**", "4) Clique **Exportar CSV**"],
+    triggers: [/exportar\s+relat[oó]rio/i, /relat[oó]rios/i, /exportar\s+(excel|csv)/i],
+    steps: ["1) Menu **Relatórios**", "2) Ajuste filtros (documento/categoria/serviço/busca)", "3) Clique **Aplicar filtros**", "4) Clique **Exportar Excel**"],
   },
 ];
 

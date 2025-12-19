@@ -24,8 +24,29 @@ export const PATCH = createApiHandler(
     const userId = validateRouteParamUUID(params.id, "id");
     
     const supabase = createServerClient(true); // Requer Service Role Key para operações admin
-    const body = await req.json();
-    const payload = updateUserSchema.parse(body);
+    
+    let body;
+    try {
+      body = await req.json();
+    } catch (error) {
+      console.error(`[PATCH /api/admin/users/${userId}] Erro ao fazer parse do JSON:`, error);
+      throw new HttpError(400, "Corpo da requisição inválido ou malformado. Verifique o formato JSON.");
+    }
+    
+    let payload;
+    try {
+      payload = updateUserSchema.parse(body);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const errorMessages = error.errors.map((e) => {
+          const path = e.path.length > 0 ? e.path.join(".") : "raiz";
+          return `${path}: ${e.message}`;
+        }).join(", ");
+        console.error(`[PATCH /api/admin/users/${userId}] Erro de validação:`, error.errors);
+        throw new HttpError(400, `Dados inválidos: ${errorMessages}`);
+      }
+      throw error;
+    }
 
     const existing = await supabase.auth.admin.getUserById(userId);
     if (existing.error) {

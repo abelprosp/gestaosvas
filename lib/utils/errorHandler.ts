@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { HttpError } from "./httpError";
 import { isProduction, getSafeErrorMessage } from "./privacy";
 
@@ -41,10 +42,28 @@ export function handleApiError(error: unknown): NextResponse {
     error,
     type: typeof error,
     isHttpError: error instanceof HttpError,
+    isZodError: error instanceof z.ZodError,
     isError: error instanceof Error,
     message: error instanceof Error ? error.message : String(error),
     stack: error instanceof Error ? error.stack : undefined,
   });
+
+  // Tratar erros do Zod primeiro
+  if (error instanceof z.ZodError) {
+    const errorMessages = error.errors.map((e) => {
+      const path = e.path.length > 0 ? e.path.join(".") : "raiz";
+      return `${path}: ${e.message}`;
+    });
+    const message = `Dados inválidos: ${errorMessages.join(", ")}`;
+    console.error("[handleApiError] Erro de validação Zod:", error.errors);
+    return NextResponse.json(
+      {
+        message,
+        ...(isProduction() ? {} : { details: { errors: error.errors } }),
+      },
+      { status: 400 }
+    );
+  }
 
   if (error instanceof HttpError) {
     // Em produção, não expor detalhes sensíveis para erros 5xx

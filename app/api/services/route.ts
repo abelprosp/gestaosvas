@@ -49,8 +49,29 @@ export const GET = createApiHandler(async (req) => {
 export const POST = createApiHandler(
   async (req) => {
     const supabase = createServerClient();
-    const body = await req.json();
-    const payload = serviceSchema.parse(body);
+    
+    let body;
+    try {
+      body = await req.json();
+    } catch (error) {
+      console.error("[POST /api/services] Erro ao fazer parse do JSON:", error);
+      throw new HttpError(400, "Corpo da requisição inválido ou malformado. Verifique o formato JSON.");
+    }
+    
+    let payload;
+    try {
+      payload = serviceSchema.parse(body);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const errorMessages = error.errors.map((e) => {
+          const path = e.path.length > 0 ? e.path.join(".") : "raiz";
+          return `${path}: ${e.message}`;
+        }).join(", ");
+        console.error("[POST /api/services] Erro de validação:", error.errors);
+        throw new HttpError(400, `Dados inválidos: ${errorMessages}`);
+      }
+      throw error;
+    }
     const insertPayload = serviceInsertPayload(payload);
     const { data, error } = await supabase.from("services").insert(insertPayload).select("*").maybeSingle();
 

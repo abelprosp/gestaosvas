@@ -32,8 +32,7 @@ import {
   TemplateFormValues,
 } from "@/components/forms/TemplateFormModal";
 import { formatDate } from "@/lib/utils/format";
-import { exportToCsv, exportToPdf } from "@/lib/utils/exporters";
-import Papa from "papaparse";
+import { exportToExcel, exportToPdf, importFromExcel } from "@/lib/utils/exporters";
 import { useAuth } from "@/context/AuthContext";
 
 export function TemplatesPage() {
@@ -146,14 +145,14 @@ export function TemplatesPage() {
     }
   };
 
-  const handleExportCsv = () => {
+  const handleExportExcel = () => {
     if (!templates.length) {
       toast({ title: "Nenhum template para exportar", status: "info" });
       return;
     }
 
-    exportToCsv(
-      "templates.csv",
+    exportToExcel(
+      "templates.xlsx",
       templates.map((template) => ({
         Nome: template.name,
         Ativo: template.active ? "Sim" : "Não",
@@ -175,21 +174,17 @@ export function TemplatesPage() {
     );
   };
 
-  const handleImportCsv = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportExcel = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setIsImporting(true);
-    Papa.parse<Record<string, string>>(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (results) => {
-        const { data, errors } = results;
-        if (errors.length) {
-          toast({ title: "CSV inválido", description: errors[0].message, status: "error" });
-          setIsImporting(false);
-          return;
-        }
+    importFromExcel<Record<string, string>>(file, async (data, errors) => {
+      if (errors.length) {
+        toast({ title: "Excel inválido", description: errors[0], status: "error" });
+        setIsImporting(false);
+        return;
+      }
 
         try {
           for (const row of data) {
@@ -209,7 +204,6 @@ export function TemplatesPage() {
           const input = document.getElementById("templates-import-input") as HTMLInputElement | null;
           if (input) input.value = "";
         }
-      },
     });
   };
 
@@ -252,7 +246,7 @@ export function TemplatesPage() {
           w="full"
         >
           <Button leftIcon={<FiDownload />} variant="outline" onClick={handleExportCsv} w={{ base: "full", lg: "auto" }}>
-            Exportar CSV
+            Exportar Excel
           </Button>
           <Button leftIcon={<FiFilePlus />} variant="outline" onClick={handleExportPdf} w={{ base: "full", lg: "auto" }}>
             Exportar PDF
@@ -264,7 +258,7 @@ export function TemplatesPage() {
             onClick={() => document.getElementById("templates-import-input")?.click()}
             w={{ base: "full", lg: "auto" }}
           >
-            Importar CSV
+            Importar Excel
           </Button>
           <Button leftIcon={<FiPlus />} onClick={openCreateModal} colorScheme="brand" w={{ base: "full", lg: "auto" }}>
             Novo template
@@ -273,9 +267,9 @@ export function TemplatesPage() {
         <input
           id="templates-import-input"
           type="file"
-          accept=".csv"
+          accept=".xlsx,.xls"
           style={{ display: "none" }}
-          onChange={handleImportCsv}
+          onChange={handleImportExcel}
         />
       </Flex>
 

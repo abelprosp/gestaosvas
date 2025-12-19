@@ -501,7 +501,7 @@ Quer que eu abra a página de contratos?`,
    • Gráficos e análises
 
 3️⃣ Na página de clientes, você também pode:
-   • Exportar CSV de todos os clientes
+   • Exportar Excel de todos os clientes
    • Exportar por documento específico
    • Filtrar e exportar resultados
 
@@ -1226,7 +1226,7 @@ Quer que eu abra o dashboard?`,
 2. Clique em "Exportar filtrados"
 
 **Formato:**
-• Os dados são exportados em CSV
+• Os dados são exportados em Excel
 • Podem ser abertos no Excel ou Google Sheets
 
 Quer que eu abra a página de clientes para exportar?`,

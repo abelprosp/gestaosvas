@@ -55,8 +55,7 @@ import { ClientFormModal, ClientFormValues } from "@/components/forms/ClientForm
 import { ClientServicesModal, ClientServicesFormValues } from "@/components/forms/ClientServicesModal";
 import { ClientValuesModal } from "@/components/forms/ClientValuesModal";
 import { formatDate } from "@/lib/utils/format";
-import { exportToCsv, exportToPdf } from "@/lib/utils/exporters";
-import Papa from "papaparse";
+import { exportToExcel, exportToPdf, importFromExcel } from "@/lib/utils/exporters";
 import { useAuth } from "@/context/AuthContext";
 import { createRequest } from "@/lib/api/requests";
 import { useRouter } from "next/navigation";
@@ -131,14 +130,14 @@ export function ClientsPage() {
   const formModal = useDisclosure();
   const servicesModal = useDisclosure();
   const valuesModal = useDisclosure();
-  const handleExportCsv = () => {
+  const handleExportExcel = () => {
     if (!filteredClients.length) {
       toast({ title: "Nenhum cliente para exportar", status: "info" });
       return;
     }
 
-    exportToCsv(
-      "clientes.csv",
+    exportToExcel(
+      "clientes.xlsx",
       filteredClients.map((client: Client) => ({
         Nome: client.name,
         Email: client.email,
@@ -198,21 +197,17 @@ export function ClientsPage() {
     );
   };
 
-  const handleImportCsv = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportExcel = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setIsImporting(true);
-    Papa.parse<ClientFormValues>(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (results) => {
-        const { data, errors } = results;
-        if (errors.length) {
-          toast({ title: "CSV inválido", description: errors[0].message, status: "error" });
-          setIsImporting(false);
-          return;
-        }
+    importFromExcel<ClientFormValues>(file, async (data, errors) => {
+      if (errors.length) {
+        toast({ title: "Excel inválido", description: errors[0], status: "error" });
+        setIsImporting(false);
+        return;
+      }
 
         try {
           for (const row of data) {
@@ -238,7 +233,6 @@ export function ClientsPage() {
           const input = document.getElementById("clients-import-input") as HTMLInputElement | null;
           if (input) input.value = "";
         }
-      },
     });
   };
 
@@ -511,9 +505,27 @@ const getSortIcon = (key: string): ReactElement | undefined => {
     },
     onError: (error: any) => {
       console.error("[updateClientServices] ❌ Erro:", error);
+      
+      // Extrair mensagem de erro de forma mais robusta
+      let errorMessage = "Não foi possível salvar as alterações";
+      
+      if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      } else if (typeof error === "string") {
+        errorMessage = error;
+      } else if (error && typeof error === "object") {
+        // Tentar extrair mensagem de diferentes formatos
+        const message = (error as any).message || (error as any).error || String(error);
+        if (message && message !== "[object Object]") {
+          errorMessage = message;
+        }
+      }
+      
       toast({ 
         title: "Erro ao atualizar serviços", 
-        description: error?.response?.data?.message || error?.message || "Não foi possível salvar as alterações",
+        description: errorMessage,
         status: "error",
         duration: 5000,
       });
@@ -531,8 +543,9 @@ const getSortIcon = (key: string): ReactElement | undefined => {
       await updateClientServices.mutateAsync({ id: selectedClient.id, values });
       servicesModal.onClose();
     } catch (error) {
-      // Erro já é tratado no onError da mutation
+      // Erro já é tratado no onError da mutation, mas logamos aqui também para debug
       console.error("[handleUpdateServices] Erro ao atualizar serviços:", error);
+      // Não precisamos fazer nada aqui, o onError da mutation já exibe o toast
     }
   };
 
@@ -560,8 +573,8 @@ const getSortIcon = (key: string): ReactElement | undefined => {
           justifyContent="flex-end"
           w="full"
         >
-          <Button leftIcon={<FiDownload />} variant="outline" onClick={handleExportCsv} w={{ base: "full", lg: "auto" }}>
-            Exportar CSV
+          <Button leftIcon={<FiDownload />} variant="outline" onClick={handleExportExcel} w={{ base: "full", lg: "auto" }}>
+            Exportar Excel
           </Button>
           <Button leftIcon={<FiFilePlus />} variant="outline" onClick={handleExportPdf} w={{ base: "full", lg: "auto" }}>
             Exportar PDF
@@ -573,7 +586,7 @@ const getSortIcon = (key: string): ReactElement | undefined => {
             onClick={() => document.getElementById("clients-import-input")?.click()}
             w={{ base: "full", lg: "auto" }}
           >
-            Importar CSV
+            Importar Excel
           </Button>
           <Button
             leftIcon={<FiPlus />}
@@ -589,9 +602,9 @@ const getSortIcon = (key: string): ReactElement | undefined => {
         <input
           id="clients-import-input"
           type="file"
-          accept=".csv"
+          accept=".xlsx,.xls"
           style={{ display: "none" }}
-          onChange={handleImportCsv}
+          onChange={handleImportExcel}
         />
       </Flex>
 

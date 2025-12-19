@@ -59,7 +59,7 @@ import { fetchTVOverview, regenerateTVSlotPassword, releaseTVSlot, updateTVSlot,
 import { PaginatedResponse, ServiceTotals, TVOverviewRecord, TVSlotStatus } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { createRequest } from "@/lib/api/requests";
-import { exportToCsv, exportToPdf } from "@/lib/utils/exporters";
+import { exportToExcel, exportToPdf } from "@/lib/utils/exporters";
 import { api } from "@/lib/api/client";
 
 const EXPIRATION_COLORS = {
@@ -525,7 +525,7 @@ export function UsersPage() {
         .trim(), // Remover espaços no início e fim - mantém conteúdo completo
     }));
 
-  const handleExport = (format: "csv" | "pdf") => {
+  const handleExport = (format: "excel" | "pdf") => {
     // Determinar qual dataset usar
     let dataset: TVOverviewRecord[] = [];
     let filename = "";
@@ -556,11 +556,11 @@ export function UsersPage() {
       filename = "usuarios_tv_filtrados";
     }
 
-    if (format === "csv") {
-      exportToCsv(`${filename}.csv`, buildExportRows(dataset));
+    if (format === "excel") {
+      exportToExcel(`${filename}.xlsx`, buildExportRows(dataset));
       toast({ 
         title: "Exportação iniciada", 
-        description: "Arquivo CSV gerado com sucesso.", 
+        description: "Arquivo Excel gerado com sucesso.", 
         status: "success" 
       });
     } else {
@@ -1268,8 +1268,8 @@ export function UsersPage() {
             Exportar <Icon as={FiChevronDown} ml={2} />
           </MenuButton>
           <MenuList>
-            <MenuItem onClick={() => handleExport("csv")}>
-              Exportar como CSV
+            <MenuItem onClick={() => handleExport("excel")}>
+              Exportar como Excel
             </MenuItem>
             <MenuItem onClick={() => handleExport("pdf")}>
               Exportar como PDF
