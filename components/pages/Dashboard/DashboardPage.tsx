@@ -186,6 +186,7 @@ export function DashboardPage() {
     selectedServices: [],
     points: [],
     totalSales: 0,
+    totalRevenue: 0,
   };
 
   const servicesQueryKey = useMemo(
@@ -417,20 +418,7 @@ export function DashboardPage() {
       <Heading size="lg">Visão geral inteligente</Heading>
       <Box>
         <VStack align="stretch" spacing={8}>
-          <SimpleGrid columns={{ base: 1, md: 2, xl: 4 }} spacing={{ base: 4, md: 6 }}>
-        {isLoading && data.metrics.all.total === 0 ? (
-          Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} height="120px" borderRadius="2xl" />)
-        ) : (
-          <>
-            <StatCard label="Total de CPFs" value={data.metrics.all.cpf} />
-            <StatCard label="Total de CNPJs" value={data.metrics.all.cnpj} />
-            <StatCard label="Total geral" value={data.metrics.all.total} />
-            <StatCard label="Cadastros no último mês" value={data.metrics.all.lastMonth} />
-          </>
-        )}
-          </SimpleGrid>
-
-          {/* Card de Total Arrecadado e Meta */}
+          {/* Card de Total Arrecadado e Meta - PRIMEIRO */}
           <Box
             bg={cardBg}
             borderRadius="2xl"
@@ -462,9 +450,13 @@ export function DashboardPage() {
             <VStack align="stretch" spacing={4}>
               <HStack justify="space-between" align="center">
                 <Text fontSize="lg" color={mutedText}>Total Arrecadado</Text>
-                <Text fontSize="3xl" fontWeight="bold" color="#10b981">
-                  {formatCurrency(totalRevenue)}
-                </Text>
+                {loadingSales ? (
+                  <Skeleton height="40px" width="150px" />
+                ) : (
+                  <Text fontSize="3xl" fontWeight="bold" color="#10b981">
+                    {formatCurrency(totalRevenue)}
+                  </Text>
+                )}
               </HStack>
               
               {revenueGoal > 0 && (
@@ -508,6 +500,19 @@ export function DashboardPage() {
               )}
             </VStack>
           </Box>
+
+          <SimpleGrid columns={{ base: 1, md: 2, xl: 4 }} spacing={{ base: 4, md: 6 }}>
+        {isLoading && data.metrics.all.total === 0 ? (
+          Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} height="120px" borderRadius="2xl" />)
+        ) : (
+          <>
+            <StatCard label="Total de CPFs" value={data.metrics.all.cpf} />
+            <StatCard label="Total de CNPJs" value={data.metrics.all.cnpj} />
+            <StatCard label="Total geral" value={data.metrics.all.total} />
+            <StatCard label="Cadastros no último mês" value={data.metrics.all.lastMonth} />
+          </>
+        )}
+          </SimpleGrid>
 
           <Box
         bg={cardBg}
