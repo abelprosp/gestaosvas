@@ -501,6 +501,43 @@ export function DashboardPage() {
         borderWidth={1}
         borderColor={cardBorder}
       >
+        <Heading size="md">Meta de acessos de TV</Heading>
+        <Text fontSize="sm" color={mutedText}>
+          Progresso em direção à meta de 5.000 acessos simultâneos.
+        </Text>
+
+        <VStack align="stretch" spacing={4} mt={6}>
+          <HStack justify="space-between">
+            <Text color={mutedText}>Acessos utilizados</Text>
+            <Text fontWeight="semibold">{data.tvUsage.used}</Text>
+          </HStack>
+          <Progress
+            value={Math.min(data.tvUsage.percentage, 100)}
+            colorScheme="brand"
+            borderRadius="full"
+            height="16px"
+            backgroundColor={useColorModeValue("gray.100", "gray.700")}
+          />
+          <HStack justify="space-between">
+            <Text color={mutedText}>Disponíveis</Text>
+            <Text fontWeight="medium">{data.tvUsage.available}</Text>
+          </HStack>
+          <Box mt={2}>
+            <Badge colorScheme="brand" borderRadius="full" px={3} py={1}>
+              {data.tvUsage.percentage.toFixed(1)}% da meta atingida
+            </Badge>
+          </Box>
+        </VStack>
+          </Box>
+
+          <Box
+        bg={cardBg}
+        borderRadius="2xl"
+        p={6}
+        boxShadow="lg"
+        borderWidth={1}
+        borderColor={cardBorder}
+      >
         <HStack justify="space-between" align={{ base: "stretch", md: "center" }} spacing={4} flexWrap="wrap">
           <Box>
             <Heading size="md">Distribuição de cadastros</Heading>
@@ -695,43 +732,6 @@ export function DashboardPage() {
             </>
           )}
         </SimpleGrid>
-          </Box>
-
-          <Box
-        bg={cardBg}
-        borderRadius="2xl"
-        p={6}
-        boxShadow="lg"
-        borderWidth={1}
-        borderColor={cardBorder}
-      >
-        <Heading size="md">Meta de acessos de TV</Heading>
-        <Text fontSize="sm" color={mutedText}>
-          Progresso em direção à meta de 5.000 acessos simultâneos.
-        </Text>
-
-        <VStack align="stretch" spacing={4} mt={6}>
-          <HStack justify="space-between">
-            <Text color={mutedText}>Acessos utilizados</Text>
-            <Text fontWeight="semibold">{data.tvUsage.used}</Text>
-          </HStack>
-          <Progress
-            value={Math.min(data.tvUsage.percentage, 100)}
-            colorScheme="brand"
-            borderRadius="full"
-            height="16px"
-            backgroundColor={useColorModeValue("gray.100", "gray.700")}
-          />
-          <HStack justify="space-between">
-            <Text color={mutedText}>Disponíveis</Text>
-            <Text fontWeight="medium">{data.tvUsage.available}</Text>
-          </HStack>
-          <Box mt={2}>
-            <Badge colorScheme="brand" borderRadius="full" px={3} py={1}>
-              {data.tvUsage.percentage.toFixed(1)}% da meta atingida
-            </Badge>
-          </Box>
-        </VStack>
           </Box>
         </VStack>
       </Box>
