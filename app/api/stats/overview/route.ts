@@ -59,6 +59,7 @@ export const GET = createApiHandler(async (req) => {
     slotsResult,
     recentContractsResult,
     clientServicesResult,
+    cloudAccessesResult,
   ] = await Promise.all([
     supabase.from("clients").select("id, document, created_at"),
     supabase.from("tv_slots").select("client_id, plan_type, status"),
@@ -68,6 +69,11 @@ export const GET = createApiHandler(async (req) => {
       .order("created_at", { ascending: false })
       .limit(5),
     supabase.from("client_services").select("client_id, service:services(id, name)"),
+    supabase
+      .from("cloud_accesses")
+      .select("id")
+      .eq("is_test", false)
+      .gte("expires_at", new Date().toISOString().slice(0, 10)),
   ]);
 
   if (clientsError) {
@@ -194,12 +200,23 @@ export const GET = createApiHandler(async (req) => {
 
   const recentContracts = (recentContractsResult.data ?? []).map(mapContractRow);
 
+  // Contar acessos cloud ativos
+  const cloudAccessesError = cloudAccessesResult.error as PostgrestError | null;
+  const cloudAccessesCount = isSchemaMissing(cloudAccessesError) 
+    ? 0 
+    : (cloudAccessesResult.data ?? []).length;
+
+  if (cloudAccessesError && !isSchemaMissing(cloudAccessesError)) {
+    throw cloudAccessesError;
+  }
+
   return NextResponse.json({
     metrics,
     planSummary,
     tvUsage,
     recentContracts,
     segments,
+    cloudAccesses: cloudAccessesCount,
   });
 });
 

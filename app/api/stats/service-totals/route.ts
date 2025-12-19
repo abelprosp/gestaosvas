@@ -70,8 +70,23 @@ async function countCloudAccessesByServiceIds(serviceIds: string[]) {
   return count ?? 0;
 }
 
+async function countAllCloudAccesses() {
+  const supabase = createServerClient();
+  const { count, error } = await supabase
+    .from("cloud_accesses")
+    .select("id", { count: "exact", head: true })
+    .eq("is_test", false)
+    .gte("expires_at", new Date().toISOString().slice(0, 10));
+
+  const pgError = error as PostgrestError | null;
+  if (pgError && !isSchemaMissing(pgError)) {
+    throw pgError;
+  }
+  return count ?? 0;
+}
+
 export const GET = createApiHandler(async () => {
-  const [tvEssencial, tvPremium, tvTelephony, hubServiceIds, teleServiceIds] = await Promise.all([
+  const [tvEssencial, tvPremium, tvTelephony, hubServiceIds, teleServiceIds, cloud] = await Promise.all([
     countTvSlots("ESSENCIAL"),
     countTvSlots("PREMIUM"),
     countTvTelephonySlots(),
@@ -79,6 +94,8 @@ export const GET = createApiHandler(async () => {
     findServiceIdsByNameLike(["hub", "hubplay"]),
     // Nomes típicos: "Tele", "Telemed", "Telepet"
     findServiceIdsByNameLike(["tele", "telemed", "telepet"]),
+    // Total de acessos cloud ativos
+    countAllCloudAccesses(),
   ]);
 
   const [hub, tele] = await Promise.all([
@@ -92,6 +109,7 @@ export const GET = createApiHandler(async () => {
     tvTelephony,
     hub,
     tele,
+    cloud,
   });
 });
 

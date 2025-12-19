@@ -234,6 +234,7 @@ export interface ServiceTotals {
   tvTelephony: number;
   hub: number;
   tele: number;
+  cloud: number;
 }
 
 export interface SalesTimeseriesService {

@@ -738,6 +738,9 @@ const getSortIcon = (key: string): ReactElement | undefined => {
           <Badge colorScheme="orange" px={3} py={1} borderRadius="full">
             Tele med: {serviceTotals?.tele ?? 0}
           </Badge>
+          <Badge colorScheme="blue" px={3} py={1} borderRadius="full">
+            Cloud: {serviceTotals?.cloud ?? 0}
+          </Badge>
         </Flex>
       </Box>
 

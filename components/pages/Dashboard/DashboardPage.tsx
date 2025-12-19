@@ -25,7 +25,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api/client";
-import { SalesTimeseries, StatsOverview } from "@/types";
+import { SalesTimeseries, StatsOverview, ServiceTotals } from "@/types";
 import {
   ResponsiveContainer,
   BarChart,
@@ -98,7 +98,8 @@ export function DashboardPage() {
       { key: "essencial", label: "TV Essencial", metrics: { cpf: 0, cnpj: 0, total: 0, lastMonth: 0 } },
       { key: "premium", label: "TV Premium", metrics: { cpf: 0, cnpj: 0, total: 0, lastMonth: 0 } },
     ],
-  };
+    cloudAccesses: 0,
+  } as StatsOverview & { cloudAccesses?: number };
 
   const { data = placeholder, isLoading } = useQuery<StatsOverview>({
     queryKey: ["stats", "overview"],
@@ -238,6 +239,21 @@ export function DashboardPage() {
     enabled: true,
     retry: 2,
     refetchOnMount: true,
+  });
+
+  // Buscar totais de serviços (incluindo cloud)
+  const { data: serviceTotals } = useQuery({
+    queryKey: ["serviceTotals", "dashboard"],
+    queryFn: async () => {
+      try {
+        const response = await api.get<{ cloud: number }>("/stats/service-totals");
+        return response.data;
+      } catch (error) {
+        console.error("Erro ao buscar totais de serviços:", error);
+        return { cloud: 0 };
+      }
+    },
+    staleTime: 60 * 1000,
   });
 
   // Combinar serviços de vendas com todos os serviços cadastrados
@@ -705,6 +721,22 @@ export function DashboardPage() {
                 ))}
               </VStack>
             </Collapse>
+              </Box>
+
+              {/* Card de Cloud */}
+              <Box borderWidth={1} borderColor={cardBorder} bg={listBg} p={4} borderRadius="xl">
+                <HStack justify="space-between" mb={2}>
+                  <Text fontWeight="semibold">Cloud</Text>
+                  <Badge colorScheme="blue" borderRadius="full">
+                    Cloud
+                  </Badge>
+                </HStack>
+                <Text fontSize="sm" color={mutedText}>
+                  Usuários ativos
+                </Text>
+                <Text fontSize="2xl" fontWeight="bold" color="brand.600">
+                  {serviceTotals?.cloud ?? (data as any).cloudAccesses ?? 0}
+                </Text>
               </Box>
 
               {/* Outros serviços */}
