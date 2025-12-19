@@ -502,19 +502,6 @@ export function DashboardPage() {
             </VStack>
           </Box>
 
-          <SimpleGrid columns={{ base: 1, md: 2, xl: 4 }} spacing={{ base: 4, md: 6 }}>
-        {isLoading && data.metrics.all.total === 0 ? (
-          Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} height="120px" borderRadius="2xl" />)
-        ) : (
-          <>
-            <StatCard label="Total de CPFs" value={data.metrics.all.cpf} />
-            <StatCard label="Total de CNPJs" value={data.metrics.all.cnpj} />
-            <StatCard label="Total geral" value={data.metrics.all.total} />
-            <StatCard label="Cadastros no último mês" value={data.metrics.all.lastMonth} />
-          </>
-        )}
-          </SimpleGrid>
-
           <Box
         bg={cardBg}
         borderRadius="2xl"
@@ -551,6 +538,19 @@ export function DashboardPage() {
           </Box>
         </VStack>
           </Box>
+
+          <SimpleGrid columns={{ base: 1, md: 2, xl: 4 }} spacing={{ base: 4, md: 6 }}>
+        {isLoading && data.metrics.all.total === 0 ? (
+          Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} height="120px" borderRadius="2xl" />)
+        ) : (
+          <>
+            <StatCard label="Total de CPFs" value={data.metrics.all.cpf} />
+            <StatCard label="Total de CNPJs" value={data.metrics.all.cnpj} />
+            <StatCard label="Total geral" value={data.metrics.all.total} />
+            <StatCard label="Cadastros no último mês" value={data.metrics.all.lastMonth} />
+          </>
+        )}
+          </SimpleGrid>
 
           <Box
         bg={cardBg}
