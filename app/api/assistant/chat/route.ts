@@ -109,7 +109,7 @@ Quando explicar um fluxo do sistema, use este formato:
 5) Dicas/erros comuns (se relevante)
 
 ### Conteúdos que você deve cobrir bem (sempre que perguntarem)
-- Cadastrar cliente, editar cliente, preencher por CNPJ, onde ficam observações, como adicionar serviços, como definir TV Essencial/Premium, como ver valores, como exportar relatórios, como gerenciar acessos (TV/Cloud/Hub/Tele) e vencimentos.
+- Cadastrar cliente, editar cliente, preencher por CNPJ, onde ficam observações, como adicionar serviços, como definir TV Essencial/Premium, como ver valores, como exportar relatórios, como gerenciar acessos (TV/Cloud) e vencimentos.
 
 Se pedirem algo que dependa de dados (ex.: “quantos clientes temos?”), responda explicando como ver no sistema (tela/relatório) e, se possível, peça um critério (período, filtro, cliente).`;
 }
@@ -326,8 +326,8 @@ function actionsForHowToKey(key: string, isAdminUser: boolean): Array<AnyAssista
         confirmMessage: "Você confirma que deseja atualizar os serviços do cliente agora?",
         prompts: [
           { key: "clientDocument", label: "Documento do cliente (CPF/CNPJ)", placeholder: "ex: 123.456.789-00" },
-          { key: "serviceNamesCsv", label: "Serviços (separados por vírgula)", placeholder: "ex: Hub, Telemed" },
-          { key: "cloudExpiresAt", label: "Vencimento dos serviços Cloud/Hub/Tele (YYYY-MM-DD) (opcional)", placeholder: "ex: 2026-01-15" },
+          { key: "serviceNamesCsv", label: "Serviços (separados por vírgula)", placeholder: "ex: Cloud 150GB, TV" },
+          { key: "cloudExpiresAt", label: "Vencimento dos serviços Cloud (YYYY-MM-DD) (opcional)", placeholder: "ex: 2026-01-15" },
           { key: "quantityEssencial", label: "Qtd TV Essencial (0 para não)", placeholder: "ex: 0" },
           { key: "quantityPremium", label: "Qtd TV Premium (0 para não)", placeholder: "ex: 0" },
           { key: "expiresAt", label: "Vencimento TV (YYYY-MM-DD) (opcional)", placeholder: "ex: 2026-01-15" },

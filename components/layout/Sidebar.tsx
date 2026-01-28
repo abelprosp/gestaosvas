@@ -42,8 +42,6 @@ import {
   FiChevronRight,
   FiX,
 } from "react-icons/fi";
-import { FaPlayCircle } from "react-icons/fa";
-import { MdMedicalServices } from "react-icons/md";
 import { IconType } from "react-icons";
 import { useAuth } from "@/context/AuthContext";
 
@@ -52,8 +50,6 @@ const baseLinks: Array<{ label: string; to: string; icon: IconType }> = [
   { label: "Clientes", to: "/clientes", icon: FiUsers },
   { label: "Usuários TV", to: "/usuarios", icon: FiMonitor },
   { label: "Usuários Cloud", to: "/usuarios-cloud", icon: FiCloud },
-  { label: "Usuários Hub", to: "/usuarios-hub", icon: FaPlayCircle },
-  { label: "Usuários Tele", to: "/usuarios-tele", icon: MdMedicalServices },
   { label: "Relatórios", to: "/relatorios/servicos", icon: FiPieChart },
   { label: "Serviços", to: "/servicos", icon: FiSettings },
   { label: "Contratos", to: "/contratos", icon: FiFileText },
@@ -400,7 +396,6 @@ export function Sidebar({ onNavigate, isMobile = false }: SidebarProps) {
     </Box>
   );
 }
-
 
 
 

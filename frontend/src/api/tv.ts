@@ -20,6 +20,7 @@ export interface UpdateTVSlotPayload {
   notes?: string | null;
   password?: string;
   planType?: TVPlanType | null;
+  bolinha?: number | null;
 }
 
 type ApiError = {
@@ -164,4 +165,3 @@ export async function fetchTVOverview(params: FetchTVOverviewParams = {}) {
     throw typedError;
   }
 }
-

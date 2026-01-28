@@ -29,6 +29,7 @@ const clientSchema = z.object({
   city: z.string().optional(),
   state: z.string().optional(),
   openedBy: z.string().optional(), // Vendedor que abriu o cliente
+  hasTelephony: z.boolean().optional(),
 });
 
 const serviceSelectionSchema = z.object({
@@ -246,6 +247,7 @@ async function handleTvServiceForClient(
   clientId: string,
   selections: ServiceSelection[] = [],
   tvSetup?: z.infer<typeof tvSetupSchema>,
+  clientHasTelephony?: boolean,
 ) {
   const serviceIds = selections.map((selection) => selection.serviceId);
   const services = await fetchServicesByIds(serviceIds);
@@ -282,7 +284,7 @@ async function handleTvServiceForClient(
   let quantity = 1;
   let planType: TVPlanType = planTypeFromService ?? "ESSENCIAL";
   let notes: string | undefined = undefined;
-  let hasTelephony: boolean | undefined = undefined;
+  let hasTelephony: boolean | undefined = clientHasTelephony;
   let soldAt: string | undefined = undefined;
   let startsAt: string | undefined = undefined;
 
@@ -302,7 +304,9 @@ async function handleTvServiceForClient(
     }
 
     if (tvSetup.notes) notes = tvSetup.notes;
-    if (tvSetup.hasTelephony !== undefined) hasTelephony = tvSetup.hasTelephony;
+    if (tvSetup.hasTelephony !== undefined && clientHasTelephony === undefined) {
+      hasTelephony = tvSetup.hasTelephony;
+    }
     if (tvSetup.soldAt) soldAt = tvSetup.soldAt;
     if (tvSetup.startsAt) startsAt = tvSetup.startsAt;
   }
@@ -396,7 +400,7 @@ async function syncCloudAccesses(
 
   const allServiceIds = selectedSet ? Array.from(selectedSet) : Array.from(setupMap.keys());
   const services = allServiceIds.length > 0 ? await fetchServicesByIds(allServiceIds) : [];
-  const cloudServiceKeywords = ["cloud", "hub", "hubplay", "telemedicina", "telepet"];
+  const cloudServiceKeywords = ["cloud"];
 
   const cloudServiceIdsSet = new Set(
     services
@@ -582,9 +586,13 @@ async function fetchClientSummary(clientId: string) {
   
   // Garantir que serviço TV está vinculado se houver acessos
   await ensureTvServiceLinked(clientId, assignments);
+  const mapped = mapClientRow(data);
+  if (mapped.hasTelephony === null || mapped.hasTelephony === undefined) {
+    mapped.hasTelephony = assignments.some((assignment) => assignment.hasTelephony === true);
+  }
 
   return {
-    ...mapClientRow(data),
+    ...mapped,
     tvAssignments: assignments,
   };
 }
@@ -643,6 +651,9 @@ export const GET = createApiHandler(async (req) => {
   
   for (const client of clients) {
     const assignments = assignmentsMap.get(client.id) ?? [];
+    if (client.hasTelephony === null || client.hasTelephony === undefined) {
+      client.hasTelephony = assignments.some((assignment) => assignment.hasTelephony === true);
+    }
     if (assignments.length > 0) {
       clientsWithTvAccess.add(client.id);
       const hadTvService = (client.services ?? []).some(s => s.name?.toLowerCase().includes("tv"));
@@ -688,9 +699,7 @@ export const GET = createApiHandler(async (req) => {
   if (hasTelephonyFilter === "WITH_TELEPHONY") {
       // Precisamos buscar os slots para saber quem tem telefonia
       filteredClients = clients.filter(client => {
-          const assignments = assignmentsMap.get(client.id) ?? [];
-          // Verifica se algum assignment tem telefonia habilitada (true)
-          return assignments.some(a => a.hasTelephony === true);
+          return client.hasTelephony === true;
       });
   } else {
       // Popula assignments para todos (opcional, mas bom para a lista)
@@ -791,7 +800,7 @@ export const POST = createApiHandler(async (req) => {
     // 3. Processa TV (Cria acessos se necessário)
     if (selections.length > 0) {
         console.log("[POST] Iniciando processamento de TV...");
-        await handleTvServiceForClient(newClient.id, selections, data.tvSetup);
+        await handleTvServiceForClient(newClient.id, selections, data.tvSetup, data.hasTelephony);
     } else {
         console.warn("[POST] Nenhum serviço selecionado, pulando configuração de TV");
     }

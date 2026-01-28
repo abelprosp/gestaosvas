@@ -54,29 +54,20 @@ async function findServiceIdsByNameLike(patterns: string[]) {
   return (data ?? []).map((row: { id: string }) => row.id);
 }
 
-async function countCloudAccessesByServiceIds(serviceIds: string[]) {
-  if (!serviceIds.length) return 0;
+async function countAllCloudAccesses(excludedServiceIds: string[] = []) {
   const supabase = createServerClient();
-  const { count, error } = await supabase
-    .from("cloud_accesses")
-    .select("id", { count: "exact", head: true })
-    .in("service_id", serviceIds)
-    .eq("is_test", false);
-
-  const pgError = error as PostgrestError | null;
-  if (pgError && !isSchemaMissing(pgError)) {
-    throw pgError;
-  }
-  return count ?? 0;
-}
-
-async function countAllCloudAccesses() {
-  const supabase = createServerClient();
-  const { count, error } = await supabase
+  let query = supabase
     .from("cloud_accesses")
     .select("id", { count: "exact", head: true })
     .eq("is_test", false)
     .gte("expires_at", new Date().toISOString().slice(0, 10));
+
+  if (excludedServiceIds.length > 0) {
+    const formatted = excludedServiceIds.map((id) => `"${id}"`).join(",");
+    query = query.not("service_id", "in", `(${formatted})`);
+  }
+
+  const { count, error } = await query;
 
   const pgError = error as PostgrestError | null;
   if (pgError && !isSchemaMissing(pgError)) {
@@ -86,31 +77,21 @@ async function countAllCloudAccesses() {
 }
 
 export const GET = createApiHandler(async () => {
-  const [tvEssencial, tvPremium, tvTelephony, hubServiceIds, teleServiceIds, cloud] = await Promise.all([
+  const [tvEssencial, tvPremium, tvTelephony, hiddenServiceIds] = await Promise.all([
     countTvSlots("ESSENCIAL"),
     countTvSlots("PREMIUM"),
     countTvTelephonySlots(),
-    // Nomes típicos: "Hub", "HubPlay", "Hub TV"
-    findServiceIdsByNameLike(["hub", "hubplay"]),
-    // Nomes típicos: "Tele", "Telemed", "Telepet"
-    findServiceIdsByNameLike(["tele", "telemed", "telepet"]),
-    // Total de acessos cloud ativos
-    countAllCloudAccesses(),
+    // Serviços ocultos: Hub/Telemedicina
+    findServiceIdsByNameLike(["hub", "hubplay", "telemedicina", "telepet"]),
   ]);
 
-  const [hub, tele] = await Promise.all([
-    countCloudAccessesByServiceIds(hubServiceIds),
-    countCloudAccessesByServiceIds(teleServiceIds),
-  ]);
+  const cloud = await countAllCloudAccesses(hiddenServiceIds);
 
   return NextResponse.json({
     tvEssencial,
     tvPremium,
     tvTelephony,
-    hub,
-    tele,
     cloud,
   });
 });
-
 

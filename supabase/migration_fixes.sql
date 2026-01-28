@@ -37,6 +37,22 @@ BEGIN
   END IF;
 END $$;
 
+-- 2.1 Adicionar coluna has_telephony
+DO $$ 
+BEGIN 
+  IF NOT EXISTS (
+    SELECT 1 
+    FROM information_schema.columns 
+    WHERE table_name = 'clients' 
+    AND column_name = 'has_telephony'
+  ) THEN
+    ALTER TABLE clients ADD COLUMN has_telephony BOOLEAN DEFAULT FALSE;
+    RAISE NOTICE 'Coluna has_telephony adicionada com sucesso à tabela clients';
+  ELSE
+    RAISE NOTICE 'Coluna has_telephony já existe na tabela clients';
+  END IF;
+END $$;
+
 -- 3. Separar serviço TV em TV ESSENCIAL e TV PREMIUM
 -- Primeiro, verificar se já existem os novos serviços
 DO $$
@@ -108,4 +124,3 @@ DO $$
 BEGIN
   RAISE NOTICE 'Migração concluída com sucesso!';
 END $$;
-

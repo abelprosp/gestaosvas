@@ -7,14 +7,21 @@ import { PostgrestError } from "@supabase/supabase-js";
 const router = Router();
 
 const SCHEMA_ERROR_CODES = new Set(["PGRST200", "PGRST201", "PGRST202", "PGRST203", "PGRST204", "PGRST205"]);
+const HIDDEN_SERVICE_KEYWORDS = ["hub", "hubplay", "telemedicina", "telepet"];
 
 function isSchemaMissing(error: unknown): error is PostgrestError {
   return Boolean((error as PostgrestError)?.code && SCHEMA_ERROR_CODES.has((error as PostgrestError).code));
 }
 
+function isHiddenServiceName(name?: string | null): boolean {
+  if (!name) return false;
+  const normalized = name.toLowerCase();
+  return HIDDEN_SERVICE_KEYWORDS.some((keyword) => normalized.includes(keyword));
+}
+
 type ReportRow = {
   id: string;
-  category: "TV" | "CLOUD" | "SERVICE" | "HUB" | "TELE";
+  category: "TV" | "CLOUD" | "SERVICE";
   clientId: string;
   clientName: string;
   clientDocument: string;
@@ -64,7 +71,8 @@ router.get("/services", requireAuth, async (req, res, next) => {
   try {
     const document = typeof req.query.document === "string" ? req.query.document.replace(/\D/g, "") : undefined;
     const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
-    const category = typeof req.query.category === "string" ? req.query.category.toUpperCase() : "ALL";
+    const categoryParam = typeof req.query.category === "string" ? req.query.category.toUpperCase() : "ALL";
+    const category = ["TV", "CLOUD", "SERVICE"].includes(categoryParam) ? categoryParam : "ALL";
     const serviceQuery = typeof req.query.service === "string" ? req.query.service.toLowerCase() : "";
     const limitParam = Number(req.query.limit ?? "2000");
     const safeLimit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 10000) : 2000;
@@ -157,18 +165,12 @@ router.get("/services", requireAuth, async (req, res, next) => {
         if (!client) {
           return;
         }
+        if (isHiddenServiceName(access.service?.name ?? null)) {
+          return;
+        }
         rows.push({
           id: access.id,
-          category: (() => {
-            const lower = access.service?.name?.toLowerCase() ?? "";
-            if (lower.includes("hub")) {
-              return "HUB";
-            }
-            if (lower.includes("tele")) {
-              return "TELE";
-            }
-            return "CLOUD";
-          })(),
+          category: "CLOUD",
           clientId: client.id,
           clientName: client.name,
           clientDocument: client.document,
@@ -204,21 +206,12 @@ router.get("/services", requireAuth, async (req, res, next) => {
         if (!client || !relation.service) {
           return;
         }
+        if (isHiddenServiceName(relation.service.name ?? null)) {
+          return;
+        }
         rows.push({
           id: `${relation.client_id}-${relation.service.id}`,
-          category: (() => {
-            const lower = relation.service.name?.toLowerCase() ?? "";
-            if (lower.includes("hub")) {
-              return "HUB";
-            }
-            if (lower.includes("tele")) {
-              return "TELE";
-            }
-            if (lower.includes("cloud")) {
-              return "CLOUD";
-            }
-            return "SERVICE";
-          })(),
+          category: relation.service.name?.toLowerCase().includes("cloud") ? "CLOUD" : "SERVICE",
           clientId: client.id,
           clientName: client.name,
           clientDocument: client.document,
@@ -264,5 +257,3 @@ router.get("/services", requireAuth, async (req, res, next) => {
 });
 
 export default router;
-
-

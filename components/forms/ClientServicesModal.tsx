@@ -37,8 +37,9 @@ import { useAuth } from "@/context/AuthContext";
 import { createRequest } from "@/lib/api/requests";
 import { FiUserPlus, FiSend } from "react-icons/fi";
 import Link from "next/link";
+import { addMonthsToISODate } from "@/lib/utils/dates";
 
-const CLOUD_SERVICE_KEYWORDS = ["cloud", "hub", "hubplay", "telemedicina", "telepet"];
+const CLOUD_SERVICE_KEYWORDS = ["cloud"];
 
 export interface ClientServicesFormValues {
   serviceIds?: string[];
@@ -54,7 +55,6 @@ export interface ClientServicesFormValues {
     startsAt?: string;
     expiresAt?: string;
     notes?: string;
-    hasTelephony?: boolean;
   };
   cloudSetups?: Array<{
     serviceId: string;
@@ -81,7 +81,6 @@ type TvSetupState = {
   startsAt: string;
   expiresAt: string;
   notes: string;
-  hasTelephony: boolean;
 };
 
 type CloudSetupState = {
@@ -101,7 +100,6 @@ function buildInitialTvSetup(): TvSetupState {
     startsAt: today,
     expiresAt: "",
     notes: "",
-    hasTelephony: false,
   };
 }
 
@@ -151,6 +149,18 @@ export function ClientServicesModal({
   const selectedServiceIds = watch("serviceIds") ?? [];
 
   const [tvSetup, setTvSetup] = useState<TvSetupState>(buildInitialTvSetup());
+  const [tvDurationPreset, setTvDurationPreset] = useState<number | "">("");
+  const [tvDurationCustom, setTvDurationCustom] = useState("");
+  const resolvedTvDuration = useMemo(() => {
+    const customValue = tvDurationCustom.trim();
+    if (customValue) {
+      const parsed = Number(customValue);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+    return tvDurationPreset ? Number(tvDurationPreset) : null;
+  }, [tvDurationCustom, tvDurationPreset]);
   const [cloudSetups, setCloudSetups] = useState<Record<string, CloudSetupState>>({});
   const [customPrices, setCustomPrices] = useState<Record<string, string>>({});
   const [customPricesEssencial, setCustomPricesEssencial] = useState<Record<string, string>>({});
@@ -162,6 +172,8 @@ export function ClientServicesModal({
     if (!isOpen || !client || pricesInitialized) {
       return;
     }
+    setTvDurationPreset("");
+    setTvDurationCustom("");
 
     // Carregar preços personalizados apenas na primeira vez que o modal abre
     const prices: Record<string, string> = {};
@@ -228,13 +240,22 @@ export function ClientServicesModal({
         startsAt: firstAssignment.startsAt ? firstAssignment.startsAt.slice(0, 10) : new Date().toISOString().slice(0, 10),
         expiresAt: firstAssignment.expiresAt ? firstAssignment.expiresAt.slice(0, 10) : "",
         notes: "", // Observações do cliente não devem ser as mesmas dos serviços/produtos
-        hasTelephony: firstAssignment.hasTelephony ?? false,
       });
     }
 
     reset({ serviceIds: currentServiceIds });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, client?.id, pricesInitialized]); // Apenas executar quando o modal abre ou o cliente muda
+
+  useEffect(() => {
+    if (!resolvedTvDuration || !tvSetup.startsAt) {
+      return;
+    }
+    const nextExpiresAt = addMonthsToISODate(tvSetup.startsAt, resolvedTvDuration);
+    if (nextExpiresAt && nextExpiresAt !== tvSetup.expiresAt) {
+      setTvSetup((prev) => ({ ...prev, expiresAt: nextExpiresAt }));
+    }
+  }, [resolvedTvDuration, tvSetup.startsAt, tvSetup.expiresAt]);
 
 
   const tvServices = useMemo(
@@ -276,6 +297,8 @@ export function ClientServicesModal({
 
   const handleClose = () => {
     setTvSetup(buildInitialTvSetup());
+    setTvDurationPreset("");
+    setTvDurationCustom("");
     setCloudSetups({});
     setCustomPrices({});
     setCustomPricesEssencial({});
@@ -380,7 +403,6 @@ export function ClientServicesModal({
               startsAt: tvSetup.startsAt || undefined,
               expiresAt: expiresAtFormatted,
               notes: tvSetup.notes?.trim() || undefined,
-              hasTelephony: tvSetup.hasTelephony || undefined,
             };
           }
         }
@@ -682,6 +704,48 @@ export function ClientServicesModal({
                     </GridItem>
                     <GridItem>
                       <FormControl>
+                        <FormLabel>Plano (meses)</FormLabel>
+                        <Select
+                          placeholder="Selecione"
+                          value={tvDurationPreset === "" ? "" : String(tvDurationPreset)}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setTvDurationPreset(value ? Number(value) : "");
+                            if (value) {
+                              setTvDurationCustom("");
+                            }
+                          }}
+                        >
+                          <option value={3}>3 meses</option>
+                          <option value={6}>6 meses</option>
+                          <option value={12}>12 meses</option>
+                          <option value={24}>24 meses</option>
+                        </Select>
+                      </FormControl>
+                    </GridItem>
+                    <GridItem>
+                      <FormControl>
+                        <FormLabel>Meses personalizados</FormLabel>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={tvDurationCustom}
+                          onChange={(e) => {
+                            const digits = e.target.value.replace(/\D/g, "");
+                            setTvDurationCustom(digits);
+                            if (digits) {
+                              setTvDurationPreset("");
+                            }
+                          }}
+                          placeholder="Ex: 9"
+                        />
+                        <Text fontSize="xs" color="gray.500" mt={1}>
+                          Preenchido aqui, o vencimento é calculado automaticamente.
+                        </Text>
+                      </FormControl>
+                    </GridItem>
+                    <GridItem>
+                      <FormControl>
                         <FormLabel>Data de início</FormLabel>
                         <Input
                           type="date"
@@ -696,18 +760,12 @@ export function ClientServicesModal({
                         <Input
                           type="date"
                           value={tvSetup.expiresAt}
-                          onChange={(e) => setTvSetup((prev) => ({ ...prev, expiresAt: e.target.value }))}
+                          onChange={(e) => {
+                            setTvDurationPreset("");
+                            setTvDurationCustom("");
+                            setTvSetup((prev) => ({ ...prev, expiresAt: e.target.value }));
+                          }}
                         />
-                      </FormControl>
-                    </GridItem>
-                    <GridItem colSpan={{ base: 1, md: 2 }}>
-                      <FormControl>
-                        <Checkbox
-                          isChecked={tvSetup.hasTelephony}
-                          onChange={(e) => setTvSetup((prev) => ({ ...prev, hasTelephony: e.target.checked }))}
-                        >
-                          Inclui telefonia
-                        </Checkbox>
                       </FormControl>
                     </GridItem>
                     <GridItem colSpan={{ base: 1, md: 2 }}>
@@ -797,4 +855,3 @@ export function ClientServicesModal({
     </Modal>
   );
 }
-

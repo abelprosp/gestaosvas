@@ -29,16 +29,6 @@ export const APP_PAGES: AppPage[] = [
     description: "Gestão de acessos Cloud (vencimentos, testes, observações).",
   },
   {
-    label: "Usuários Hub",
-    path: "/usuarios-hub",
-    description: "Gestão de acessos HubPlay.",
-  },
-  {
-    label: "Usuários Tele",
-    path: "/usuarios-tele",
-    description: "Gestão de acessos Telemedicina/Telepet.",
-  },
-  {
     label: "Relatórios",
     path: "/relatorios/servicos",
     description: "Relatórios de serviços (filtros + exportação Excel).",
@@ -231,5 +221,4 @@ export function matchHowTo(message: string): HowTo | null {
   }
   return null;
 }
-
 

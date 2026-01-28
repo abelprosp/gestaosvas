@@ -254,7 +254,7 @@ export function DashboardPage() {
           return;
         }
         
-        // Adicionar TODOS os outros serviços (Cloud, Tele, Hub, etc.)
+        // Adicionar TODOS os outros serviços (Cloud, etc.)
         console.log('[Dashboard] ✅ Adicionando serviço:', serviceName);
         servicesMap.set(serviceName, {
           key: `svc-${serviceId}`,
@@ -636,4 +636,3 @@ export function DashboardPage() {
     </VStack>
   );
 }
-

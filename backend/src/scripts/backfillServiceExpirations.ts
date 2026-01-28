@@ -1,10 +1,7 @@
 import "dotenv/config";
 import supabase from "../supabaseClient";
 
-const TARGET_SERVICES = [
-  { name: "HubPlay Premium", key: "hubplay premium" },
-  { name: "Telemedicina e Telepet", key: "telemedicina e telepet" },
-];
+const TARGET_SERVICES: Array<{ name: string; key: string }> = [];
 
 function randomExpiration() {
   const base = new Date();
@@ -84,5 +81,4 @@ main()
   .finally(() => {
     process.exit(0);
   });
-
 

@@ -37,6 +37,7 @@ import { FiDownload, FiEdit, FiFilePlus, FiPlus, FiTrash, FiUpload } from "react
 import { api } from "@/lib/api/client";
 import { Service } from "@/types";
 import { exportToExcel, exportToPdf, importFromExcel } from "@/lib/utils/exporters";
+import { useAuth } from "@/context/AuthContext";
 
 interface ServiceFormValues {
   name: string;
@@ -211,6 +212,7 @@ function ServiceFormModal({ isOpen, onClose, onSubmit, defaultValues }: ServiceF
 export function ServicesPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const { isAdmin } = useAuth();
   const formModal = useDisclosure();
   const [selectedService, setSelectedService] = useState<Service | undefined>();
   const [isImporting, setIsImporting] = useState(false);
@@ -260,8 +262,8 @@ export function ServicesPage() {
   });
 
   const deleteService = useMutation({
-    mutationFn: async (id: string) => {
-      await api.delete(`/services/${id}`);
+    mutationFn: async ({ id, password }: { id: string; password: string }) => {
+      await api.delete(`/services/${id}`, { data: { password } });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["services"] });
@@ -279,6 +281,21 @@ export function ServicesPage() {
   const handleUpdate = async (values: ServiceFormValues) => {
     if (!selectedService) return;
     await updateService.mutateAsync({ id: selectedService.id, values });
+  };
+
+  const handleDeleteService = async (service: Service) => {
+    if (!isAdmin) {
+      toast({ title: "Apenas administradores podem excluir.", status: "warning" });
+      return;
+    }
+    const confirmed = window.confirm(`Tem certeza que deseja excluir o serviço "${service.name}"?`);
+    if (!confirmed) return;
+    const password = window.prompt("Confirme com sua senha para excluir este serviço:");
+    if (!password || !password.trim()) {
+      toast({ title: "Senha obrigatória para excluir.", status: "warning" });
+      return;
+    }
+    deleteService.mutate({ id: service.id, password: password.trim() });
   };
 
   const openCreateModal = () => {
@@ -514,13 +531,13 @@ export function ServicesPage() {
                         onClick={() => openEditModal(service)}
                         isDisabled={updateService.isPending}
                       />
-                      <IconButton
-                        aria-label="Excluir serviço"
-                        icon={<FiTrash />}
-                        variant="ghost"
-                        onClick={() => deleteService.mutate(service.id)}
-                        isDisabled={deleteService.isPending}
-                      />
+                        <IconButton
+                          aria-label="Excluir serviço"
+                          icon={<FiTrash />}
+                          variant="ghost"
+                          onClick={() => handleDeleteService(service)}
+                          isDisabled={deleteService.isPending}
+                        />
                     </Stack>
                   </Td>
                 </Tr>
@@ -539,4 +556,3 @@ export function ServicesPage() {
     </Stack>
   );
 }
-

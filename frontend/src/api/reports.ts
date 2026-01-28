@@ -5,7 +5,7 @@ export interface FetchServiceReportParams {
   document?: string;
   search?: string;
   service?: string;
-  category?: "ALL" | "TV" | "CLOUD" | "HUB" | "TELE" | "SERVICE";
+  category?: "ALL" | "TV" | "CLOUD" | "SERVICE";
   limit?: number;
 }
 
@@ -20,7 +20,6 @@ export async function fetchServiceReport(params: FetchServiceReportParams) {
   });
   return response.data;
 }
-
 
 
 

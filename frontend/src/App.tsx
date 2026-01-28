@@ -12,8 +12,6 @@ import { AdminUsersPage } from "./pages/Admin/AdminUsersPage";
 import { Outlet } from "react-router-dom";
 import { UsersPage } from "./pages/Users/UsersPage";
 import { CloudUsersPage } from "./pages/CloudUsers/CloudUsersPage";
-import { HubUsersPage } from "./pages/CloudUsers/HubUsersPage";
-import { TeleUsersPage } from "./pages/CloudUsers/TeleUsersPage";
 import { ServiceReportsPage } from "./pages/Reports/ServiceReportsPage";
 import { ProfilePage } from "./pages/Profile/ProfilePage";
 
@@ -39,8 +37,6 @@ function App() {
         <Route path="/servicos" element={<ServicesPage />} />
         <Route path="/usuarios" element={<UsersPage />} />
         <Route path="/usuarios-cloud" element={<CloudUsersPage />} />
-        <Route path="/usuarios-hub" element={<HubUsersPage />} />
-        <Route path="/usuarios-tele" element={<TeleUsersPage />} />
         <Route path="/guia" element={<GuidePage />} />
         <Route path="/admin/usuarios" element={<AdminUsersPage />} />
         <Route path="/perfil" element={<ProfilePage />} />

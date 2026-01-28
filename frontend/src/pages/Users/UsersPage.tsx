@@ -166,6 +166,8 @@ export function UsersPage() {
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
   const [notesBySlot, setNotesBySlot] = useState<Record<string, string>>({});
   const [pendingNoteId, setPendingNoteId] = useState<string | null>(null);
+  const [bolinhaBySlot, setBolinhaBySlot] = useState<Record<string, string>>({});
+  const [pendingBolinhaId, setPendingBolinhaId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const limit = 50;
   const hasSearch = searchTerm.trim().length > 0;
@@ -213,6 +215,14 @@ export function UsersPage() {
       records.reduce<Record<string, string>>((acc: Record<string, string>, record: TVOverviewRecord) => {
         if (record.id) {
           acc[record.id] = record.notes ?? "";
+        }
+        return acc;
+      }, {}),
+    );
+    setBolinhaBySlot(
+      records.reduce<Record<string, string>>((acc: Record<string, string>, record: TVOverviewRecord) => {
+        if (record.id) {
+          acc[record.id] = record.bolinha !== null && record.bolinha !== undefined ? String(record.bolinha) : "";
         }
         return acc;
       }, {}),
@@ -341,6 +351,26 @@ export function UsersPage() {
     },
   });
 
+  const bolinhaMutation = useMutation({
+    mutationFn: ({ slotId, bolinha }: { slotId: string; bolinha: number | null }) =>
+      updateTVSlot(slotId, { bolinha }),
+    onSuccess: () => {
+      toast({ title: "Bolinha atualizada", status: "success" });
+      queryClient.invalidateQueries({ queryKey: ["tvOverview"] });
+      queryClient.invalidateQueries({ queryKey: ["tvAssignments"] });
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: "Erro ao salvar bolinha",
+        description: mutateErrorMessage(error),
+        status: "error",
+      });
+    },
+    onSettled: () => {
+      setPendingBolinhaId(null);
+    },
+  });
+
   const filteredRecords = useMemo(() => {
     const term = searchTerm.toLowerCase();
     const filtered = sortedRecords.filter((record) => {
@@ -355,6 +385,7 @@ export function UsersPage() {
           record.profileLabel,
           record.planType ? (record.planType === "PREMIUM" ? "premium" : "essencial") : undefined,
           record.client?.document,
+          record.bolinha !== null && record.bolinha !== undefined ? String(record.bolinha) : undefined,
         ]
           .filter(Boolean)
           .some((value) => value?.toLowerCase().includes(term));
@@ -395,6 +426,14 @@ export function UsersPage() {
           return direction * a.status.localeCompare(b.status, "pt-BR", { sensitivity: "base" });
         case "planType":
           return direction * ((a.planType ?? "").localeCompare(b.planType ?? "", "pt-BR", { sensitivity: "base" }));
+        case "bolinha": {
+          const aValue = a.bolinha ?? null;
+          const bValue = b.bolinha ?? null;
+          if (aValue === null && bValue === null) return 0;
+          if (aValue === null) return 1;
+          if (bValue === null) return -1;
+          return direction * (aValue - bValue);
+        }
         case "startsAt": {
           const aDate = a.startsAt ? new Date(a.startsAt).getTime() : 0;
           const bDate = b.startsAt ? new Date(b.startsAt).getTime() : 0;
@@ -441,6 +480,7 @@ export function UsersPage() {
       Email: record.email,
       Usuario: record.username,
       Slot: record.slotNumber,
+      Bolinha: record.bolinha ?? "",
       Cliente: record.client?.name ?? "",
       Documento: formatDocument(record.client?.document ?? ""),
       Plano: record.planType ?? "-",
@@ -619,6 +659,16 @@ export function UsersPage() {
                   <Button
                     variant="ghost"
                     size="sm"
+                    onClick={() => handleSort("bolinha")}
+                    rightIcon={getSortIcon("bolinha")}
+                  >
+                    Bolinha
+                  </Button>
+                </Th>
+                <Th display={{ base: "none", md: "table-cell" }}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => handleSort("planType")}
                     rightIcon={getSortIcon("planType")}
                   >
@@ -755,6 +805,9 @@ export function UsersPage() {
                       </Td>
                       <Td display={{ base: "none", md: "table-cell" }}>
                         <Badge colorScheme="blue">#{record.slotNumber}</Badge>
+                      </Td>
+                      <Td display={{ base: "none", md: "table-cell" }}>
+                        {record.bolinha !== null && record.bolinha !== undefined ? record.bolinha : "-"}
                       </Td>
                       <Td display={{ base: "none", md: "table-cell" }}>
                         {record.planType ? (
@@ -945,6 +998,12 @@ export function UsersPage() {
                                   <Text fontWeight="semibold">Vendedor</Text>
                                   <Text mt={1}>{record.soldBy ?? "-"}</Text>
                                 </Box>
+                                <Box>
+                                  <Text fontWeight="semibold">Bolinha</Text>
+                                  <Text mt={1}>
+                                    {record.bolinha !== null && record.bolinha !== undefined ? record.bolinha : "-"}
+                                  </Text>
+                                </Box>
                               <Box>
                                 <Text fontWeight="semibold">Documento</Text>
                                 <Text mt={1}>{formatDocument(record.client?.document)}</Text>
@@ -970,6 +1029,58 @@ export function UsersPage() {
                                     : "Nenhum comentário"}
                                 </Text>
                               </Box>
+
+                              <Stack direction={{ base: "column", sm: "row" }} spacing={3} align="flex-end">
+                                <FormControl maxW={{ base: "full", sm: "220px" }}>
+                                  <FormLabel>Bolinha (manual)</FormLabel>
+                                  <Input
+                                    type="number"
+                                    value={bolinhaBySlot[record.id] ?? ""}
+                                    onChange={(event) =>
+                                      setBolinhaBySlot((prev) => ({
+                                        ...prev,
+                                        [record.id]: event.target.value,
+                                      }))
+                                    }
+                                    placeholder="Ex: 12"
+                                    isDisabled={!isAdmin}
+                                  />
+                                </FormControl>
+                                <Button
+                                  size="sm"
+                                  colorScheme="brand"
+                                  onClick={() => {
+                                    if (!isAdmin) {
+                                      toast({ title: "Apenas administradores podem editar.", status: "warning" });
+                                      return;
+                                    }
+                                    if (bolinhaMutation.isPending) {
+                                      return;
+                                    }
+                                    const raw = (bolinhaBySlot[record.id] ?? "").trim();
+                                    if (!raw) {
+                                      setPendingBolinhaId(record.id);
+                                      bolinhaMutation.mutate({ slotId: record.id, bolinha: null });
+                                      return;
+                                    }
+                                    const parsed = Number(raw.replace(",", "."));
+                                    if (!Number.isFinite(parsed)) {
+                                      toast({
+                                        title: "Bolinha inválida",
+                                        description: "Informe apenas números.",
+                                        status: "warning",
+                                      });
+                                      return;
+                                    }
+                                    setPendingBolinhaId(record.id);
+                                    bolinhaMutation.mutate({ slotId: record.id, bolinha: parsed });
+                                  }}
+                                  isLoading={pendingBolinhaId === record.id && bolinhaMutation.isPending}
+                                  isDisabled={!isAdmin}
+                                >
+                                  Salvar bolinha
+                                </Button>
+                              </Stack>
 
                               <FormControl>
                                 <FormLabel>Adicionar ou editar comentário</FormLabel>
@@ -1120,4 +1231,3 @@ export function UsersPage() {
     </Stack>
   );
 }
-

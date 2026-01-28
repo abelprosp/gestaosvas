@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createApiHandler } from "@/lib/utils/apiHandler";
 import { createServerClient } from "@/lib/supabase/server";
 import { HttpError } from "@/lib/utils/httpError";
+import { isHiddenServiceName } from "@/lib/utils/serviceVisibility";
 import { mapServiceRow, serviceInsertPayload, serviceUpdatePayload } from "@/lib/utils/mappers";
 
 function normalizePriceInput(input: string | number): number {
@@ -43,7 +44,8 @@ export const GET = createApiHandler(async (req) => {
   if (error) {
     throw error;
   }
-  return NextResponse.json((data ?? []).map(mapServiceRow));
+  const filtered = (data ?? []).filter((service) => !isHiddenServiceName(service?.name));
+  return NextResponse.json(filtered.map(mapServiceRow));
 });
 
 export const POST = createApiHandler(
@@ -87,7 +89,6 @@ export const POST = createApiHandler(
   },
   { requireAdmin: true }
 );
-
 
 
 

@@ -37,8 +37,9 @@ import Link from "next/link";
 import { FiUserPlus, FiSend } from "react-icons/fi";
 import { TVAssignmentsManager } from "@/components/tv/TVAssignmentsManager";
 import { lookupCompanyByCnpj } from "@/lib/api/client";
+import { addMonthsToISODate } from "@/lib/utils/dates";
 
-const CLOUD_SERVICE_KEYWORDS = ["cloud", "hub", "hubplay", "telemedicina"];
+const CLOUD_SERVICE_KEYWORDS = ["cloud"];
 
 export interface ClientFormValues {
   name: string;
@@ -54,6 +55,7 @@ export interface ClientFormValues {
   state?: string;
   serviceIds?: string[];
   openedBy?: string; // Vendedor que abriu o cliente
+  hasTelephony?: boolean;
   serviceSelections?: Array<{
     serviceId: string;
     customPrice?: number | null;
@@ -67,7 +69,6 @@ export interface ClientFormValues {
     startsAt?: string;
     expiresAt?: string;
     notes?: string;
-    hasTelephony?: boolean;
   };
   cloudSetups?: Array<{
     serviceId: string;
@@ -116,7 +117,6 @@ type TvSetupState = {
   startsAt: string;
   expiresAt: string;
   notes: string;
-  hasTelephony: boolean;
 };
 
 function buildInitialTvSetup(): TvSetupState {
@@ -128,7 +128,6 @@ function buildInitialTvSetup(): TvSetupState {
     startsAt: todayISODate(),
     expiresAt: "",
     notes: "",
-    hasTelephony: false,
   };
 }
 
@@ -204,6 +203,7 @@ export function ClientFormModal({
       state: defaultValues?.state ?? "",
       notes: defaultValues?.notes ?? "",
       openedBy: defaultValues?.openedBy ?? "",
+      hasTelephony: defaultValues?.hasTelephony ?? false,
       serviceIds: defaultValues?.services?.map((service) => service.id) ?? [],
     }),
     [
@@ -262,8 +262,20 @@ export function ClientFormModal({
   });
 
   const [tvSetup, setTvSetup] = useState<TvSetupState>(buildInitialTvSetup());
+  const [tvDurationPreset, setTvDurationPreset] = useState<number | "">("");
+  const [tvDurationCustom, setTvDurationCustom] = useState("");
   const [cloudSetups, setCloudSetups] = useState<Record<string, CloudSetupState>>({});
   const [isFetchingCnpj, setIsFetchingCnpj] = useState(false);
+  const resolvedTvDuration = useMemo(() => {
+    const customValue = tvDurationCustom.trim();
+    if (customValue) {
+      const parsed = Number(customValue);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+    return tvDurationPreset ? Number(tvDurationPreset) : null;
+  }, [tvDurationCustom, tvDurationPreset]);
 
   const vendorOptions = useMemo(() => {
     return vendors
@@ -414,8 +426,20 @@ export function ClientFormModal({
   useEffect(() => {
     if (isOpen && !defaultValues) {
       setTvSetup(buildInitialTvSetup());
+      setTvDurationPreset("");
+      setTvDurationCustom("");
     }
   }, [isOpen, defaultValues]);
+
+  useEffect(() => {
+    if (!resolvedTvDuration || !tvSetup.startsAt) {
+      return;
+    }
+    const nextExpiresAt = addMonthsToISODate(tvSetup.startsAt, resolvedTvDuration);
+    if (nextExpiresAt && nextExpiresAt !== tvSetup.expiresAt) {
+      setTvSetup((prev) => ({ ...prev, expiresAt: nextExpiresAt }));
+    }
+  }, [resolvedTvDuration, tvSetup.startsAt, tvSetup.expiresAt]);
 
 useEffect(() => {
   if (!isOpen) {
@@ -455,6 +479,8 @@ useEffect(() => {
   const handleClose = () => {
     reset(formDefaults);
     setTvSetup(buildInitialTvSetup());
+    setTvDurationPreset("");
+    setTvDurationCustom("");
     setCloudSetups({});
     onClose();
   };
@@ -578,7 +604,6 @@ useEffect(() => {
             startsAt: tvSetup.startsAt || undefined,
             expiresAt: expiresAtFormatted,
             notes: tvSetup.notes?.trim() || undefined,
-            hasTelephony: tvSetup.hasTelephony || undefined,
           };
           console.log("[ClientFormModal] ✅ tvSetup será enviado:", tvSetupPayload);
         } else {
@@ -768,6 +793,14 @@ useEffect(() => {
                     <option value="LUXUS">LUXUS</option>
                     <option value="NEXUS">NEXUS</option>
                   </Select>
+                </FormControl>
+              </GridItem>
+              <GridItem>
+                <FormControl>
+                  <FormLabel>Telefonia</FormLabel>
+                  <Checkbox colorScheme="brand" {...register("hasTelephony")}>
+                    Cliente tem telefonia
+                  </Checkbox>
                 </FormControl>
               </GridItem>
               <GridItem>
@@ -1011,21 +1044,6 @@ useEffect(() => {
                     </Select>
                   </FormControl>
                   <FormControl>
-                    <FormLabel>Telefonia</FormLabel>
-                    <Checkbox
-                      isChecked={tvSetup.hasTelephony}
-                      onChange={(event) =>
-                        setTvSetup((prev) => ({
-                          ...prev,
-                          hasTelephony: event.target.checked,
-                        }))
-                      }
-                      colorScheme="brand"
-                    >
-                      Cliente tem telefonia
-                    </Checkbox>
-                  </FormControl>
-                  <FormControl>
                     <FormLabel>Quantidade de acessos</FormLabel>
                     <Input
                       type="number"
@@ -1123,6 +1141,44 @@ useEffect(() => {
                     />
                   </FormControl>
                   <FormControl>
+                    <FormLabel>Plano (meses)</FormLabel>
+                    <Select
+                      placeholder="Selecione"
+                      value={tvDurationPreset === "" ? "" : String(tvDurationPreset)}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setTvDurationPreset(value ? Number(value) : "");
+                        if (value) {
+                          setTvDurationCustom("");
+                        }
+                      }}
+                    >
+                      <option value={3}>3 meses</option>
+                      <option value={6}>6 meses</option>
+                      <option value={12}>12 meses</option>
+                      <option value={24}>24 meses</option>
+                    </Select>
+                  </FormControl>
+                  <FormControl>
+                    <FormLabel>Meses personalizados</FormLabel>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={tvDurationCustom}
+                      onChange={(event) => {
+                        const digits = event.target.value.replace(/\D/g, "");
+                        setTvDurationCustom(digits);
+                        if (digits) {
+                          setTvDurationPreset("");
+                        }
+                      }}
+                      placeholder="Ex: 9"
+                    />
+                    <FormHelperText fontSize="xs" color="gray.500">
+                      Preenchido aqui, o vencimento é calculado automaticamente.
+                    </FormHelperText>
+                  </FormControl>
+                  <FormControl>
                     <FormLabel>Início</FormLabel>
                     <Input
                       type="date"
@@ -1140,12 +1196,14 @@ useEffect(() => {
                     <Input
                       type="date"
                       value={tvSetup.expiresAt}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        setTvDurationPreset("");
+                        setTvDurationCustom("");
                         setTvSetup((prev) => ({
                           ...prev,
                           expiresAt: event.target.value,
-                        }))
-                      }
+                        }));
+                      }}
                     />
                   </FormControl>
                   <GridItem colSpan={{ base: 1, md: 2, xl: 3 }}>
@@ -1272,4 +1330,3 @@ useEffect(() => {
     </Modal>
   );
 }
-

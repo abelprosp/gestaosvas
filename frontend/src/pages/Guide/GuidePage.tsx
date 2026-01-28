@@ -196,7 +196,7 @@ export function GuidePage() {
         <UnorderedList spacing={3}>
           <ListItem>
             <strong>Cadastrar cliente:</strong> clique em “Novo cliente” → preencha nome/e-mail → opcionalmente clique em
-            “Buscar CNPJ” → selecione os serviços desejados → se incluir TV ou Cloud/Hub/Tele, configure vencimentos nos
+            “Buscar CNPJ” → selecione os serviços desejados → se incluir TV ou Cloud, configure vencimentos nos
             blocos adicionais → clique em “Cadastrar”.
           </ListItem>
           <ListItem>
@@ -212,7 +212,7 @@ export function GuidePage() {
             Contato, Remover ou “Gerar nova senha”. Sempre confirme quando solicitado.
           </ListItem>
           <ListItem>
-            <strong>Alterar acesso Cloud/Hub/Tele:</strong> vá até a aba correspondente → clique no ícone de edição →
+            <strong>Alterar acesso Cloud:</strong> vá até a aba correspondente → clique no ícone de edição →
             ajuste vencimento, marque se é teste, adicione comentário → salve. Para remover, use o mesmo modal (somente admin
             confirma a exclusão).
           </ListItem>
@@ -231,5 +231,4 @@ export function GuidePage() {
     </Stack>
   );
 }
-
 

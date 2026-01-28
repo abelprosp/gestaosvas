@@ -8,6 +8,7 @@ import { mapClientRow, mapContractRow, clientUpdatePayload } from "@/lib/utils/m
 import { assignMultipleSlotsToClient, assignSlotToClient, releaseSlotsForClient } from "@/lib/services/tvAssignments";
 import { TVPlanType } from "@/types";
 import { validateRouteParamUUID } from "@/lib/utils/validation";
+import { requirePasswordConfirmation } from "@/lib/auth";
 
 type ServiceSelection = {
   serviceId: string;
@@ -30,6 +31,7 @@ const clientSchema = z.object({
   address: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),
+  hasTelephony: z.boolean().optional(),
 });
 
 const serviceSelectionSchema = z.object({
@@ -233,6 +235,7 @@ async function handleTvServiceForClient(
   clientId: string,
   selections: ServiceSelection[] = [],
   tvSetup?: z.infer<typeof tvSetupSchema>,
+  clientHasTelephony?: boolean,
 ) {
   const serviceIds = selections.map((selection) => selection.serviceId);
   const services = await fetchServicesByIds(serviceIds);
@@ -294,6 +297,8 @@ async function handleTvServiceForClient(
           ? new Date(`${tvSetup.soldAt}T12:00:00`).toISOString()
           : tvSetup?.soldAt ?? undefined;
       const soldBy = tvSetup.soldBy.trim();
+      const resolvedHasTelephony =
+        clientHasTelephony !== undefined ? clientHasTelephony : tvSetup?.hasTelephony;
       
       // Processar ESSENCIAL
       if (desiredEssencial !== currentEssencial) {
@@ -312,7 +317,7 @@ async function handleTvServiceForClient(
               expiresAt: tvSetup.expiresAt,
               notes: tvSetup?.notes?.trim() || undefined,
               planType: "ESSENCIAL",
-              hasTelephony: tvSetup?.hasTelephony ?? undefined,
+              hasTelephony: resolvedHasTelephony,
               customEmail: tvSetup.customEmail,
             });
           } else if (toAdd === 1) {
@@ -325,7 +330,7 @@ async function handleTvServiceForClient(
               expiresAt: tvSetup.expiresAt,
               notes: tvSetup?.notes?.trim() || undefined,
               planType: "ESSENCIAL",
-              hasTelephony: tvSetup?.hasTelephony ?? undefined,
+              hasTelephony: resolvedHasTelephony,
             });
           } else if (toAdd === 2) {
             // 2 acessos - criar sequencialmente
@@ -337,7 +342,7 @@ async function handleTvServiceForClient(
               expiresAt: tvSetup.expiresAt,
               notes: tvSetup?.notes?.trim() || undefined,
               planType: "ESSENCIAL",
-              hasTelephony: tvSetup?.hasTelephony ?? undefined,
+              hasTelephony: resolvedHasTelephony,
             });
             await assignSlotToClient({
               clientId,
@@ -347,7 +352,7 @@ async function handleTvServiceForClient(
               expiresAt: tvSetup.expiresAt,
               notes: tvSetup?.notes?.trim() || undefined,
               planType: "ESSENCIAL",
-              hasTelephony: tvSetup?.hasTelephony ?? undefined,
+              hasTelephony: resolvedHasTelephony,
             });
           } else {
             // Múltiplos acessos (3 ou mais)
@@ -359,7 +364,7 @@ async function handleTvServiceForClient(
               expiresAt: tvSetup.expiresAt,
               notes: tvSetup?.notes?.trim() || undefined,
               planType: "ESSENCIAL",
-              hasTelephony: tvSetup?.hasTelephony ?? undefined,
+              hasTelephony: resolvedHasTelephony,
               quantity: toAdd,
             });
           }
@@ -415,7 +420,7 @@ async function handleTvServiceForClient(
               expiresAt: tvSetup.expiresAt,
               notes: tvSetup?.notes?.trim() || undefined,
               planType: "PREMIUM",
-              hasTelephony: tvSetup?.hasTelephony ?? undefined,
+              hasTelephony: resolvedHasTelephony,
               customEmail: tvSetup.customEmail,
             });
           } else if (toAdd === 1) {
@@ -428,7 +433,7 @@ async function handleTvServiceForClient(
               expiresAt: tvSetup.expiresAt,
               notes: tvSetup?.notes?.trim() || undefined,
               planType: "PREMIUM",
-              hasTelephony: tvSetup?.hasTelephony ?? undefined,
+              hasTelephony: resolvedHasTelephony,
             });
           } else if (toAdd === 2) {
             // 2 acessos - criar sequencialmente
@@ -440,7 +445,7 @@ async function handleTvServiceForClient(
               expiresAt: tvSetup.expiresAt,
               notes: tvSetup?.notes?.trim() || undefined,
               planType: "PREMIUM",
-              hasTelephony: tvSetup?.hasTelephony ?? undefined,
+              hasTelephony: resolvedHasTelephony,
             });
             await assignSlotToClient({
               clientId,
@@ -450,7 +455,7 @@ async function handleTvServiceForClient(
               expiresAt: tvSetup.expiresAt,
               notes: tvSetup?.notes?.trim() || undefined,
               planType: "PREMIUM",
-              hasTelephony: tvSetup?.hasTelephony ?? undefined,
+              hasTelephony: resolvedHasTelephony,
             });
           } else {
             // Múltiplos acessos (3 ou mais)
@@ -462,7 +467,7 @@ async function handleTvServiceForClient(
               expiresAt: tvSetup.expiresAt,
               notes: tvSetup?.notes?.trim() || undefined,
               planType: "PREMIUM",
-              hasTelephony: tvSetup?.hasTelephony ?? undefined,
+              hasTelephony: resolvedHasTelephony,
               quantity: toAdd,
             });
           }
@@ -510,7 +515,7 @@ async function handleTvServiceForClient(
           starts_at: tvSetup?.startsAt ?? undefined,
           expires_at: tvSetup.expiresAt,
           notes: tvSetup?.notes?.trim() || null,
-          has_telephony: tvSetup?.hasTelephony ?? null,
+          has_telephony: resolvedHasTelephony ?? null,
         })
         .eq("client_id", clientId)
         .eq("status", "ASSIGNED");
@@ -541,7 +546,7 @@ async function syncCloudAccesses(
 
   const allServiceIds = selectedSet ? Array.from(selectedSet) : Array.from(setupMap.keys());
   const services = allServiceIds.length > 0 ? await fetchServicesByIds(allServiceIds) : [];
-  const cloudServiceKeywords = ["cloud", "hub", "hubplay", "telemedicina", "telepet"];
+  const cloudServiceKeywords = ["cloud"];
 
   const cloudServiceIdsSet = new Set(
     services
@@ -755,7 +760,7 @@ export const PUT = createApiHandler(
       .from("clients")
       .update(updatePayload)
       .eq("id", clientId)
-      .select("id")
+      .select("id, has_telephony")
       .maybeSingle();
 
     if (error) {
@@ -787,10 +792,30 @@ export const PUT = createApiHandler(
         throw syncError;
       }
       
-      await handleTvServiceForClient(data.id, selections, tvSetup);
+      await handleTvServiceForClient(
+        data.id,
+        selections,
+        tvSetup,
+        (data as { has_telephony?: boolean | null }).has_telephony ?? undefined,
+      );
       await syncCloudAccesses(data.id, selectedServiceIdsList, cloudSetups ?? []);
     } else if (cloudSetups) {
       await syncCloudAccesses(data.id, undefined, cloudSetups);
+    }
+
+    if (clientData.hasTelephony !== undefined) {
+      const { error: telephonyError } = await supabase
+        .from("tv_slots")
+        .update({
+          has_telephony: clientData.hasTelephony,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("client_id", clientId)
+        .eq("status", "ASSIGNED");
+
+      if (telephonyError && !isSchemaMissing(telephonyError)) {
+        throw telephonyError;
+      }
     }
 
     const refreshed = await fetchClientSummary(data.id);
@@ -806,6 +831,8 @@ export const DELETE = createApiHandler(
     const clientId = validateRouteParamUUID(params.id, "id");
     
     const supabase = createServerClient();
+
+    await requirePasswordConfirmation(req, user);
     
     // Verificar se o usuário tem acesso ao recurso
     const { requireResourceAccess } = await import("@/lib/utils/resourceAuth");
@@ -820,8 +847,3 @@ export const DELETE = createApiHandler(
   },
   { requireAdmin: true }
 );
-
-
-
-
-

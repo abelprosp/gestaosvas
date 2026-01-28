@@ -65,6 +65,7 @@ export function AdminUsersPage() {
   const deleteDialog = useDisclosure();
   const cancelDeleteRef = useRef<HTMLButtonElement>(null);
   const [userToDelete, setUserToDelete] = useState<AdminUser | null>(null);
+  const [deletePassword, setDeletePassword] = useState("");
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [editEmail, setEditEmail] = useState("");
   const [editName, setEditName] = useState("");
@@ -178,8 +179,8 @@ export function AdminUsersPage() {
   });
 
   const deleteUser = useMutation({
-    mutationFn: async (id: string) => {
-      await api.delete(`/admin/users/${id}`);
+    mutationFn: async ({ id, password }: { id: string; password: string }) => {
+      await api.delete(`/admin/users/${id}`, { data: { password } });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
@@ -198,18 +199,24 @@ export function AdminUsersPage() {
 
   const handleDeleteClick = (user: AdminUser) => {
     setUserToDelete(user);
+    setDeletePassword("");
     deleteDialog.onOpen();
   };
 
   const handleConfirmDelete = () => {
     if (!userToDelete) return;
-    deleteUser.mutate(userToDelete.id);
+    if (!deletePassword.trim()) {
+      toast({ title: "Informe sua senha para excluir.", status: "warning" });
+      return;
+    }
+    deleteUser.mutate({ id: userToDelete.id, password: deletePassword.trim() });
   };
 
   const closeDeleteDialog = () => {
     if (deleteUser.isPending) return;
     deleteDialog.onClose();
     setUserToDelete(null);
+    setDeletePassword("");
   };
 
   const openEdit = (user: AdminUser) => {
@@ -493,12 +500,28 @@ export function AdminUsersPage() {
                 <strong>{userToDelete?.name || userToDelete?.email || "selecionado"}</strong>? Esta ação é permanente e
                 não pode ser desfeita.
               </Text>
+              <FormControl>
+                <FormLabel>Senha do administrador</FormLabel>
+                <Input
+                  type="password"
+                  value={deletePassword}
+                  onChange={(event) => setDeletePassword(event.target.value)}
+                  placeholder="Digite sua senha para confirmar"
+                  autoComplete="current-password"
+                />
+              </FormControl>
             </AlertDialogBody>
             <AlertDialogFooter>
               <Button ref={cancelDeleteRef} onClick={closeDeleteDialog} isDisabled={deleteUser.isPending}>
                 Cancelar
               </Button>
-              <Button colorScheme="red" ml={3} onClick={handleConfirmDelete} isLoading={deleteUser.isPending}>
+              <Button
+                colorScheme="red"
+                ml={3}
+                onClick={handleConfirmDelete}
+                isLoading={deleteUser.isPending}
+                isDisabled={!deletePassword.trim()}
+              >
                 Excluir
               </Button>
             </AlertDialogFooter>
@@ -508,4 +531,3 @@ export function AdminUsersPage() {
     </Stack>
   );
 }
-

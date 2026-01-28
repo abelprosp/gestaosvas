@@ -32,8 +32,6 @@ interface ClientValuesModalProps {
 }
 
 const CLOUD_KEYWORDS = ["cloud"];
-const HUB_KEYWORDS = ["hub", "hubplay"];
-const TELE_KEYWORDS = ["telemedicina", "telepet"];
 
 function isServiceType(service: Service, keywords: string[]): boolean {
   const name = service.name.toLowerCase();
@@ -124,8 +122,6 @@ export function ClientValuesModal({ isOpen, onClose, client }: ClientValuesModal
 
   // Separar serviços por tipo
   const cloudServices = (client.services ?? []).filter((service) => isServiceType(service, CLOUD_KEYWORDS));
-  const hubServices = (client.services ?? []).filter((service) => isServiceType(service, HUB_KEYWORDS));
-  const teleServices = (client.services ?? []).filter((service) => isServiceType(service, TELE_KEYWORDS));
 
   // Calcular totais por tipo
   const cloudTotal = cloudServices.reduce((sum, service) => {
@@ -133,18 +129,8 @@ export function ClientValuesModal({ isOpen, onClose, client }: ClientValuesModal
     return sum + price;
   }, 0);
 
-  const hubTotal = hubServices.reduce((sum, service) => {
-    const price = service.customPrice ?? service.price;
-    return sum + price;
-  }, 0);
-
-  const teleTotal = teleServices.reduce((sum, service) => {
-    const price = service.customPrice ?? service.price;
-    return sum + price;
-  }, 0);
-
   // Valor total geral
-  const grandTotal = tvEssencialTotal + tvPremiumTotal + cloudTotal + hubTotal + teleTotal;
+  const grandTotal = tvEssencialTotal + tvPremiumTotal + cloudTotal;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="xl" scrollBehavior="inside">
@@ -262,66 +248,10 @@ export function ClientValuesModal({ isOpen, onClose, client }: ClientValuesModal
               </Box>
             )}
 
-            {/* Hub */}
-            {hubServices.length > 0 && (
-              <Box borderWidth={1} borderRadius="lg" p={4} bg={cardBg} borderColor={cardBorder}>
-                <HStack justify="space-between" mb={2}>
-                  <Text fontWeight="semibold">Hub</Text>
-                  <Badge colorScheme="purple">{hubServices.length} serviço(s)</Badge>
-                </HStack>
-                <VStack align="stretch" spacing={2} mt={2}>
-                  {hubServices.map((service) => (
-                    <HStack key={service.id} justify="space-between">
-                      <Text fontSize="sm">{service.name}</Text>
-                      <Text fontSize="sm" fontWeight="medium">
-                        {currencyFormatter.format(service.customPrice ?? service.price)}
-                      </Text>
-                    </HStack>
-                  ))}
-                  <Divider />
-                  <HStack justify="space-between">
-                    <Text fontWeight="semibold">Total Hub:</Text>
-                    <Text fontWeight="bold" color="purple.500">
-                      {currencyFormatter.format(hubTotal)}
-                    </Text>
-                  </HStack>
-                </VStack>
-              </Box>
-            )}
-
-            {/* Tele */}
-            {teleServices.length > 0 && (
-              <Box borderWidth={1} borderRadius="lg" p={4} bg={cardBg} borderColor={cardBorder}>
-                <HStack justify="space-between" mb={2}>
-                  <Text fontWeight="semibold">Tele</Text>
-                  <Badge colorScheme="orange">{teleServices.length} serviço(s)</Badge>
-                </HStack>
-                <VStack align="stretch" spacing={2} mt={2}>
-                  {teleServices.map((service) => (
-                    <HStack key={service.id} justify="space-between">
-                      <Text fontSize="sm">{service.name}</Text>
-                      <Text fontSize="sm" fontWeight="medium">
-                        {currencyFormatter.format(service.customPrice ?? service.price)}
-                      </Text>
-                    </HStack>
-                  ))}
-                  <Divider />
-                  <HStack justify="space-between">
-                    <Text fontWeight="semibold">Total Tele:</Text>
-                    <Text fontWeight="bold" color="orange.500">
-                      {currencyFormatter.format(teleTotal)}
-                    </Text>
-                  </HStack>
-                </VStack>
-              </Box>
-            )}
-
             {/* Resumo quando não há serviços */}
             {tvEssencialAssignments.length === 0 &&
               tvPremiumAssignments.length === 0 &&
-              cloudServices.length === 0 &&
-              hubServices.length === 0 &&
-              teleServices.length === 0 && (
+              cloudServices.length === 0 && (
                 <Box textAlign="center" py={8}>
                   <Text color={mutedText}>Nenhum serviço ou acesso vinculado a este cliente.</Text>
                 </Box>
@@ -330,9 +260,7 @@ export function ClientValuesModal({ isOpen, onClose, client }: ClientValuesModal
             {/* Total Geral */}
             {(tvEssencialAssignments.length > 0 ||
               tvPremiumAssignments.length > 0 ||
-              cloudServices.length > 0 ||
-              hubServices.length > 0 ||
-              teleServices.length > 0) && (
+              cloudServices.length > 0) && (
               <Box borderWidth={2} borderRadius="lg" p={4} bg={cardBg} borderColor="brand.500">
                 <HStack justify="space-between">
                   <Text fontSize="lg" fontWeight="bold">
@@ -353,4 +281,3 @@ export function ClientValuesModal({ isOpen, onClose, client }: ClientValuesModal
     </Modal>
   );
 }
-

@@ -5,6 +5,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { HttpError } from "@/lib/utils/httpError";
 import { mapTemplateRow, templateUpdatePayload } from "@/lib/utils/mappers";
 import { validateRouteParamUUID } from "@/lib/utils/validation";
+import { requirePasswordConfirmation } from "@/lib/auth";
 
 const templateSchema = z.object({
   name: z.string().min(3),
@@ -13,9 +14,6 @@ const templateSchema = z.object({
 });
 
 const templateUpdateSchema = templateSchema.partial();
-const templateDeleteSchema = z.object({
-  password: z.string().min(1, "Informe sua senha para confirmar."),
-});
 
 export const PUT = createApiHandler(async (req, { params, user }) => {
   // Validar UUID do parâmetro
@@ -46,21 +44,7 @@ export const PUT = createApiHandler(async (req, { params, user }) => {
 export const DELETE = createApiHandler(
   async (req, { params, user }) => {
     const supabase = createServerClient();
-    const body = await req.json().catch(() => ({}));
-    const { password } = templateDeleteSchema.parse(body ?? {});
-
-    if (!user.email) {
-      throw new HttpError(400, "Conta sem e-mail. Faça login novamente.");
-    }
-
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email: user.email,
-      password,
-    });
-
-    if (authError) {
-      throw new HttpError(401, "Senha incorreta. Tente novamente.");
-    }
+    await requirePasswordConfirmation(req, user);
 
     // Validar UUID do parâmetro
     const templateId = validateRouteParamUUID(params.id, "id");
@@ -75,7 +59,6 @@ export const DELETE = createApiHandler(
   },
   { requireAdmin: true }
 );
-
 
 
 

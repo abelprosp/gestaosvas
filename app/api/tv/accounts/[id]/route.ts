@@ -6,6 +6,7 @@ import { z } from "zod";
 import { HttpError } from "@/lib/utils/httpError";
 import { PostgrestError } from "@supabase/supabase-js";
 import { validateRouteParamUUID } from "@/lib/utils/validation";
+import { requirePasswordConfirmation } from "@/lib/auth";
 
 function isUniqueViolation(error: PostgrestError) {
   return error.code === "23505";
@@ -204,10 +205,11 @@ export const PATCH = createApiHandler(
 );
 
 export const DELETE = createApiHandler(
-  async (req, { params }) => {
+  async (req, { params, user }) => {
     // Validar UUID do parâmetro
     const accountId = validateRouteParamUUID(params.id, "id");
     const supabase = createServerClient();
+    await requirePasswordConfirmation(req, user);
 
     // Verificar se a conta existe
     const { data: account, error: fetchError } = await supabase
@@ -258,5 +260,3 @@ export const DELETE = createApiHandler(
   },
   { requireAdmin: true }
 );
-
-

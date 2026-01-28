@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createApiHandler } from "@/lib/utils/apiHandler";
 import { createServerClient } from "@/lib/supabase/server";
 import { HttpError } from "@/lib/utils/httpError";
+import { hiddenServiceKeywords, isHiddenServiceName } from "@/lib/utils/serviceVisibility";
 
 const updateSchema = z
   .object({
@@ -38,6 +39,24 @@ export const GET = createApiHandler(async (req) => {
   const documentDigits = searchParams.get("document")?.replace(/\D/g, "") || "";
   const service = searchParams.get("service") || undefined;
 
+  // Buscar IDs de serviços ocultos (Hub/Telemedicina) para filtrar
+  let hiddenServiceIds: string[] = [];
+  const keywords = hiddenServiceKeywords();
+  if (keywords.length) {
+    const or = keywords.map((keyword) => `name.ilike.%${keyword}%`).join(",");
+    const { data: hiddenServices, error: hiddenError } = await supabase
+      .from("services")
+      .select("id, name")
+      .or(or);
+
+    if (hiddenError) {
+      throw hiddenError;
+    }
+    hiddenServiceIds = (hiddenServices ?? [])
+      .filter((row) => isHiddenServiceName(row?.name))
+      .map((row) => row.id);
+  }
+
   // Buscar service_id se filtro por serviço foi especificado
   let serviceId: string | undefined = undefined;
   if (service) {
@@ -58,6 +77,16 @@ export const GET = createApiHandler(async (req) => {
 
     if (!matchedService) {
       // Serviço não encontrado, retornar resultado vazio
+      return NextResponse.json({
+        data: [],
+        page: safePage,
+        limit: safeLimit,
+        total: 0,
+        totalPages: 1,
+      });
+    }
+
+    if (isHiddenServiceName(matchedService.name)) {
       return NextResponse.json({
         data: [],
         page: safePage,
@@ -105,6 +134,11 @@ export const GET = createApiHandler(async (req) => {
     )
     .order("expires_at", { ascending: true })
     .range(offset, offset + safeLimit - 1);
+
+  if (hiddenServiceIds.length > 0) {
+    const formatted = hiddenServiceIds.map((id) => `"${id}"`).join(",");
+    query = query.not("service_id", "in", `(${formatted})`);
+  }
 
   if (serviceId) {
     query = query.eq("service_id", serviceId);
@@ -177,5 +211,4 @@ export const GET = createApiHandler(async (req) => {
     totalPages: Math.max(1, Math.ceil((count ?? data?.length ?? 0) / safeLimit)),
   });
 });
-
 

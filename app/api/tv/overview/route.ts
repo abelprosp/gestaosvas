@@ -39,6 +39,7 @@ export const GET = createApiHandler(async (req) => {
         `plan_type.ilike.${ilike}`,
         `status.ilike.${ilike}`,
         `slot_number::text.ilike.${ilike}`,
+        `bolinha::text.ilike.${ilike}`,
       ].join(","),
     );
 
@@ -110,6 +111,7 @@ export const GET = createApiHandler(async (req) => {
       notes: mapped.notes,
       planType: mapped.planType ?? null,
       hasTelephony: mapped.hasTelephony ?? null,
+      bolinha: mapped.bolinha ?? null,
       client: row.client ?? null,
       clientId: mapped.clientId ?? null,
       profileLabel: profileLabel,
@@ -156,7 +158,6 @@ export const GET = createApiHandler(async (req) => {
     totalPages,
   });
 });
-
 
 
 

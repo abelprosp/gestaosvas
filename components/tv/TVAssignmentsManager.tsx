@@ -22,7 +22,6 @@ import {
   Badge,
   SimpleGrid,
   GridItem,
-  Checkbox,
 } from "@chakra-ui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
@@ -42,6 +41,7 @@ import { fetchVendors, Vendor } from "@/lib/api/users";
 import { createRequest } from "@/lib/api/requests";
 import { vendorDisplayName } from "@/lib/utils/vendors";
 import Link from "next/link";
+import { addMonthsToISODate } from "@/lib/utils/dates";
 
 interface TVAssignmentsManagerProps {
   clientId?: string;
@@ -69,7 +69,6 @@ type AssignFormState = {
   startsAt: string;
   expiresAt: string;
   notes: string;
-  hasTelephony: boolean;
 };
 
 function extractErrorMessage(error: unknown) {
@@ -125,8 +124,19 @@ export function TVAssignmentsManager({ clientId, isTvSelected, isOpen }: TVAssig
     startsAt: todayISODate(),
     expiresAt: "",
     notes: "",
-    hasTelephony: false,
   });
+  const [durationPreset, setDurationPreset] = useState<number | "">("");
+  const [durationCustom, setDurationCustom] = useState("");
+  const resolvedDuration = useMemo(() => {
+    const customValue = durationCustom.trim();
+    if (customValue) {
+      const parsed = Number(customValue);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+    return durationPreset ? Number(durationPreset) : null;
+  }, [durationCustom, durationPreset]);
   const vendorOptions = useMemo(() => {
     return vendors
       .map((vendor) => vendorDisplayName(vendor))
@@ -285,10 +295,21 @@ export function TVAssignmentsManager({ clientId, isTvSelected, isOpen }: TVAssig
         expiresAt: "",
         notes: "",
         planType: "ESSENCIAL",
-        hasTelephony: false,
       });
+      setDurationPreset("");
+      setDurationCustom("");
     }
   }, [isOpen, clientId]);
+
+  useEffect(() => {
+    if (!resolvedDuration || !assignForm.startsAt) {
+      return;
+    }
+    const nextExpiresAt = addMonthsToISODate(assignForm.startsAt, resolvedDuration);
+    if (nextExpiresAt && nextExpiresAt !== assignForm.expiresAt) {
+      setAssignForm((prev) => ({ ...prev, expiresAt: nextExpiresAt }));
+    }
+  }, [resolvedDuration, assignForm.startsAt, assignForm.expiresAt]);
 
   const handleToggleHistory = (slotId: string) => {
     setShowHistoryIds((prev) => {
@@ -349,17 +370,44 @@ export function TVAssignmentsManager({ clientId, isTvSelected, isOpen }: TVAssig
             </Select>
           </FormControl>
           <FormControl>
-            <FormLabel>Telefonia</FormLabel>
-            <Checkbox
-              isChecked={assignForm.hasTelephony}
-              onChange={(event) =>
-                setAssignForm((prev) => ({ ...prev, hasTelephony: event.target.checked }))
-              }
+            <FormLabel>Plano (meses)</FormLabel>
+            <Select
+              placeholder="Selecione"
+              value={durationPreset === "" ? "" : String(durationPreset)}
+              onChange={(event) => {
+                const value = event.target.value;
+                setDurationPreset(value ? Number(value) : "");
+                if (value) {
+                  setDurationCustom("");
+                }
+              }}
               isDisabled={isReadOnly}
-              colorScheme="brand"
             >
-              Cliente tem telefonia
-            </Checkbox>
+              <option value={3}>3 meses</option>
+              <option value={6}>6 meses</option>
+              <option value={12}>12 meses</option>
+              <option value={24}>24 meses</option>
+            </Select>
+          </FormControl>
+          <FormControl>
+            <FormLabel>Meses personalizados</FormLabel>
+            <Input
+              type="number"
+              min={1}
+              value={durationCustom}
+              onChange={(event) => {
+                const digits = event.target.value.replace(/\D/g, "");
+                setDurationCustom(digits);
+                if (digits) {
+                  setDurationPreset("");
+                }
+              }}
+              placeholder="Ex: 9"
+              isDisabled={isReadOnly}
+            />
+            <Text fontSize="xs" color="gray.500" mt={1}>
+              Preenchido aqui, o vencimento é calculado automaticamente.
+            </Text>
           </FormControl>
           <FormControl>
             <FormLabel>Início</FormLabel>
@@ -375,7 +423,11 @@ export function TVAssignmentsManager({ clientId, isTvSelected, isOpen }: TVAssig
             <Input
               type="date"
               value={assignForm.expiresAt ?? ""}
-              onChange={(event) => setAssignForm((prev) => ({ ...prev, expiresAt: event.target.value }))}
+              onChange={(event) => {
+                setDurationPreset("");
+                setDurationCustom("");
+                setAssignForm((prev) => ({ ...prev, expiresAt: event.target.value }));
+              }}
               isDisabled={isReadOnly}
             />
           </FormControl>
@@ -507,7 +559,6 @@ export function TVAssignmentsManager({ clientId, isTvSelected, isOpen }: TVAssig
                 expiresAt: assignForm.expiresAt || undefined,
                 notes: assignForm.notes || undefined,
                 planType: assignForm.planType,
-                hasTelephony: assignForm.hasTelephony || undefined,
               };
 
               if (isReadOnly) {
@@ -708,22 +759,6 @@ export function TVAssignmentsManager({ clientId, isTvSelected, isOpen }: TVAssig
                   </Select>
                 </FormControl>
                 <FormControl>
-                  <FormLabel>Telefonia</FormLabel>
-                  <Checkbox
-                    isChecked={assignment.hasTelephony ?? false}
-                    onChange={(event) =>
-                      updateMutation.mutate({
-                        slotId: assignment.slotId,
-                        payload: { hasTelephony: event.target.checked },
-                      })
-                    }
-                    isDisabled={isReadOnly}
-                    colorScheme="brand"
-                  >
-                    Cliente tem telefonia
-                  </Checkbox>
-                </FormControl>
-                <FormControl>
                   <FormLabel>Vendedor</FormLabel>
                   <Input
                     list={`tv-slot-vendors-${assignment.slotId}`}
@@ -861,4 +896,3 @@ export function TVAssignmentsManager({ clientId, isTvSelected, isOpen }: TVAssig
     </Stack>
   );
 }
-

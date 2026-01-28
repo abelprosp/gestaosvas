@@ -363,8 +363,8 @@ const getSortIcon = (key: string): ReactElement | undefined => {
   });
 
   const deleteClient = useMutation({
-    mutationFn: async (id: string) => {
-      await api.delete(`/clients/${id}`);
+    mutationFn: async ({ id, password }: { id: string; password: string }) => {
+      await api.delete(`/clients/${id}`, { data: { password } });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clients"] });
@@ -390,8 +390,15 @@ const getSortIcon = (key: string): ReactElement | undefined => {
       await handleAuthorizationRequest("CLIENT_DELETE_REQUEST", { clientId: client.id });
       return;
     }
+    const confirmed = window.confirm(`Tem certeza que deseja excluir o cliente "${client.name}"?`);
+    if (!confirmed) return;
+    const password = window.prompt("Confirme com sua senha para excluir este cliente:");
+    if (!password || !password.trim()) {
+      toast({ title: "Senha obrigatória para excluir.", status: "warning" });
+      return;
+    }
     try {
-      await deleteClient.mutateAsync(client.id);
+      await deleteClient.mutateAsync({ id: client.id, password: password.trim() });
       toast({ title: "Cliente removido", status: "success" });
     } catch (error) {
       console.error(error);
@@ -874,4 +881,3 @@ const getSortIcon = (key: string): ReactElement | undefined => {
     </VStack>
   );
 }
-

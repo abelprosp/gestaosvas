@@ -1,3 +1,2 @@
-export type ServiceReportCategory = "TV" | "CLOUD" | "HUB" | "TELE" | "SERVICE";
-
+export type ServiceReportCategory = "TV" | "CLOUD" | "SERVICE";
 

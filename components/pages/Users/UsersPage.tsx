@@ -186,6 +186,8 @@ export function UsersPage() {
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
   const [notesBySlot, setNotesBySlot] = useState<Record<string, string>>({});
   const [pendingNoteId, setPendingNoteId] = useState<string | null>(null);
+  const [bolinhaBySlot, setBolinhaBySlot] = useState<Record<string, string>>({});
+  const [pendingBolinhaId, setPendingBolinhaId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const editEmailModal = useDisclosure();
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
@@ -283,6 +285,14 @@ export function UsersPage() {
         return acc;
       }, {}),
     );
+    setBolinhaBySlot(
+      records.reduce<Record<string, string>>((acc: Record<string, string>, record: TVOverviewRecord) => {
+        if (record.id) {
+          acc[record.id] = record.bolinha !== null && record.bolinha !== undefined ? String(record.bolinha) : "";
+        }
+        return acc;
+      }, {}),
+    );
   }, [records]);
   const handlePreviousPage = () => {
     if (hasSearch) return;
@@ -313,6 +323,19 @@ export function UsersPage() {
       return String((error as { message?: string }).message);
     }
     return "Não foi possível concluir a operação.";
+  };
+
+  const requestDeletePassword = (label: string) => {
+    if (!isAdmin) {
+      toast({ title: "Apenas administradores podem excluir.", status: "warning" });
+      return null;
+    }
+    const password = window.prompt(`Confirme com sua senha para excluir ${label}:`);
+    if (!password || !password.trim()) {
+      toast({ title: "Senha obrigatória para excluir.", status: "warning" });
+      return null;
+    }
+    return password.trim();
   };
 
   const regenerateMutation = useMutation({
@@ -407,6 +430,26 @@ export function UsersPage() {
     },
   });
 
+  const bolinhaMutation = useMutation({
+    mutationFn: ({ slotId, bolinha }: { slotId: string; bolinha: number | null }) =>
+      updateTVSlot(slotId, { bolinha }),
+    onSuccess: () => {
+      toast({ title: "Bolinha atualizada", status: "success" });
+      queryClient.invalidateQueries({ queryKey: ["tvOverview"] });
+      queryClient.invalidateQueries({ queryKey: ["tvAssignments"] });
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: "Erro ao salvar bolinha",
+        description: mutateErrorMessage(error),
+        status: "error",
+      });
+    },
+    onSettled: () => {
+      setPendingBolinhaId(null);
+    },
+  });
+
   const filteredRecords = useMemo(() => {
     const term = searchTerm.toLowerCase();
     const filtered = sortedRecords.filter((record) => {
@@ -421,6 +464,7 @@ export function UsersPage() {
           record.profileLabel,
           record.planType ? (record.planType === "PREMIUM" ? "premium" : "essencial") : undefined,
           record.client?.document,
+          record.bolinha !== null && record.bolinha !== undefined ? String(record.bolinha) : undefined,
         ]
           .filter(Boolean)
           .some((value) => value?.toLowerCase().includes(term));
@@ -463,6 +507,14 @@ export function UsersPage() {
           return direction * a.status.localeCompare(b.status, "pt-BR", { sensitivity: "base" });
         case "planType":
           return direction * ((a.planType ?? "").localeCompare(b.planType ?? "", "pt-BR", { sensitivity: "base" }));
+        case "bolinha": {
+          const aValue = a.bolinha ?? null;
+          const bValue = b.bolinha ?? null;
+          if (aValue === null && bValue === null) return 0;
+          if (aValue === null) return 1;
+          if (bValue === null) return -1;
+          return direction * (aValue - bValue);
+        }
         case "startsAt": {
           const aDate = a.startsAt ? new Date(a.startsAt).getTime() : 0;
           const bDate = b.startsAt ? new Date(b.startsAt).getTime() : 0;
@@ -511,6 +563,7 @@ export function UsersPage() {
       Usuario: record.username,
       Senha: record.password ?? "",
       Slot: record.slotNumber,
+      Bolinha: record.bolinha ?? "",
       Cliente: record.client?.name ?? "",
       Documento: formatDocument(record.client?.document ?? ""),
       Plano: record.planType ?? "-",
@@ -565,11 +618,12 @@ export function UsersPage() {
       });
     } else {
       // Exportar PDF com todas as informações organizadas
-      const headers = ["Email", "Usuário", "Senha", "Cliente", "Documento", "Plano", "Status", "Vencimento", "Vendedor", "Comentário"];
+      const headers = ["Email", "Usuário", "Senha", "Bolinha", "Cliente", "Documento", "Plano", "Status", "Vencimento", "Vendedor", "Comentário"];
       const rows = dataset.map((record) => [
         record.email,
         record.username || `#${record.slotNumber}`,
         record.password || "-",
+        record.bolinha ?? "-",
         record.client?.name || "-",
         formatDocument(record.client?.document ?? ""),
         record.planType ? (record.planType === "PREMIUM" ? "Premium" : "Essencial") : "-",
@@ -771,9 +825,12 @@ export function UsersPage() {
 
     if (!confirmed) return;
 
+    const password = requestDeletePassword(`a conta de TV "${originalEmail}"`);
+    if (!password) return;
+
     setIsDeletingAccount(true);
     try {
-      const result = await deleteTVAccount(editingAccountId);
+      const result = await deleteTVAccount(editingAccountId, password);
       toast({ 
         title: "Conta removida com sucesso", 
         description: result.slotsRemoved || "A conta e todos os seus slots foram removidos.",
@@ -952,12 +1009,6 @@ export function UsersPage() {
           </Badge>
           <Badge colorScheme="cyan" px={3} py={1} borderRadius="full">
             Com telefonia: {serviceTotals?.tvTelephony ?? 0}
-          </Badge>
-          <Badge colorScheme="purple" px={3} py={1} borderRadius="full">
-            Hub TV: {serviceTotals?.hub ?? 0}
-          </Badge>
-          <Badge colorScheme="orange" px={3} py={1} borderRadius="full">
-            Tele med: {serviceTotals?.tele ?? 0}
           </Badge>
         </Flex>
       </Box>
@@ -1336,6 +1387,16 @@ export function UsersPage() {
                   <Button
                     variant="ghost"
                     size="sm"
+                    onClick={() => handleSort("bolinha")}
+                    rightIcon={getSortIcon("bolinha")}
+                  >
+                    Bolinha
+                  </Button>
+                </Th>
+                <Th display={{ base: "none", md: "table-cell" }}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => handleSort("planType")}
                     rightIcon={getSortIcon("planType")}
                   >
@@ -1504,6 +1565,9 @@ export function UsersPage() {
                           ? <Badge colorScheme="blue">{record.username}</Badge>
                           : <Badge colorScheme="blue">#{record.slotNumber}</Badge>
                         }
+                      </Td>
+                      <Td display={{ base: "none", md: "table-cell" }}>
+                        {record.bolinha !== null && record.bolinha !== undefined ? record.bolinha : "-"}
                       </Td>
                       <Td display={{ base: "none", md: "table-cell" }}>
                         {record.planType ? (
@@ -1723,6 +1787,12 @@ export function UsersPage() {
                                   <Text fontWeight="semibold">Vendedor</Text>
                                   <Text mt={1}>{record.soldBy ?? "-"}</Text>
                                 </Box>
+                                <Box>
+                                  <Text fontWeight="semibold">Bolinha</Text>
+                                  <Text mt={1}>
+                                    {record.bolinha !== null && record.bolinha !== undefined ? record.bolinha : "-"}
+                                  </Text>
+                                </Box>
                               <Box>
                                 <Text fontWeight="semibold">Documento</Text>
                                 <Text mt={1}>{formatDocument(record.client?.document)}</Text>
@@ -1748,6 +1818,58 @@ export function UsersPage() {
                                     : "Nenhum comentário"}
                                 </Text>
                               </Box>
+
+                              <Stack direction={{ base: "column", sm: "row" }} spacing={3} align="flex-end">
+                                <FormControl maxW={{ base: "full", sm: "220px" }}>
+                                  <FormLabel>Bolinha (manual)</FormLabel>
+                                  <Input
+                                    type="number"
+                                    value={bolinhaBySlot[record.id] ?? ""}
+                                    onChange={(event) =>
+                                      setBolinhaBySlot((prev) => ({
+                                        ...prev,
+                                        [record.id]: event.target.value,
+                                      }))
+                                    }
+                                    placeholder="Ex: 12"
+                                    isDisabled={!isAdmin}
+                                  />
+                                </FormControl>
+                                <Button
+                                  size="sm"
+                                  colorScheme="brand"
+                                  onClick={() => {
+                                    if (!isAdmin) {
+                                      toast({ title: "Apenas administradores podem editar.", status: "warning" });
+                                      return;
+                                    }
+                                    if (bolinhaMutation.isPending) {
+                                      return;
+                                    }
+                                    const raw = (bolinhaBySlot[record.id] ?? "").trim();
+                                    if (!raw) {
+                                      setPendingBolinhaId(record.id);
+                                      bolinhaMutation.mutate({ slotId: record.id, bolinha: null });
+                                      return;
+                                    }
+                                    const parsed = Number(raw.replace(",", "."));
+                                    if (!Number.isFinite(parsed)) {
+                                      toast({
+                                        title: "Bolinha inválida",
+                                        description: "Informe apenas números.",
+                                        status: "warning",
+                                      });
+                                      return;
+                                    }
+                                    setPendingBolinhaId(record.id);
+                                    bolinhaMutation.mutate({ slotId: record.id, bolinha: parsed });
+                                  }}
+                                  isLoading={pendingBolinhaId === record.id && bolinhaMutation.isPending}
+                                  isDisabled={!isAdmin}
+                                >
+                                  Salvar bolinha
+                                </Button>
+                              </Stack>
 
                               <FormControl>
                                 <FormLabel>Adicionar ou editar comentário</FormLabel>
@@ -2311,9 +2433,13 @@ export function UsersPage() {
                                                               `Tem certeza que deseja remover permanentemente o slot #${slot.slotNumber}?\n\nEsta ação não pode ser desfeita.`
                                                             );
                                                             if (!confirmed) return;
+                                                            const password = requestDeletePassword(
+                                                              `o slot #${slot.slotNumber}`
+                                                            );
+                                                            if (!password) return;
                                                             
                                                             try {
-                                                              await deleteTVSlot(slot.id);
+                                                              await deleteTVSlot(slot.id, password);
                                                               toast({
                                                                 title: "Slot removido com sucesso",
                                                                 status: "success",
@@ -2525,4 +2651,3 @@ export function UsersPage() {
     </Stack>
   );
 }
-

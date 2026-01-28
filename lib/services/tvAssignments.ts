@@ -93,6 +93,20 @@ function sortSlotsByEmail(slots: any[]) {
 }
 
 // --- Núcleo da Lógica (Service Role Key ALWAYS) ---
+async function fetchClientHasTelephony(supabase: any, clientId: string): Promise<boolean | null> {
+  const { data, error } = await supabase
+    .from("clients")
+    .select("has_telephony")
+    .eq("id", clientId)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("[fetchClientHasTelephony] Erro ao buscar has_telephony:", error);
+    return null;
+  }
+
+  return (data as { has_telephony?: boolean | null } | null)?.has_telephony ?? null;
+}
 
 async function fetchExistingEmails(supabase: any): Promise<string[]> {
   const { data, error } = await supabase.from("tv_accounts").select("email");
@@ -380,6 +394,10 @@ export async function ensureAvailableSlotExists() {
 export async function assignSlotToClient(params: AssignSlotParams) {
   console.log(`[assignSlotToClient] Iniciando atribuição para cliente ${params.clientId}`);
   const supabase = createSupabaseClient(true); // SERVICE ROLE KEY
+  let resolvedHasTelephony = params.hasTelephony;
+  if (resolvedHasTelephony === undefined) {
+    resolvedHasTelephony = await fetchClientHasTelephony(supabase, params.clientId);
+  }
 
   // Se customEmail foi fornecido, criar conta com email personalizado (1 slot exclusivo)
   if (params.customEmail) {
@@ -415,7 +433,7 @@ export async function assignSlotToClient(params: AssignSlotParams) {
         expires_at: params.expiresAt ?? null,
         notes: params.notes ?? null,
         plan_type: params.planType ?? null,
-        has_telephony: params.hasTelephony ?? null,
+        has_telephony: resolvedHasTelephony ?? null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", slot.id)
@@ -479,7 +497,7 @@ export async function assignSlotToClient(params: AssignSlotParams) {
         expires_at: params.expiresAt ?? null,
         notes: params.notes ?? null,
         plan_type: params.planType ?? null,
-        has_telephony: params.hasTelephony ?? null,
+        has_telephony: resolvedHasTelephony ?? null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", slot.id)
@@ -534,6 +552,11 @@ export async function assignSlotToClient(params: AssignSlotParams) {
 
 export async function assignMultipleSlotsToClient(params: AssignMultipleSlotParams) {
   const { quantity, ...rest } = params;
+  if (rest.hasTelephony === undefined) {
+    const supabase = createSupabaseClient(true);
+    const resolved = await fetchClientHasTelephony(supabase, rest.clientId);
+    rest.hasTelephony = resolved;
+  }
   const results = [];
   for (let i = 0; i < quantity; i++) {
     const slot = await assignSlotToClient(rest);

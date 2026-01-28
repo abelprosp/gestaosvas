@@ -150,8 +150,8 @@ export function CloudUsersPage({ title = "Usuários Cloud", serviceFilter }: Clo
   });
 
   const removeAccess = useMutation({
-    mutationFn: async (id: string) => {
-      await deleteCloudAccess(id);
+    mutationFn: async ({ id, password }: { id: string; password: string }) => {
+      await deleteCloudAccess(id, password);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cloudUsers"] });
@@ -193,8 +193,17 @@ export function CloudUsersPage({ title = "Usuários Cloud", serviceFilter }: Clo
     if (!confirmation) {
       return;
     }
+    if (!isAdmin) {
+      toast({ title: "Apenas administradores podem excluir.", status: "warning" });
+      return;
+    }
+    const password = window.prompt("Confirme com sua senha para remover este acesso:");
+    if (!password || !password.trim()) {
+      toast({ title: "Senha obrigatória para excluir.", status: "warning" });
+      return;
+    }
     try {
-      await removeAccess.mutateAsync(editingAccess.id);
+      await removeAccess.mutateAsync({ id: editingAccess.id, password: password.trim() });
       editModal.onClose();
     } catch (error) {
       console.error(error);
@@ -482,5 +491,4 @@ export function CloudUsersPage({ title = "Usuários Cloud", serviceFilter }: Clo
     </VStack>
   );
 }
-
 

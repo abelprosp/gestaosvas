@@ -68,6 +68,7 @@ export interface ClientTVAssignment {
   expiresAt?: string | null;
   notes?: string | null;
   planType?: TVPlanType | null;
+  bolinha?: number | null;
   history: TVSlotHistory[];
   clientId?: string | null;
   profileLabel?: string | null;
@@ -91,7 +92,7 @@ export interface CloudAccess {
 
 export interface ServiceReportRow {
   id: string;
-  category: "TV" | "CLOUD" | "HUB" | "TELE" | "SERVICE";
+  category: "TV" | "CLOUD" | "SERVICE";
   clientId: string;
   clientName: string;
   clientDocument: string;
@@ -214,6 +215,7 @@ export interface TVOverviewRecord {
   expiresAt?: string | null;
   notes?: string | null;
   planType?: TVPlanType | null;
+  bolinha?: number | null;
   clientId?: string | null;
   profileLabel?: string | null;
   document?: string | null;
@@ -225,4 +227,3 @@ export interface TVOverviewRecord {
     document?: string | null;
   } | null;
 }
-

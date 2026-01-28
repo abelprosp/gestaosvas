@@ -4,6 +4,7 @@ import { createApiHandler } from "@/lib/utils/apiHandler";
 import { createServerClient } from "@/lib/supabase/server";
 import { HttpError } from "@/lib/utils/httpError";
 import { validateRouteParamUUID } from "@/lib/utils/validation";
+import { requirePasswordConfirmation } from "@/lib/auth";
 
 const updateSchema = z
   .object({
@@ -61,11 +62,12 @@ export const PATCH = createApiHandler(async (req, { params }) => {
 });
 
 export const DELETE = createApiHandler(
-  async (req, { params }) => {
+  async (req, { params, user }) => {
     // Validar UUID do parâmetro
     const accessId = validateRouteParamUUID(params.id, "id");
     
     const supabase = createServerClient();
+    await requirePasswordConfirmation(req, user);
     const { error } = await supabase.from("cloud_accesses").delete().eq("id", accessId);
 
     if (error) {
@@ -76,7 +78,6 @@ export const DELETE = createApiHandler(
   },
   { requireAdmin: true }
 );
-
 
 
 

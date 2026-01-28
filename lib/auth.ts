@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { createServerClient } from "@/lib/supabase/server";
 import { maskEmail, getSafeErrorMessage } from "@/lib/utils/privacy";
+import { HttpError } from "@/lib/utils/httpError";
 
 export interface AuthUser {
   id: string;
   email?: string;
   role?: string;
 }
+
+const passwordConfirmSchema = z.object({
+  password: z.string().min(1, "Informe sua senha para confirmar."),
+});
 
 export async function requireAuth(request: NextRequest): Promise<{ user: AuthUser } | NextResponse> {
   try {
@@ -106,3 +112,21 @@ export function isAdmin(user: AuthUser): boolean {
   return requireAdmin(user);
 }
 
+export async function requirePasswordConfirmation(req: NextRequest, user: AuthUser) {
+  const body = await req.json().catch(() => ({}));
+  const { password } = passwordConfirmSchema.parse(body ?? {});
+
+  if (!user.email) {
+    throw new HttpError(400, "Conta sem e-mail. Faça login novamente.");
+  }
+
+  const supabase = createServerClient(false);
+  const { error: authError } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password,
+  });
+
+  if (authError) {
+    throw new HttpError(401, "Senha incorreta. Tente novamente.");
+  }
+}

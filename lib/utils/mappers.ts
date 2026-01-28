@@ -10,6 +10,7 @@ import {
   TVSlot,
   TVSlotHistory,
 } from "@/types";
+import { isHiddenServiceName } from "@/lib/utils/serviceVisibility";
 
 type ClientRow = {
   id: string;
@@ -25,6 +26,7 @@ type ClientRow = {
   zip_code: string | null;
   state: string | null;
   opened_by: string | null;
+  has_telephony: boolean | null;
   created_at: string;
   updated_at: string;
   client_services?:
@@ -121,6 +123,7 @@ type TVSlotRow = {
   notes: string | null;
   plan_type: string | null;
   has_telephony: boolean | null;
+  bolinha?: string | number | null;
   created_at: string;
   updated_at: string;
   tv_accounts?: TVAccountRow | null;
@@ -161,6 +164,7 @@ export function mapClientRow(row: ClientRow): Client {
     zipCode: row.zip_code ?? null,
     state: row.state,
     openedBy: row.opened_by ?? null,
+    hasTelephony: row.has_telephony ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     services: [],
@@ -193,7 +197,8 @@ export function mapClientRow(row: ClientRow): Client {
         }
         return mapped;
       })
-      .filter((service): service is Service => Boolean(service));
+      .filter((service): service is Service => Boolean(service))
+      .filter((service) => !isHiddenServiceName(service.name));
   } else {
     client.services = [];
   }
@@ -218,6 +223,7 @@ export function clientInsertPayload(data: Partial<Client>): Record<string, unkno
     city: data.city ?? null,
     zip_code: data.zipCode ?? null,
     state: data.state ?? null,
+    ...(data.hasTelephony !== undefined ? { has_telephony: data.hasTelephony } : {}),
   };
   
   // Adicionar opened_by se fornecido
@@ -241,6 +247,7 @@ export function clientUpdatePayload(data: Partial<Client>): Record<string, unkno
     ...(data.city !== undefined ? { city: data.city } : {}),
     ...(data.zipCode !== undefined ? { zip_code: data.zipCode } : {}),
     ...(data.state !== undefined ? { state: data.state } : {}),
+    ...(data.hasTelephony !== undefined ? { has_telephony: data.hasTelephony } : {}),
     updated_at: new Date().toISOString(),
   };
   
@@ -430,6 +437,10 @@ export function mapTVSlotHistoryRow(row: TVSlotHistoryRow): TVSlotHistory {
 }
 
 export function mapTVSlotRow(row: TVSlotRow, history: TVSlotHistoryRow[] = []): TVSlot {
+  const bolinha =
+    row.bolinha === undefined || row.bolinha === null || Number.isNaN(Number(row.bolinha))
+      ? null
+      : Number(row.bolinha);
   return {
     id: row.id,
     tvAccountId: row.tv_account_id,
@@ -444,6 +455,7 @@ export function mapTVSlotRow(row: TVSlotRow, history: TVSlotHistoryRow[] = []): 
     expiresAt: row.expires_at,
     notes: row.notes,
     planType: row.status === "ASSIGNED" ? (row.plan_type as TVSlot["planType"]) ?? null : null,
+    bolinha,
     hasTelephony: row.has_telephony ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -485,13 +497,9 @@ export function mapClientTVAssignment(
     notes: mappedSlot.notes,
     planType: mappedSlot.planType,
     hasTelephony: mappedSlot.hasTelephony ?? null,
+    bolinha: mappedSlot.bolinha ?? null,
     history: historyRows.map(mapTVSlotHistoryRow),
     clientId: mappedSlot.clientId ?? null,
     profileLabel: profileLabel ?? null,
   };
 }
-
-
-
-
-

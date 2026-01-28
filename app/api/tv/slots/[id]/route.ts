@@ -7,6 +7,7 @@ import { PostgrestError } from "@supabase/supabase-js";
 import { mapTVSlotRow } from "@/lib/utils/mappers";
 import { generateNumericPassword } from "@/lib/utils/password";
 import { validateRouteParamUUID } from "@/lib/utils/validation";
+import { requirePasswordConfirmation } from "@/lib/auth";
 
 const SCHEMA_ERROR_CODES = new Set(["PGRST200", "PGRST201", "PGRST202", "PGRST203", "PGRST204", "PGRST205"]);
 
@@ -35,6 +36,7 @@ const updateSchema = z
     notes: z.string().optional().nullable(),
     planType: PLAN_TYPE_ENUM.optional().nullable(),
     hasTelephony: z.boolean().optional().nullable(),
+    bolinha: z.number().optional().nullable(),
     password: z
       .string()
       .regex(/^\d{4}$/, { message: "A senha deve conter exatamente 4 dígitos." })
@@ -76,6 +78,9 @@ export const PATCH = createApiHandler(async (req, { params, user }) => {
   }
   if (payload.hasTelephony !== undefined) {
     updateData.has_telephony = payload.hasTelephony ?? null;
+  }
+  if (payload.bolinha !== undefined) {
+    updateData.bolinha = payload.bolinha;
   }
   if (payload.username !== undefined) {
     updateData.custom_username = payload.username && payload.username.trim().length > 0 
@@ -132,6 +137,8 @@ export const DELETE = createApiHandler(
     const slotId = validateRouteParamUUID(params.id, "id");
     
     const supabase = createServerClient();
+
+    await requirePasswordConfirmation(req, user);
     
     // Nota: A verificação de admin já é feita pelo createApiHandler quando requireAdmin: true
     // Não precisamos verificar novamente aqui
@@ -195,4 +202,3 @@ export const DELETE = createApiHandler(
   },
   { requireAdmin: true }
 );
-

@@ -37,7 +37,7 @@ import { FiUserPlus, FiSend } from "react-icons/fi";
 import { TVAssignmentsManager } from "../tv/TVAssignmentsManager";
 import { lookupCompanyByCnpj } from "../../api/client";
 
-const CLOUD_SERVICE_KEYWORDS = ["cloud", "hub", "hubplay", "telemedicina"];
+const CLOUD_SERVICE_KEYWORDS = ["cloud"];
 
 export interface ClientFormValues {
   name: string;
@@ -993,4 +993,3 @@ useEffect(() => {
     </Modal>
   );
 }
-

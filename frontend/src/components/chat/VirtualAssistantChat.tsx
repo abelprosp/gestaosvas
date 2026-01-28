@@ -220,8 +220,6 @@ export function VirtualAssistantChat() {
         contratos: "/contratos",
         tv: "/usuarios",
         cloud: "/usuarios-cloud",
-        hub: "/usuarios-hub",
-        tele: "/usuarios-tele",
         relatórios: "/relatorios/servicos",
         serviços: "/servicos",
         templates: "/templates",

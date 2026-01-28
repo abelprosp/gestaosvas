@@ -36,6 +36,7 @@ export interface TVSlot {
   notes?: string | null;
   planType?: TVPlanType | null;
   hasTelephony?: boolean | null;
+  bolinha?: number | null;
   createdAt: string;
   updatedAt: string;
   account?: TVAccount;
@@ -62,6 +63,7 @@ export interface ClientTVAssignment {
   notes?: string | null;
   planType?: TVPlanType | null;
   hasTelephony?: boolean | null;
+  bolinha?: number | null;
   history: TVSlotHistory[];
   clientId?: string | null;
   profileLabel?: string | null;
@@ -94,6 +96,7 @@ export interface Client {
   zipCode?: string | null; // CEP
   state?: string | null;
   openedBy?: string | null; // Vendedor que abriu o cliente
+  hasTelephony?: boolean | null;
   createdAt: string;
   updatedAt: string;
   services?: Service[];
@@ -185,6 +188,7 @@ export interface TVOverviewRecord {
   notes?: string | null;
   planType?: TVPlanType | null;
   hasTelephony?: boolean | null;
+  bolinha?: number | null;
   clientId?: string | null;
   profileLabel?: string | null;
   document?: string | null;
@@ -207,7 +211,7 @@ export interface PaginatedResponse<T> {
 
 export interface ServiceReportRow {
   id: string;
-  category: "TV" | "CLOUD" | "HUB" | "TELE" | "SERVICE";
+  category: "TV" | "CLOUD" | "SERVICE";
   clientId: string;
   clientName: string;
   clientDocument: string;
@@ -232,8 +236,6 @@ export interface ServiceTotals {
   tvEssencial: number;
   tvPremium: number;
   tvTelephony: number;
-  hub: number;
-  tele: number;
   cloud: number;
 }
 
@@ -263,4 +265,3 @@ export interface SalesTimeseries {
   totalSales: number; // Total de vendas (quantidade)
   totalRevenue: number; // Total arrecadado (R$)
 }
-

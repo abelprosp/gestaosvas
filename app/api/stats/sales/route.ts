@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createApiHandler } from "@/lib/utils/apiHandler";
 import { createServerClient } from "@/lib/supabase/server";
 import { HttpError } from "@/lib/utils/httpError";
+import { isHiddenServiceName } from "@/lib/utils/serviceVisibility";
 import { PostgrestError } from "@supabase/supabase-js";
 
 const SCHEMA_MISSING_CODES = new Set(["PGRST200", "PGRST201", "PGRST202", "PGRST203", "PGRST204", "PGRST205"]);
@@ -104,7 +105,7 @@ export const GET = createApiHandler(async (req) => {
       : [];
 
   // Compatibilidade:
-  // - legado: filtra por NOME ("TV Essencial", "HubPlay Premium"...)
+  // - legado: filtra por NOME ("TV Essencial", "Cloud 150GB"...)
   // - novo: filtra por KEY ("tv-essencial", "svc-<id>", "tv-total")
   const expanded = rawFilterServices.flatMap((name) => {
     const n = name.trim();
@@ -188,6 +189,9 @@ export const GET = createApiHandler(async (req) => {
       return;
     }
     const serviceName = service.name.trim();
+    if (isHiddenServiceName(serviceName)) {
+      return;
+    }
     if (serviceName.toLowerCase() === "tv") {
       return;
     }
@@ -243,7 +247,7 @@ export const GET = createApiHandler(async (req) => {
     events.push({ serviceKey: key, occurredAt: occurredAt.toISOString(), value });
   });
 
-  // Adicionar acessos Cloud (Cloud, Tele, Hub)
+  // Adicionar acessos Cloud
   const cloudAccessRows = (cloudAccesses ?? []) as unknown as CloudAccessSaleRow[];
   cloudAccessRows.forEach((access) => {
     const rawDate = access.created_at;
@@ -256,6 +260,9 @@ export const GET = createApiHandler(async (req) => {
       return;
     }
     const serviceName = service.name.trim();
+    if (isHiddenServiceName(serviceName)) {
+      return;
+    }
     // Ignorar se já foi processado via client_services
     const key = `svc-${service.id}`;
     if (!serviceCatalog.has(key)) {
@@ -346,8 +353,6 @@ export const GET = createApiHandler(async (req) => {
     totalRevenue,
   });
 });
-
-
 
 
 

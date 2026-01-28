@@ -30,6 +30,7 @@ create table if not exists clients (
   address text,
   city text,
   state text,
+  has_telephony boolean default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -190,6 +191,7 @@ create table if not exists tv_slots (
   expires_at date,
   notes text,
   plan_type text,
+  bolinha numeric,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (tv_account_id, slot_number)

@@ -114,6 +114,7 @@ type TVSlotRow = {
   expires_at: string | null;
   notes: string | null;
   plan_type: string | null;
+  bolinha?: string | number | null;
   created_at: string;
   updated_at: string;
   tv_accounts?: TVAccountRow | null;
@@ -393,6 +394,10 @@ export function mapTVSlotHistoryRow(row: TVSlotHistoryRow): TVSlotHistory {
 }
 
 export function mapTVSlotRow(row: TVSlotRow, history: TVSlotHistoryRow[] = []): TVSlot {
+  const bolinha =
+    row.bolinha === undefined || row.bolinha === null || Number.isNaN(Number(row.bolinha))
+      ? null
+      : Number(row.bolinha);
   return {
     id: row.id,
     tvAccountId: row.tv_account_id,
@@ -407,6 +412,7 @@ export function mapTVSlotRow(row: TVSlotRow, history: TVSlotHistoryRow[] = []): 
     expiresAt: row.expires_at,
     notes: row.notes,
     planType: row.status === "ASSIGNED" ? (row.plan_type as TVSlot["planType"]) ?? null : null,
+    bolinha,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     account: row.tv_accounts ? mapTVAccountRow(row.tv_accounts) : undefined,
@@ -446,9 +452,9 @@ export function mapClientTVAssignment(
     expiresAt: mappedSlot.expiresAt,
     notes: mappedSlot.notes,
     planType: mappedSlot.planType,
+    bolinha: mappedSlot.bolinha ?? null,
     history: historyRows.map(mapTVSlotHistoryRow),
     clientId: mappedSlot.clientId ?? null,
     profileLabel: profileLabel ?? null,
   };
 }
-

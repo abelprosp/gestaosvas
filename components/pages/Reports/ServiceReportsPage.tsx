@@ -32,15 +32,11 @@ const CATEGORY_LABELS: Record<ServiceReportRow["category"], string> = {
   TV: "TV",
   CLOUD: "Cloud",
   SERVICE: "Serviço",
-  HUB: "Hub",
-  TELE: "Tele",
 };
 
 const CATEGORY_COLORS: Record<ServiceReportRow["category"], string> = {
   TV: "purple",
   CLOUD: "blue",
-  HUB: "orange",
-  TELE: "pink",
   SERVICE: "gray",
 };
 

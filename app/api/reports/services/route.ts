@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createApiHandler } from "@/lib/utils/apiHandler";
 import { createServerClient } from "@/lib/supabase/server";
+import { isHiddenServiceName } from "@/lib/utils/serviceVisibility";
 import { PostgrestError } from "@supabase/supabase-js";
 
 const SCHEMA_ERROR_CODES = new Set(["PGRST200", "PGRST201", "PGRST202", "PGRST203", "PGRST204", "PGRST205"]);
@@ -11,7 +12,7 @@ function isSchemaMissing(error: unknown): error is PostgrestError {
 
 type ReportRow = {
   id: string;
-  category: "TV" | "CLOUD" | "SERVICE" | "HUB" | "TELE";
+  category: "TV" | "CLOUD" | "SERVICE";
   clientId: string;
   clientName: string;
   clientDocument: string;
@@ -69,7 +70,8 @@ export const GET = createApiHandler(async (req) => {
   const { searchParams } = new URL(req.url);
   const document = searchParams.get("document")?.replace(/\D/g) || undefined;
   const search = searchParams.get("search")?.trim() || "";
-  const category = searchParams.get("category")?.toUpperCase() || "ALL";
+  const categoryParam = searchParams.get("category")?.toUpperCase() || "ALL";
+  const category = ["TV", "CLOUD", "SERVICE"].includes(categoryParam) ? categoryParam : "ALL";
   const serviceQuery = searchParams.get("service")?.toLowerCase() || "";
   const limitParam = Number(searchParams.get("limit") ?? "2000");
   const safeLimit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 10000) : 2000;
@@ -184,10 +186,12 @@ export const GET = createApiHandler(async (req) => {
           return;
         }
         const serviceName = access.service?.name ?? "Cloud";
-        const lower = serviceName.toLowerCase();
+        if (isHiddenServiceName(serviceName)) {
+          return;
+        }
         rows.push({
           id: access.id,
-          category: lower.includes("hub") ? "HUB" : lower.includes("tele") ? "TELE" : "CLOUD",
+          category: "CLOUD",
           clientId: client.id,
           clientName: client.name,
           clientDocument: client.document,
@@ -234,6 +238,9 @@ export const GET = createApiHandler(async (req) => {
         }
         const serviceName = relation.service.name ?? "Serviço";
         const lower = serviceName.toLowerCase().trim();
+        if (isHiddenServiceName(serviceName)) {
+          return;
+        }
         
         // Pula serviços de TV que já aparecem em tv_slots para evitar duplicação
         // TV pode aparecer como "TV", "TV ESSENCIAL", "TV PREMIUM", etc.
@@ -246,13 +253,7 @@ export const GET = createApiHandler(async (req) => {
         
         rows.push({
           id: `${relation.client_id}-${relation.service.id}`,
-          category: lower.includes("hub")
-            ? "HUB"
-            : lower.includes("tele")
-              ? "TELE"
-              : lower.includes("cloud")
-                ? "CLOUD"
-                : "SERVICE",
+          category: lower.includes("cloud") ? "CLOUD" : "SERVICE",
           clientId: client.id,
           clientName: client.name,
           clientDocument: client.document,
@@ -313,8 +314,3 @@ export const GET = createApiHandler(async (req) => {
     throw error;
   }
 });
-
-
-
-
-

@@ -74,12 +74,6 @@ function getServiceRoute(serviceName: string): string {
   if (name.includes("cloud")) {
     return "/usuarios-cloud";
   }
-  if (name.includes("hub") || name.includes("hubplay")) {
-    return "/usuarios-hub";
-  }
-  if (name.includes("telemedicina") || name.includes("telepet") || name.includes("tele")) {
-    return "/usuarios-tele";
-  }
   return "/servicos"; // Fallback para outros serviços
 }
 
@@ -326,16 +320,7 @@ export function ClientsPage() {
     
     // Filtro de telefonia (aplicado como fallback caso o backend não tenha filtrado)
     if (telephonyFilter) {
-      scopedClients = scopedClients.filter((client: Client) => {
-        const assignments = client.tvAssignments ?? [];
-        // Se não temos assignments ainda, não podemos filtrar aqui
-        // O backend deve ter filtrado, então assumimos que se chegou aqui, tem telefonia
-        if (assignments.length === 0) {
-          // Se não temos assignments, confiamos que o backend já filtrou corretamente
-          return true;
-        }
-        return assignments.some((assignment: ClientTVAssignment) => assignment.hasTelephony === true);
-      });
+      scopedClients = scopedClients.filter((client: Client) => client.hasTelephony === true);
     }
     
     const filtered = term
@@ -435,8 +420,8 @@ const getSortIcon = (key: string): ReactElement | undefined => {
   });
 
   const deleteClient = useMutation({
-    mutationFn: async (id: string) => {
-      await api.delete(`/clients/${id}`);
+    mutationFn: async ({ id, password }: { id: string; password: string }) => {
+      await api.delete(`/clients/${id}`, { data: { password } });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clients"] });
@@ -462,8 +447,15 @@ const getSortIcon = (key: string): ReactElement | undefined => {
       await handleAuthorizationRequest("CLIENT_DELETE_REQUEST", { clientId: client.id });
       return;
     }
+    const confirmed = window.confirm(`Tem certeza que deseja excluir o cliente "${client.name}"?`);
+    if (!confirmed) return;
+    const password = window.prompt("Confirme com sua senha para excluir este cliente:");
+    if (!password || !password.trim()) {
+      toast({ title: "Senha obrigatória para excluir.", status: "warning" });
+      return;
+    }
     try {
-      await deleteClient.mutateAsync(client.id);
+      await deleteClient.mutateAsync({ id: client.id, password: password.trim() });
       toast({ title: "Cliente removido", status: "success" });
     } catch (error) {
       console.error(error);
@@ -732,12 +724,6 @@ const getSortIcon = (key: string): ReactElement | undefined => {
           <Badge colorScheme="cyan" px={3} py={1} borderRadius="full">
             Com telefonia: {serviceTotals?.tvTelephony ?? 0}
           </Badge>
-          <Badge colorScheme="purple" px={3} py={1} borderRadius="full">
-            Hub TV: {serviceTotals?.hub ?? 0}
-          </Badge>
-          <Badge colorScheme="orange" px={3} py={1} borderRadius="full">
-            Tele med: {serviceTotals?.tele ?? 0}
-          </Badge>
           <Badge colorScheme="blue" px={3} py={1} borderRadius="full">
             Cloud: {serviceTotals?.cloud ?? 0}
           </Badge>
@@ -809,7 +795,7 @@ const getSortIcon = (key: string): ReactElement | undefined => {
               {filteredClients.map((client) => {
                 const assignments = client.tvAssignments ?? [];
                 const isExpanded = expandedClientId === client.id;
-                const hasTelephony = assignments.some((assignment) => assignment.hasTelephony === true);
+                const hasTelephony = client.hasTelephony === true;
 
                 return (
                   <Fragment key={client.id}>
@@ -1173,4 +1159,3 @@ const getSortIcon = (key: string): ReactElement | undefined => {
     </VStack>
   );
 }
-

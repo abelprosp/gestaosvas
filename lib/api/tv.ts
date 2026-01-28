@@ -22,6 +22,7 @@ export interface UpdateTVSlotPayload {
   password?: string;
   planType?: TVPlanType | null;
   hasTelephony?: boolean | null;
+  bolinha?: number | null;
 }
 
 type ApiError = {
@@ -112,13 +113,13 @@ export async function migrateTVAccountSlots(fromAccountId: string, toAccountId: 
   }
 }
 
-export async function deleteTVAccount(accountId: string) {
+export async function deleteTVAccount(accountId: string, password: string) {
   try {
     const response = await api.delete<{
       message: string;
       deletedAccount: { id: string; email: string };
       slotsRemoved?: string;
-    }>(`/tv/accounts/${accountId}`);
+    }>(`/tv/accounts/${accountId}`, { data: { password } });
     return response.data;
   } catch (error) {
     const typedError = error as ApiError;
@@ -219,6 +220,7 @@ export interface TVAccountSlot {
   expiresAt: string | null;
   notes: string | null;
   hasTelephony: boolean | null;
+  bolinha?: number | null;
 }
 
 export async function getTVAccountSlots(accountId: string): Promise<TVAccountSlot[]> {
@@ -300,7 +302,7 @@ export async function releaseTVSlot(slotId: string) {
   }
 }
 
-export async function deleteTVSlot(slotId: string) {
+export async function deleteTVSlot(slotId: string, password: string) {
   try {
     const response = await api.delete<{
       message: string;
@@ -309,7 +311,7 @@ export async function deleteTVSlot(slotId: string) {
         slotNumber: number;
         email?: string;
       };
-    }>(`/tv/slots/${slotId}`);
+    }>(`/tv/slots/${slotId}`, { data: { password } });
     return response.data;
   } catch (error) {
     const typedError = error as ApiError;
@@ -382,4 +384,3 @@ export async function fetchTVOverview(params: FetchTVOverviewParams = {}) {
     throw typedError;
   }
 }
-

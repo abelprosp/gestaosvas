@@ -10,7 +10,7 @@ export const GET = createApiHandler(async (req) => {
   const supabase = createServerClient();
   const { data, error } = await supabase
     .from("tv_accounts")
-    .select("id, email, max_slots, created_at, tv_slots(id, slot_number, username, custom_username, status, client_id)")
+    .select("id, email, max_slots, created_at, tv_slots(id, slot_number, username, custom_username, status, client_id, bolinha)")
     .order("email", { ascending: true })
     .order("slot_number", { ascending: true, foreignTable: "tv_slots" });
 
@@ -101,7 +101,6 @@ export const POST = createApiHandler(
   },
   { requireAdmin: true }
 );
-
 
 
 

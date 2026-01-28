@@ -5,6 +5,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { HttpError } from "@/lib/utils/httpError";
 import { lineUpdatePayload, mapLineRow } from "@/lib/utils/mappers";
 import { validateRouteParamUUID } from "@/lib/utils/validation";
+import { requirePasswordConfirmation } from "@/lib/auth";
 
 const lineUpdateSchema = z
   .object({
@@ -43,20 +44,23 @@ export const PUT = createApiHandler(async (req, { params }) => {
   return NextResponse.json(mapLineRow(data));
 });
 
-export const DELETE = createApiHandler(async (req, { params }) => {
-  // Validar UUID do parâmetro
-  const lineId = validateRouteParamUUID(params.id, "id");
-  
-  const supabase = createServerClient();
-  const { error } = await supabase.from("lines").delete().eq("id", lineId);
+export const DELETE = createApiHandler(
+  async (req, { params, user }) => {
+    // Validar UUID do parâmetro
+    const lineId = validateRouteParamUUID(params.id, "id");
 
-  if (error) {
-    throw error;
-  }
+    const supabase = createServerClient();
+    await requirePasswordConfirmation(req, user);
+    const { error } = await supabase.from("lines").delete().eq("id", lineId);
 
-  return new NextResponse(null, { status: 204 });
-});
+    if (error) {
+      throw error;
+    }
 
+    return new NextResponse(null, { status: 204 });
+  },
+  { requireAdmin: true }
+);
 
 
 

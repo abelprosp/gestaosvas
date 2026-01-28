@@ -29,15 +29,11 @@ const CATEGORY_LABELS: Record<ServiceReportRow["category"], string> = {
   TV: "TV",
   CLOUD: "Cloud",
   SERVICE: "Serviço",
-  HUB: "Hub",
-  TELE: "Tele",
 };
 
 const CATEGORY_COLORS: Record<ServiceReportRow["category"], string> = {
   TV: "purple",
   CLOUD: "blue",
-  HUB: "orange",
-  TELE: "pink",
   SERVICE: "gray",
 };
 
@@ -47,8 +43,6 @@ const QUICK_FILTERS: Array<{
   category: ServiceReportCategory | "ALL";
 }> = [
   { label: "Cloud 150GB", service: "Cloud 150GB", category: "CLOUD" },
-  { label: "HubPlay Premium", service: "HubPlay Premium", category: "HUB" },
-  { label: "Telemedicina e Telepet", service: "Telemedicina e Telepet", category: "TELE" },
   { label: "TV Essencial", service: "TV ESSENCIAL", category: "TV" },
   { label: "TV Premium", service: "TV PREMIUM", category: "TV" },
 ];
@@ -157,8 +151,6 @@ export function ServiceReportsPage() {
           <option value="ALL">Todas as categorias</option>
           <option value="TV">TV</option>
           <option value="CLOUD">Cloud</option>
-          <option value="HUB">Hub</option>
-          <option value="TELE">Tele</option>
           <option value="SERVICE">Serviços gerais</option>
         </Select>
         <Input

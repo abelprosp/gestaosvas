@@ -398,7 +398,7 @@ async function syncCloudAccesses(
   // Busca serviços para identificar quais são Cloud/Hub/Tele
   const allServiceIds = selectedSet ? Array.from(selectedSet) : Array.from(setupMap.keys());
   const services = allServiceIds.length > 0 ? await fetchServicesByIds(allServiceIds) : [];
-  const cloudServiceKeywords = ["cloud", "hub", "hubplay", "telemedicina", "telepet"];
+  const cloudServiceKeywords = ["cloud"];
   
   const cloudServiceIdsSet = new Set(
     services
@@ -789,4 +789,3 @@ router.delete("/:id", requireAdmin, async (req, res, next) => {
 });
 
 export default router;
-

@@ -6,6 +6,13 @@ import { mapServiceRow, serviceInsertPayload, serviceUpdatePayload } from "../ut
 import { requireAdmin } from "../middleware/auth";
 
 const router = Router();
+const HIDDEN_SERVICE_KEYWORDS = ["hub", "hubplay", "telemedicina", "telepet"];
+
+function isHiddenServiceName(name?: string | null): boolean {
+  if (!name) return false;
+  const normalized = name.toLowerCase();
+  return HIDDEN_SERVICE_KEYWORDS.some((keyword) => normalized.includes(keyword));
+}
 
 function normalizePriceInput(input: string | number): number {
   if (typeof input === "number") {
@@ -46,7 +53,8 @@ router.get("/", async (_req, res, next) => {
       throw error;
     }
 
-    res.json((data ?? []).map(mapServiceRow));
+    const filtered = (data ?? []).filter((service) => !isHiddenServiceName(service?.name));
+    res.json(filtered.map(mapServiceRow));
   } catch (error) {
     next(error);
   }
@@ -112,5 +120,4 @@ router.delete("/:id", requireAdmin, async (req, res, next) => {
 });
 
 export default router;
-
 

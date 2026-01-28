@@ -27,7 +27,6 @@ export async function updateCloudAccess(id: string, payload: UpdateCloudAccessPa
   return response.data;
 }
 
-export async function deleteCloudAccess(id: string) {
-  await api.delete(`/cloud/accesses/${id}`);
+export async function deleteCloudAccess(id: string, password: string) {
+  await api.delete(`/cloud/accesses/${id}`, { data: { password } });
 }
-

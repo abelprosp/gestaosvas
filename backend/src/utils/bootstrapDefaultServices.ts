@@ -15,21 +15,9 @@ const DEFAULT_SERVICES: DefaultServiceDefinition[] = [
     allowCustomPrice: true,
   },
   {
-    name: "Telemedicina e Telepet",
-    description: "Cobertura de telemedicina humana e pet.",
-    price: 8.35,
-    allowCustomPrice: false,
-  },
-  {
     name: "Cloud 150GB",
     description: "Armazenamento em nuvem de 150 GB.",
     price: 4.99,
-    allowCustomPrice: false,
-  },
-  {
-    name: "HubPlay Premium",
-    description: "Plataforma HubPlay Premium.",
-    price: 39.99,
     allowCustomPrice: false,
   },
 ];
@@ -167,5 +155,4 @@ export async function bootstrapDefaultServices() {
     console.error("[bootstrapDefaultServices] Erro inesperado ao inicializar serviços padrão.", error);
   }
 }
-
 

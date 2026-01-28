@@ -889,7 +889,7 @@ Este sistema foi desenvolvido para gerenciar de forma completa e eficiente todos
 • 📋 **Gestão de Clientes**: Cadastro completo, histórico, busca avançada
 • 📄 **Contratos**: Criação, envio, assinatura digital e acompanhamento
 • 📺 **TV**: Controle total de acessos Essencial e Premium
-• ☁️ **Cloud**: Gestão de serviços cloud e Hub
+• ☁️ **Cloud**: Gestão de serviços cloud
 • 📊 **Relatórios**: Análises detalhadas, gráficos, exportações
 • 👥 **Usuários**: Gerenciamento de colaboradores e permissões
 • 📈 **Dashboard**: Visão geral em tempo real
@@ -1014,8 +1014,6 @@ Quer saber mais sobre alguma funcionalidade específica?`,
         contratos: "/contratos",
         tv: "/usuarios",
         cloud: "/usuarios-cloud",
-        hub: "/usuarios-hub",
-        tele: "/usuarios-tele",
         relatórios: "/relatorios/servicos",
         serviços: "/servicos",
         templates: "/templates",
@@ -2003,8 +2001,6 @@ Digite "ajuda" para ver todos os comandos disponíveis ou faça uma pergunta esp
     </>
   );
 }
-
-
 
 
 
