@@ -8,7 +8,7 @@ export default function AdminUsuariosPageRoute() {
   return (
     <ProtectedRoute>
       <AppLayout>
-        <AdminUsersPage />
+        <AdminUsersPage daknsçlfskdfãsdpnv~ds/>
       </AppLayout>
     </ProtectedRoute>
   );
